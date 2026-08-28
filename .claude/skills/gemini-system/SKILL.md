@@ -27,17 +27,17 @@ metadata:
 | 멀티모달 | 서브에이전트 경유(권장) |
 | 짧은 질문 (1-2 문 답변) | 직접 호출 확인 |
 
-## Gemini vs Codex
+## Gemini vs deep-reasoning
 
-| Task | Gemini | Codex |
-|------|--------|-------|
+| Task | Gemini | deep-reasoning |
+|------|--------|----------------|
 |**리포지토리 전체 이해**|✓| |
 |**라이브러리 조사**|✓| |
 |**멀티모달(PDF/동영상/음성)**|✓| |
 |**최신 문서 검색**|✓| |
 |**디자인 판단**| |✓|
 |**디버그** | |✓|
-|**코드 구현** | |✓|
+|**코드 구현** | | (main Claude / general-purpose) |
 
 ## When to Consult (MUST)
 
@@ -50,9 +50,9 @@ metadata:
 
 ## When NOT to Consult
 
-- Design decisions (use Codex)
-- Debugging (use Codex)
-- Code implementation (use Codex)
+- Design decisions (use deep-reasoning subagent)
+- Debugging (use deep-reasoning subagent)
+- Code implementation (main Claude or general-purpose subagent)
 - Simple file operations (do directly)
 
 ## How to Consult
@@ -116,7 +116,7 @@ Save Gemini research results to:
 .claude/docs/research/{topic}.md
 ```
 
-This allows Claude and Codex to reference the research later.
+This allows Claude (and the deep-reasoning subagent) to reference the research later.
 
 ## Task Templates
 
@@ -160,13 +160,13 @@ gemini -p "Extract: API specs, examples, constraints" < api-docs.pdf 2>/dev/null
 gemini -p "Transcribe and summarize: decisions, action items" < meeting.mp3 2>/dev/null
 ```
 
-## Integration with Codex
+## Integration with deep-reasoning
 
 | Workflow | Steps |
 |----------|-------|
-| **New feature** | Gemini research → Codex design review |
-| **Library choice** | Gemini comparison → Codex decision |
-| **Bug investigation** | Gemini codebase search → Codex debug |
+| **New feature** | Gemini research → deep-reasoning design review |
+| **Library choice** | Gemini comparison → deep-reasoning decision |
+| **Bug investigation** | Gemini codebase search → deep-reasoning debug |
 
 ## Why Gemini?
 
@@ -174,4 +174,4 @@ gemini -p "Transcribe and summarize: decisions, action items" < meeting.mp3 2>/d
 - **Google Search**: Latest information and docs
 - **Multimodal**: Native PDF/video/audio processing
 - **Fast exploration**: Quick overview before deep work
-- **Shared context**: Results saved for Claude/Codex
+- **Shared context**: Results saved for Claude and its subagents

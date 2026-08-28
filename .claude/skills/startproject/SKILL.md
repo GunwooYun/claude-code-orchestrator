@@ -13,7 +13,7 @@ metadata:
 
 ## Overview
 
-이 스킬은 3개의 에이전트(Claude, Codex, Gemini)를 협조시켜 프로젝트 개시부터 구현후 리뷰까지를 커버한다.
+이 스킬은 Claude(오케스트레이션 + deep-reasoning 서브에이전트)와 Gemini를 협조시켜 프로젝트 개시부터 구현후 리뷰까지를 커버한다.
 
 ## Workflow
 
@@ -22,7 +22,7 @@ Phase 1: Research (Gemini via Subagent)
     ↓
 Phase 2: Requirements & Planning (Claude)
     ↓
-Phase 3: Design Review (Codex via Subagent)
+Phase 3: Design Review (deep-reasoning Subagent)
     ↓
 Phase 4: Task Creation (Claude)
     ↓
@@ -30,7 +30,7 @@ Phase 5: CLAUDE.md Update (Claude)
     ↓
 [Implementation...]
     ↓
-Phase 6: Multi-Session Review (New Session + Codex)
+Phase 6: Multi-Session Review (New Session + deep-reasoning)
 ```
 
 ---
@@ -78,35 +78,29 @@ Ask in Korean:
 
 ---
 
-## Phase 3: Codex Design Review (Background)
+## Phase 3: Design Review (deep-reasoning Subagent, Background)
 
-**Task tool에서 하위 에이전트를 시작하고 Codex에서 계획 검토한다.**
+**Task tool에서 deep-reasoning 서브에이전트를 시작하고 계획을 검토한다.**
 
 ```
 Task tool parameters:
-- subagent_type: "general-purpose"
+- subagent_type: "deep-reasoning"
 - run_in_background: true
 - prompt: |
-    Review plan for: {feature}
+    Review this implementation plan for: {feature}
 
     Draft plan: {plan from Phase 2}
 
-    1. Call Codex CLI:
-       codex exec --model gpt-5.2-codex --sandbox read-only --full-auto "
-       Review this implementation plan:
-       {plan}
+    Analyze:
+    1. Approach assessment
+    2. Risk analysis
+    3. Implementation order
+    4. Improvements
 
-       Analyze:
-       1. Approach assessment
-       2. Risk analysis
-       3. Implementation order
-       4. Improvements
-       " 2>/dev/null
-
-    2. Return CONCISE summary:
-       - Top 3-5 recommendations
-       - Key risks
-       - Suggested order
+    Return CONCISE summary:
+    - Top 3-5 recommendations
+    - Key risks
+    - Suggested order
 ```
 
 ---
@@ -165,35 +159,30 @@ Add to CLAUDE.md:
 2. Run: `git diff main...HEAD` to see all changes
 3. Ask Claude to review the implementation
 
-### Option B: Codex Review (via Subagent)
+### Option B: deep-reasoning Review (via Subagent)
 
 ```
 Task tool parameters:
-- subagent_type: "general-purpose"
+- subagent_type: "deep-reasoning"
 - prompt: |
-    Review implementation for: {feature}
+    Review the implementation for: {feature}
 
-    1. Run: git diff main...HEAD
-    2. Call Codex CLI:
-       codex exec --model gpt-5.2-codex --sandbox read-only --full-auto "
-       Review this implementation:
-       {diff output}
+    Run `git diff main...HEAD` to see all changes.
 
-       Check:
-       1. Code quality and patterns
-       2. Potential bugs
-       3. Missing edge cases
-       4. Security concerns
-       " 2>/dev/null
+    Check:
+    1. Code quality and patterns
+    2. Potential bugs
+    3. Missing edge cases
+    4. Security concerns
 
-    3. Return findings and recommendations
+    Return findings and recommendations.
 ```
 
 ### Why Multi-Session Review?
 
 - **Fresh perspective**: New session has no bias from implementation
 - **Different context**: Can focus purely on review, not implementation details
-- **Codex strength**: Deep analysis without context pollution
+- **Isolated context**: Deep analysis without context pollution
 
 ---
 
@@ -207,14 +196,14 @@ Present final plan to user (in Korean):
 ### 조사 결과 (Gemini)
 {Key findings - 3-5 bullet points}
 
-### 설계 정책 (Codex 검토)
+### 설계 정책 (deep-reasoning 검토)
 {Approach with refinements}
 
 ### 작업 목록 ({N}개)
 {Task list}
 
 ### 위험과 주의사항
-{From Codex analysis}
+{From deep-reasoning analysis}
 
 ### 다음 단계
 1. 이 계획으로 진행하시겠습니까?
@@ -238,7 +227,7 @@ Present final plan to user (in Korean):
 
 ## Tips
 
-- **All Codex/Gemini work through subagents** to preserve main context
+- **All deep-reasoning/Gemini work through subagents** to preserve main context
 - **Update CLAUDE.md** to persist context across sessions
 - **Use multi-session review** for better quality assurance
 - **Ctrl+T**: Toggle task list visibility

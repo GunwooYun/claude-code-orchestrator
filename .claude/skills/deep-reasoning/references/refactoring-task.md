@@ -1,6 +1,8 @@
-# Refactoring Task for Codex
+# Refactoring Task
 
-When delegating refactoring to Codex, use this prompt template.
+When delegating refactoring, use this prompt template. The deep-reasoning
+subagent designs the refactoring (read-only); the main orchestrator or a
+general-purpose subagent applies the changes.
 
 ## Prompt Template
 
@@ -61,13 +63,12 @@ Provide:
 
 ## Example Invocation
 
-```bash
-codex exec --model gpt-5.2-codex --sandbox workspace-write --full-auto "
-Refactor this code for simplicity:
+```
+Task(subagent_type="deep-reasoning", prompt="""
+Design a refactoring for simplicity:
 
 ## Target Code
-File: src/services/llm_client.py
-$(cat src/services/llm_client.py)
+File: src/services/llm_client.py (read it)
 
 ## Libraries Used
 - openai: async client, retry with exponential backoff
@@ -79,7 +80,9 @@ $(cat src/services/llm_client.py)
 - Improve naming
 
 [Principles and patterns as above...]
-" 2>/dev/null
+
+Return the refactored code and change rationale; the orchestrator applies it.
+""")
 ```
 
 ## Checklist

@@ -138,9 +138,9 @@ Cross-reference with our codebase to identify:
 
 | Task | Reason | Use Instead |
 |------|--------|-------------|
-| Design decisions | Requires deep reasoning | Codex |
-| Code implementation | Codex has better code abilities | Codex |
-| Debugging | Requires logical analysis | Codex |
+| Design decisions | Requires deep reasoning | deep-reasoning subagent |
+| Code implementation | Execution task | Claude Code directly |
+| Debugging | Requires logical analysis | deep-reasoning subagent |
 | Simple file edits | Overkill | Claude Code directly |
 | Running tests | Execution task | Claude Code directly |
 

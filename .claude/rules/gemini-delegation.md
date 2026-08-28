@@ -40,10 +40,10 @@ Think of Gemini as your research assistant who can quickly gather and synthesize
 
 **When you need research → Delegate to subagent → Subagent consults Gemini.**
 
-## Gemini vs Codex: Choose the Right Tool
+## Gemini vs deep-reasoning: Choose the Right Tool
 
-| Task | Codex | Gemini |
-|------|-------|--------|
+| Task | deep-reasoning | Gemini |
+|------|----------------|--------|
 | Design decisions | ✓ | |
 | Debugging | ✓ | |
 | Code implementation | ✓ | |
@@ -78,9 +78,9 @@ Consult Gemini when user says:
 
 Skip Gemini for:
 
-- Design decisions (use Codex instead)
-- Code implementation (use Codex instead)
-- Debugging (use Codex instead)
+- Design decisions (use deep-reasoning subagent instead)
+- Code implementation (main Claude or general-purpose subagent)
+- Debugging (use deep-reasoning subagent instead)
 - Simple file operations (do directly)
 - Running tests/linting (do directly)
 
@@ -152,7 +152,7 @@ prompt: |
 While subagent is processing, you can:
 - Work on other files
 - Run tests
-- Spawn another subagent for Codex consultation
+- Spawn the deep-reasoning subagent for design/debugging consultation
 
 ### Step 3: Receive Summary
 
@@ -189,4 +189,4 @@ gemini -p "{question}" --output-format json 2>/dev/null
 - **Concise handoff**: Main only receives key findings
 - **Parallel work**: Background subagents enable concurrent research
 
-**Use Gemini (via subagent) for research, Codex (via subagent) for reasoning, Claude for orchestration.**
+**Use Gemini (via subagent) for research, the deep-reasoning subagent for reasoning, Claude for orchestration.**

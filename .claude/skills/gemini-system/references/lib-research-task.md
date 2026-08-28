@@ -105,11 +105,11 @@ All library documentation should be saved to:
 - Checking library specifications before implementation
 - Updating outdated library documentation
 - Investigating library conflicts or issues
-- When user says "このライブラリについて調べて", "research this library"
+- When user says "이 라이브러리에 대해 조사해 줘", "research this library"
 
-## Integration with Codex
+## Integration with deep-reasoning
 
 After Gemini researches a library:
 1. Documentation is saved to `.claude/docs/libraries/`
-2. Codex can reference this when reviewing code or refactoring
+2. The deep-reasoning subagent can reference this when reviewing code or refactoring
 3. Ensures library constraints are respected across all agents

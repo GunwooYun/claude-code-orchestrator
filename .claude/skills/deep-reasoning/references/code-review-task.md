@@ -1,6 +1,6 @@
-# Code Review Task for Codex
+# Code Review Task for the deep-reasoning Subagent
 
-When delegating code review to Codex, use this prompt template.
+When delegating code review to the deep-reasoning subagent, use this prompt template.
 
 ## Prompt Template
 
@@ -67,12 +67,12 @@ Well-implemented points
 
 ## Example Invocation
 
-```bash
-codex exec --model gpt-5.2-codex --sandbox read-only --full-auto "
+```
+Task(subagent_type="deep-reasoning", prompt="""
 Review this code change:
 
 ## Changes
-$(git diff HEAD~1)
+Run `git diff HEAD~1` to see the changes.
 
 ## Libraries Used
 - httpx (async HTTP client)
@@ -83,7 +83,7 @@ $(git diff HEAD~1)
 - pydantic: Use Field() for validation, avoid root validators
 
 [Review checklist as above...]
-" 2>/dev/null
+""")
 ```
 
 ## When to Use

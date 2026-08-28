@@ -41,7 +41,7 @@ CLI 상담 이력을 각 에이전트의 구성 파일에 추가한다.
 │  Data Sources:                                              │
 │  ├─ git log (commits)                                       │
 │  ├─ git diff (file changes)                                 │
-│  └─ cli-tools.jsonl (Codex/Gemini logs)                     │
+│  └─ cli-tools.jsonl (Gemini logs)                           │
 │                      ↓                                      │
 │  /checkpointing --full                                      │
 │                      ↓                                      │
@@ -49,7 +49,7 @@ CLI 상담 이력을 각 에이전트의 구성 파일에 추가한다.
 │  ├─ Summary (commits, files, consultations)                 │
 │  ├─ Git History (commits list)                              │
 │  ├─ File Changes (created, modified, deleted)               │
-│  └─ CLI Consultations (Codex/Gemini)                        │
+│  └─ CLI Consultations (Gemini)                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -113,7 +113,7 @@ python checkpoint.py --full --analyze
 ### Session History 모드
 
 1. `.claude/logs/cli-tools.jsonl` 구문 분석
-2. Codex/Gemini에 상담 내용을 날짜별로 정리
+2. Gemini 상담 내용을 날짜별로 정리
 3. 각 에이전트 구성 파일에 `## Session History` 추가
 
 ### Full Checkpoint 모드
@@ -124,7 +124,6 @@ python checkpoint.py --full --analyze
    - `git diff --numstat`로 행 수 변경
 
 2. **CLI 상담 로그 분석**
-   - Codex상담 내용 및 상태
    - Gemini조사 내용 및 상태
 
 3. **체크포인트 파일 생성**
@@ -138,7 +137,6 @@ python checkpoint.py --full --analyze
 ## Summary
 - **Commits**: 5
 - **Files changed**: 12 (8 modified, 3 created, 1 deleted)
-- **Codex consultations**: 3
 - **Gemini researches**: 2
 
 ## Git History
@@ -161,10 +159,6 @@ python checkpoint.py --full --analyze
 
 ## CLI Tool Consultations
 
-### Codex (3 consultations)
-- ✓ 설계: 체크포인트 확장 아키텍처
-- ✓ 디버깅: Git log parsing issue
-
 ### Gemini (2 researches)
 - ✓ 조사: Git integration best practices
 ```
@@ -175,9 +169,6 @@ python checkpoint.py --full --analyze
 ## Session History
 
 ### 2026-01-26
-
-**Codex상담:**
-- ✓ 하위 에이전트 패턴으로 Codex / Gemini 호출 권장...
 
 **Gemini조사:**
 - ✓ MCP vs CLI 비교 조사...
