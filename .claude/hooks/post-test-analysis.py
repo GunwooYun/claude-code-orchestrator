@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-PostToolUse hook: Suggest Codex analysis after test/build failures.
+PostToolUse hook: Suggest deep-reasoning analysis after test/build failures.
 
-Analyzes test and build output and suggests Codex consultation
+Analyzes test and build output and suggests deep-reasoning consultation
 for debugging complex failures.
 """
 
@@ -48,7 +48,7 @@ FAILURE_PATTERNS = [
     r"FAIL:",
 ]
 
-# Simple errors that don't need Codex
+# Simple errors that don't need deep reasoning
 SIMPLE_ERRORS = [
     "ModuleNotFoundError",  # Usually just need to install
     "command not found",
@@ -78,7 +78,7 @@ def has_complex_failure(output: str) -> tuple[bool, str]:
             failure_count += len(matches)
             matched_patterns.append(pattern)
 
-    # Multiple failures or complex errors suggest need for Codex
+    # Multiple failures or complex errors suggest need for deep reasoning
     if failure_count >= 3:
         return True, f"Multiple failures detected ({failure_count} issues)"
 
@@ -114,10 +114,10 @@ def main():
                 "hookSpecificOutput": {
                     "hookEventName": "PostToolUse",
                     "additionalContext": (
-                        f"[Codex Debug Suggestion] {reason}. "
-                        "Consider consulting Codex for debugging analysis. "
-                        "**Recommended**: Use Task tool with subagent_type='general-purpose' "
-                        "to consult Codex with full error context and preserve main context."
+                        f"[Debug Suggestion] {reason}. "
+                        "Consider consulting the deep-reasoning subagent for debugging analysis. "
+                        "**Recommended**: Use Task tool with subagent_type='deep-reasoning' "
+                        "with full error context to preserve main context."
                     )
                 }
             }

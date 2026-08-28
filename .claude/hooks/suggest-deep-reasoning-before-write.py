@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-PreToolUse hook: Check if Codex consultation is recommended before Write/Edit.
+PreToolUse hook: Suggest deep-reasoning consultation before Write/Edit.
 
-This hook analyzes the file being modified and suggests Codex consultation
+This hook analyzes the file being modified and suggests deep-reasoning consultation
 for design decisions, complex implementations, or architectural changes.
 """
 
@@ -68,8 +68,8 @@ SIMPLE_EDIT_PATTERNS = [
 ]
 
 
-def should_suggest_codex(file_path: str, content: str | None = None) -> tuple[bool, str]:
-    """Determine if Codex consultation should be suggested."""
+def should_suggest_deep_reasoning(file_path: str, content: str | None = None) -> tuple[bool, str]:
+    """Determine if deep-reasoning consultation should be suggested."""
     path = Path(file_path)
     filename = path.name.lower()
     filepath_lower = file_path.lower()
@@ -114,7 +114,7 @@ def main():
         if not validate_input(file_path, content):
             sys.exit(0)
 
-        should_suggest, reason = should_suggest_codex(file_path, content)
+        should_suggest, reason = should_suggest_deep_reasoning(file_path, content)
 
         if should_suggest:
             # Return additional context to Claude
@@ -122,12 +122,10 @@ def main():
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
                     "additionalContext": (
-                        f"[Codex Consultation Reminder] {reason}. "
-                        "Consider consulting Codex before making this change. "
-                        "**Recommended**: Use Task tool with subagent_type='general-purpose' "
-                        "to preserve main context. "
-                        "(Direct call OK for quick questions: "
-                        "`codex exec --model gpt-5.2-codex --sandbox read-only --full-auto '...'`)"
+                        f"[Design Review Reminder] {reason}. "
+                        "Consider consulting the deep-reasoning subagent before this change. "
+                        "**Recommended**: Use Task tool with subagent_type='deep-reasoning' "
+                        "(isolated context; returns a concise recommendation)."
                     )
                 }
             }

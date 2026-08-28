@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-codex-before-write.py\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/suggest-deep-reasoning-before-write.py\"",
             "timeout": 10
           }
         ]
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-codex-after-plan.py\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/suggest-deep-reasoning-after-plan.py\"",
             "timeout": 10
           }
         ]
@@ -149,7 +149,6 @@
       "Bash(docker:*)",
       "Bash(docker-compose:*)",
       "Bash(gemini:*)",
-      "Bash(codex:*)",
       "Bash(pkill:*)",
       "Bash(for:*)",
       "Bash(do)",

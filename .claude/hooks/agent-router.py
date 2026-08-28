@@ -3,14 +3,14 @@
 UserPromptSubmit hook: Route to appropriate agent based on user intent.
 
 Analyzes user prompts and suggests the most appropriate agent
-(Codex for design/debug, Gemini for research/multimodal).
+(deep-reasoning subagent for design/debug, Gemini for research/multimodal).
 """
 
 import json
 import sys
 
-# Triggers for Codex (design, debugging, deep reasoning)
-CODEX_TRIGGERS = {
+# Triggers for the deep-reasoning subagent (design, debugging, deep reasoning)
+DEEP_REASONING_TRIGGERS = {
     "ko": [
         "설계", "어떻게 설계", "아키텍처",
         "왜 움직이지 않는다", "오류", "버그", "디버깅",
@@ -54,11 +54,11 @@ def detect_agent(prompt: str) -> tuple[str | None, str]:
     """Detect which agent should handle this prompt."""
     prompt_lower = prompt.lower()
 
-    # Check Codex triggers
-    for triggers in CODEX_TRIGGERS.values():
+    # Check deep-reasoning triggers
+    for triggers in DEEP_REASONING_TRIGGERS.values():
         for trigger in triggers:
             if trigger in prompt_lower:
-                return "codex", trigger
+                return "deep-reasoning", trigger
 
     # Check Gemini triggers
     for triggers in GEMINI_TRIGGERS.values():
@@ -80,15 +80,15 @@ def main():
 
         agent, trigger = detect_agent(prompt)
 
-        if agent == "codex":
+        if agent == "deep-reasoning":
             output = {
                 "hookSpecificOutput": {
                     "hookEventName": "UserPromptSubmit",
                     "additionalContext": (
                         f"[Agent Routing] Detected '{trigger}' - this task may benefit from "
-                        "Codex CLI's deep reasoning capabilities. Consider: "
-                        "`codex exec --model gpt-5.2-codex --sandbox read-only --full-auto "
-                        '"{task description}"` for design decisions, debugging, or complex analysis.'
+                        "deep reasoning in an isolated context. Consider: Task tool with "
+                        "subagent_type='deep-reasoning' for design decisions, debugging, "
+                        "or complex analysis."
                     )
                 }
             }

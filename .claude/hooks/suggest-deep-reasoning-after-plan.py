@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-PostToolUse hook: Suggest Codex review after Plan tasks.
+PostToolUse hook: Suggest deep-reasoning review after Plan tasks.
 
-This hook runs after Task tool execution and suggests Codex consultation
+This hook runs after Task tool execution and suggests deep-reasoning consultation
 for reviewing plans and implementation strategies.
 """
 
@@ -25,8 +25,8 @@ PLAN_INDICATORS = [
 ]
 
 
-def should_suggest_codex_review(tool_input: dict, tool_output: str | None = None) -> tuple[bool, str]:
-    """Determine if Codex review should be suggested after task completion."""
+def should_suggest_review(tool_input: dict, tool_output: str | None = None) -> tuple[bool, str]:
+    """Determine if deep-reasoning review should be suggested after task completion."""
     subagent_type = tool_input.get("subagent_type", "").lower()
     description = tool_input.get("description", "").lower()
     prompt = tool_input.get("prompt", "").lower()
@@ -56,17 +56,17 @@ def main():
         tool_input = data.get("tool_input", {})
         tool_output = data.get("tool_output", "")
 
-        should_suggest, reason = should_suggest_codex_review(tool_input, tool_output)
+        should_suggest, reason = should_suggest_review(tool_input, tool_output)
 
         if should_suggest:
             output = {
                 "hookSpecificOutput": {
                     "hookEventName": "PostToolUse",
                     "additionalContext": (
-                        f"[Codex Review Suggestion] {reason}. "
-                        "Consider having Codex review this plan for potential improvements. "
-                        "**Recommended**: Use Task tool with subagent_type='general-purpose' "
-                        "to consult Codex and preserve main context."
+                        f"[Plan Review Suggestion] {reason}. "
+                        "Consider having the deep-reasoning subagent review this plan. "
+                        "**Recommended**: Use Task tool with subagent_type='deep-reasoning' "
+                        "to preserve main context."
                     )
                 }
             }
