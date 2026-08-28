@@ -5,7 +5,7 @@
 Multi-Agent AI Development Environment
 
 ```
-Claude Code (Orchestrator) ─┬─ Codex CLI (Deep Reasoning)
+Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심층 추론)
                             ├─ Gemini CLI (Research)
                             └─ Subagents (Parallel Tasks)
 ```
@@ -15,7 +15,7 @@ Claude Code (Orchestrator) ─┬─ Codex CLI (Deep Reasoning)
 기존 프로젝트의 루트로 실행:
 
 ```bash
-git clone --depth 1 https://github.com/gaebalai/claude-code-orchestrator.git .starter && cp -r .starter/.claude .starter/.codex .starter/.gemini .starter/CLAUDE.md . && rm -rf .starter && claude
+git clone --depth 1 https://github.com/GunwooYun/claude-code-orchestrator.git .starter && cp -r .starter/.claude .starter/.gemini .starter/CLAUDE.md . && rm -rf .starter && claude
 ```
 
 ## Prerequisites
@@ -23,22 +23,17 @@ git clone --depth 1 https://github.com/gaebalai/claude-code-orchestrator.git .st
 ### Claude Code
 
 ```bash
-npm install -g @anthropic-ai/claude-code
-claude login
-```
-
-### Codex CLI
-
-```bash
-npm install -g @openai/codex
-codex login
+# 네이티브 인스톨러 (npm 불필요)
+curl -fsSL https://claude.ai/install.sh | bash
+claude   # 최초 실행 시 로그인
 ```
 
 ### Gemini CLI
 
 ```bash
+brew install node
 npm install -g @google/gemini-cli
-gemini login
+gemini   # 최초 실행 시 Google 로그인
 ```
 
 ## Architecture
@@ -49,18 +44,19 @@ gemini login
 │           → 컨텍스트 절약이 최우선                         │
 │           → 사용자 대화/조정/실행 담당                   │
 │                      ↓                                      │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │              Subagent (general-purpose)               │  │
-│  │              → 독립된 컨텍스트 보유              │  │
-│  │              → Codex/Gemini 호출 가능             │  │
-│  │              → 결과 요약 후 메인으로 반환              │  │
-│  │                                                       │  │
-│  │   ┌──────────────┐        ┌──────────────┐           │  │
-│  │   │  Codex CLI   │        │  Gemini CLI  │           │  │
-│  │   │  설계/추론     │        │  리서치    │           │  │
-│  │   │  디버깅       │        │  멀티모달  │          │  │
-│  │   └──────────────┘        └──────────────┘           │  │
-│  └───────────────────────────────────────────────────────┘  │
+│  ┌───────────────────────────┐  ┌────────────────────────┐  │
+│  │  deep-reasoning Subagent  │  │  Subagent              │  │
+│  │  (Claude Fable)           │  │  (general-purpose)     │  │
+│  │  → 독립된 컨텍스트         │  │  → 독립된 컨텍스트      │  │
+│  │  → 설계/추론/디버깅        │  │  → Gemini 호출 가능    │  │
+│  │  → 읽기 전용, 권고만 반환   │  │  → 결과 요약 후 반환    │  │
+│  └───────────────────────────┘  │                        │  │
+│                                 │   ┌──────────────┐     │  │
+│                                 │   │  Gemini CLI  │     │  │
+│                                 │   │  리서치       │     │  │
+│                                 │   │  멀티모달     │     │  │
+│                                 │   └──────────────┘     │  │
+│                                 └────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -72,7 +68,8 @@ gemini login
 |------|----------|
 | 출력이 클 것으로 예상 | 서브에이전트 경유 |
 | 짧은 질문·짧은 답변 | 직접 호출 가능 |
-| Codex / Gemini 상담 | 서브에이전트 경유 |
+| 설계/디버깅 상담 | deep-reasoning 서브에이전트 |
+| Gemini 리서치 | general-purpose 서브에이전트 경유 |
 | 상세 분석 필요 | 서브에이전트 → 파일 저장 |
 
 ## 디렉터리 구조(Directory Structure)
@@ -86,14 +83,15 @@ gemini login
 │
 ├── .claude/
 │   ├── agents/
-│   │   └── general-purpose.md   # 서브에이전트 설정
+│   │   ├── deep-reasoning.md    # 심층 추론 서브에이전트 (Claude Fable)
+│   │   └── general-purpose.md   # 범용 서브에이전트 (Gemini 호출)
 │   │
 │   ├── skills/                  # 재사용 가능한 워크플로우
 │   │   ├── startproject/        # 프로젝트 시작
 │   │   ├── plan/                # 구현 계획
 │   │   ├── tdd/                 # 테스트 주도 개발
 │   │   ├── checkpointing/       # 세션 영속화
-│   │   ├── codex-system/        # Codex CLI 연동
+│   │   ├── deep-reasoning/      # 심층 추론 서브에이전트 연동
 │   │   ├── gemini-system/       # Gemini CLI 연동
 │   │   └── ...
 │   │
@@ -113,11 +111,7 @@ gemini login
 │   │   └── libraries/           # 라이브러리 제약
 │   │
 │   └── logs/
-│       └── cli-tools.jsonl      # Codex/Gemini 입출력 로그
-│
-├── .codex/                      # Codex CLI 설정
-│   ├── AGENTS.md
-│   └── config.toml
+│       └── cli-tools.jsonl      # Gemini 입출력 로그
 │
 └── .gemini/                     # Gemini CLI 설정
     ├── GEMINI.md
@@ -137,7 +131,7 @@ gemini login
 **워크플로우:**
 1. **Gemini** → 리포지토리 분석·사전 조사
 2. **Claude** → 요구사항 정리·계획 수립
-3. **Codex** → 계획 리뷰·리스크 분석
+3. **deep-reasoning** → 계획 리뷰·리스크 분석
 4. **Claude** → 실행 태스크 목록 생성
 
 ### `/plan` — 구현 계획 수립
@@ -177,21 +171,21 @@ Red → Green → Refactor 사이클을 강제한다.
 /checkpointing --analyze    # 분석 : 재사용 가능한 기술 패턴 발견
 ```
 
-### `/codex-system` — Codex CLI連携
+### `/deep-reasoning` — 심층 추론 서브에이전트 연동
 
-설계 판단, 디버깅, 트레이드오프 분석 전용.
+설계 판단, 디버깅, 트레이드오프 분석 전용. Claude Fable이 격리된 컨텍스트에서 분석하고 간결한 권고만 반환한다.
 
 **트리거 예시:**
 - "어떻게 설계해야 하는가?" "어떻게 구현할까?"
-- "왜 움직이지 않아?" "오류가 나온다"
+- "왜 안 돌아가지?" "오류가 나온다"
 - "어느 쪽이 좋다?" "비교해"
 
-### `/gemini-system` — Gemini CLI連携
+### `/gemini-system` — Gemini CLI 연동
 
 리서치, 대규모 분석, 멀티모달 처리 전용.
 
 **트리거 예:**
-- "검사해" "리서치해"
+- "조사해" "리서치해"
 - "이 PDF/동영상 보기"
 - "코드베이스 전체 이해"
 
@@ -240,10 +234,12 @@ uv run ruff check .
 
 | 후크 | 트리거 | 동작 |
 |--------|----------|------|
-| `agent-router.py` | 사용자 입력 | Codex / Gemini로 라우팅 제안 |
+| `agent-router.py` | 사용자 입력 | deep-reasoning / Gemini 라우팅 제안 |
 | `lint-on-save.py` | 파일 저장 | 자동 lint 실행 |
-| `check-codex-before-write.py` | 파일 쓰기 전 | Codex 상담 제안 |
-| `log-cli-tools.py` | Codex / Gemini 실행 | I / O 로깅 |
+| `suggest-deep-reasoning-before-write.py` | 파일 쓰기 전 | 심층 추론 리뷰 제안 |
+| `suggest-deep-reasoning-after-plan.py` | Plan 태스크 후 | 계획 리뷰 제안 |
+| `post-test-analysis.py` | 테스트 실패 | 디버깅 분석 제안 |
+| `log-cli-tools.py` | Gemini 실행 | I/O 로깅 |
 
 ## Language Rules
 
@@ -255,4 +251,4 @@ uv run ruff check .
 ## License
 [MIT](LICENSE)
 
-MDRULES Dev. by JAEWOO, KIM.
+원본: [gaebalai/claude-code-orchestrator](https://github.com/gaebalai/claude-code-orchestrator) (MDRULES Dev. by JAEWOO, KIM.) — 이 포크는 Codex CLI 역할을 Claude의 deep-reasoning 서브에이전트로 대체한 버전입니다.
