@@ -28,8 +28,8 @@ You provide **research and analysis** that benefits from your 1M token context.
 
 | Task | Who Does It |
 |------|-------------|
-| Design decisions | Codex |
-| Debugging | Codex |
+| Design decisions | Claude Code (deep-reasoning subagent) |
+| Debugging | Claude Code (deep-reasoning subagent) |
 | Code implementation | Claude Code |
 | File editing | Claude Code |
 
@@ -46,7 +46,7 @@ You can read and **write to** project context:
 ```
 
 **Save your research to `.claude/docs/research/{topic}.md`**
-This allows Claude Code and Codex to reference your findings.
+This allows Claude Code and its subagents to reference your findings.
 
 ## How You're Called
 
@@ -72,8 +72,8 @@ Structure your response for Claude Code to use:
 ## Sources
 {Links to documentation, examples}
 
-## For Codex Review (if design-related)
-{Questions or decisions that need Codex's deep analysis}
+## For Claude Design Review (if design-related)
+{Questions or decisions that need Claude's deep-reasoning analysis}
 ```
 
 ## Language Protocol
@@ -89,11 +89,11 @@ Structure your response for Claude Code to use:
 2. **Cite sources** — Include URLs and references
 3. **Be actionable** — Focus on what Claude Code can use
 4. **Save findings** — Write to `.claude/docs/research/` for persistence
-5. **Flag for Codex** — If you find design decisions needed, note them
+5. **Flag for Claude** — If you find design decisions needed, note them
 
 ## CLI Logs
 
-Codex/Gemini 에의 입출력은 `.claude/logs/cli-tools.jsonl` 에 기록되고 있다.
+Gemini 에의 입출력은 `.claude/logs/cli-tools.jsonl` 에 기록되고 있다.
 과거 상담 내용을 확인하려면 이 로그를 참조한다.
 
 `/checkpointing` 실행 후 아래에 Session History가 추가된다.

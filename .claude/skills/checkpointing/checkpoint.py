@@ -8,12 +8,12 @@ Usage:
     python checkpoint.py --full --analyze               # Full checkpoint + skill analysis
 
 Session History Mode (default):
-    Updates CLAUDE.md, .codex/AGENTS.md, .gemini/GEMINI.md with CLI consultation history.
+    Updates CLAUDE.md, .gemini/GEMINI.md with CLI consultation history.
 
 Full Checkpoint Mode (--full):
     Creates comprehensive checkpoint file in .claude/checkpoints/ including:
     - Git commits and file changes
-    - CLI tool consultations (Codex/Gemini)
+    - CLI tool consultations (Gemini)
     - Design decisions changes
     - Session summary
 
@@ -37,7 +37,6 @@ DESIGN_FILE = PROJECT_ROOT / ".claude" / "docs" / "DESIGN.md"
 
 CONTEXT_FILES = {
     "claude": PROJECT_ROOT / "CLAUDE.md",
-    "codex": PROJECT_ROOT / ".codex" / "AGENTS.md",
     "gemini": PROJECT_ROOT / ".gemini" / "GEMINI.md",
 }
 
@@ -502,7 +501,7 @@ Examples:
             print(f"\nCheckpoint created: {checkpoint_file}")
             print("\nCheckpoint includes:")
             print("  - Git commits and file changes")
-            print("  - CLI tool consultations (Codex/Gemini)")
+            print("  - CLI tool consultations (Gemini)")
             print("  - Session summary")
 
             if args.analyze:
@@ -551,7 +550,7 @@ Examples:
             print(f"Skipped: {file_path}")
 
     print("\nSession history has been written to all context files.")
-    print("All agents (Claude, Codex, Gemini) can now see the session history.")
+    print("All agents (Claude, Gemini) can now see the session history.")
 
 
 if __name__ == "__main__":

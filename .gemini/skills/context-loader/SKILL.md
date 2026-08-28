@@ -7,7 +7,7 @@ description: Load project context from .claude/ directory at the start of every 
 
 ## Purpose
 
-Load shared project context from `.claude/` directory to ensure Gemini CLI operates with the same knowledge as Claude Code and Codex CLI.
+Load shared project context from `.claude/` directory to ensure Gemini CLI operates with the same knowledge as Claude Code.
 
 ## When to Activate
 
