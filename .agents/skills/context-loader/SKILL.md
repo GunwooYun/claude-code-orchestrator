@@ -1,13 +1,13 @@
 ---
 name: context-loader
-description: Load project context from .claude/ directory at the start of every task. This ensures Gemini CLI has the same coding rules, design decisions, and library constraints as Claude Code.
+description: Load project context from .claude/ directory at the start of every task. This ensures Antigravity CLI (agy) has the same coding rules, design decisions, and library constraints as Claude Code.
 ---
 
-# Context Loader Skill for Gemini
+# Context Loader Skill for Antigravity (agy)
 
 ## Purpose
 
-Load shared project context from `.claude/` directory to ensure Gemini CLI operates with the same knowledge as Claude Code.
+Load shared project context from `.claude/` directory to ensure Antigravity CLI (agy) operates with the same knowledge as Claude Code.
 
 ## When to Activate
 
