@@ -2,7 +2,7 @@
 
 **멀티 에이전트 협업 프레임워크**
 
-**Claude Code**가 **deep-reasoning 서브에이전트(Claude Fable, 심층 추론)**와 **Gemini CLI(대규모 리서치)**를 오케스트레이션하여 각 에이전트의 강점을 극대화하고 **개발 속도와 품질을 동시에 끌어올리는 구조**다.
+**Claude Code**가 **deep-reasoning 서브에이전트(Claude Fable, 심층 추론)**와 **Antigravity CLI(`agy`, Gemini 모델 기반 대규모 리서치)**를 오케스트레이션하여 각 에이전트의 강점을 극대화하고 **개발 속도와 품질을 동시에 끌어올리는 구조**다.
 
 ---
 
@@ -12,7 +12,7 @@
 |-------|----------|---------|
 | **Claude Code (메인)** | 오케스트레이션, 사용자 대화 | 전체 통합, 태스크 관리, 의사결정|
 | **deep-reasoning 서브에이전트 (Claude Fable)** | 깊은 추론, 설계 판단, 디버깅 | 설계 검토, 에러 분석, 트레이드오프 평가 (격리된 컨텍스트, 읽기 전용) |
-| **Gemini CLI** | 1M 토큰, 멀티모달, 웹 검색 | 대규모 코드 분석, 라이브러리 조사, PDF/영상 분석 |
+| **Antigravity CLI (`agy`, Gemini 모델)** | 대규모 컨텍스트, 멀티모달, 웹 검색 | 대규모 코드 분석, 라이브러리 조사, PDF/이미지/영상 분석 |
 
 **IMPORTANT**: 각 에이전트는 단독으로도 강력하지만, **의도적으로 역할을 분리했을 때 성능이 폭발**한다.
 
@@ -38,11 +38,11 @@ Claude Code의 최대 컨텍스트는 **200k 토큰**이지만,
 # MUST: 설계 검토는 deep-reasoning 서브에이전트 (분석은 격리 컨텍스트에서, 요약만 반환)
 Task(subagent_type="deep-reasoning", prompt="Review this design ... Return concise summary")
 
-# MUST: 대규모 리서치는 general-purpose 서브에이전트 경유로 Gemini 호출 (출력 큼)
-Task(subagent_type="general-purpose", prompt="Gemini에게 리서치 요청 후 요약만 반환")
+# MUST: 대규모 리서치는 general-purpose 서브에이전트 경유로 agy 호출 (출력 큼)
+Task(subagent_type="general-purpose", prompt="agy에게 리서치 요청 후 요약만 반환")
 
-# OK: 짧은 Gemini 질문은 직접 호출 (아주 짧은 출력)
-Bash("gemini -p '한 문장으로 답변' 2>/dev/null")
+# OK: 짧은 agy 질문은 직접 호출 (아주 짧은 출력)
+Bash("agy -p '한 문장으로 답변'")
 ```
 
 ---
@@ -62,7 +62,7 @@ Bash("gemini -p '한 문장으로 답변' 2>/dev/null")
 
 → 참고: `.claude/rules/deep-reasoning-delegation.md`
 
-### Gemini CLI를 써야 할 때
+### Antigravity CLI(agy)를 써야 할 때
 
 - 리서치
     - "이거 조사해줘"
@@ -72,9 +72,9 @@ Bash("gemini -p '한 문장으로 답변' 2>/dev/null")
 - 멀티모달
     - "이 PDF 요약"
     - "이 강의 영상 핵심만 정리"
-- ➡ 많이 읽고, 넓게 볼 땐 Gemini
+- ➡ 많이 읽고, 넓게 볼 땐 agy
 
-→ 참고: `.claude/rules/gemini-delegation.md`
+→ 참고: `.claude/rules/antigravity-delegation.md`
 
 ---
 
@@ -86,7 +86,7 @@ Bash("gemini -p '한 문장으로 답변' 2>/dev/null")
 
 ### 진행 순서
 
-1. Gemini 
+1. Antigravity CLI (agy)
     - 리포지토리 전체 분석 (서브 에이전트)
 2. Claude 
     - 요구사항 정리
@@ -131,8 +131,9 @@ Bash("gemini -p '한 문장으로 답변' 2>/dev/null")
 | ------------------------------ | --------------------- |
 | `.claude/rules/`               | 코딩 / 보안 / 언어 규칙       |
 | `.claude/docs/DESIGN.md`       | 설계 결정 기록              |
-| `.claude/docs/research/`       | Gemini 조사 결과          |
-| `.claude/logs/cli-tools.jsonl` | Gemini 입출력 로그         |
+| `.claude/docs/research/`       | agy 조사 결과             |
+| `.claude/logs/cli-tools.jsonl` | agy 입출력 로그            |
+| `.agents/rules/AGENTS.md`      | agy용 프로젝트 컨텍스트     |
 
 ---
 

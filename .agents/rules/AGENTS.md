@@ -58,6 +58,8 @@ agy -p "{question}" --output-format json --print-timeout 10m   # scripted calls
 ```
 
 When given a file path, read the file with your own tools before answering.
+If a required tool was denied (headless soft-deny), say so explicitly in your
+response instead of returning an empty answer.
 
 ## Output Format
 
