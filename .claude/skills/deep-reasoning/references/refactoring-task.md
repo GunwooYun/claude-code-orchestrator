@@ -56,8 +56,8 @@ Refactoring Patterns to Apply:
 ---
 
 Provide:
-1. Refactored code
-2. Explanation of changes (in Korean)
+1. Refactoring plan and a unified diff (not the full rewritten file — keep main context small)
+2. Explanation of changes (in English)
 3. Verification that library constraints are preserved
 ```
 

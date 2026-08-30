@@ -125,7 +125,8 @@ def main():
                         f"[Design Review Reminder] {reason}. "
                         "Consider consulting the deep-reasoning subagent before this change. "
                         "**Recommended**: Use Task tool with subagent_type='deep-reasoning' "
-                        "(isolated context; returns a concise recommendation)."
+                        "(isolated context; returns a concise recommendation). "
+                        "If you are a subagent, report back to the orchestrator instead."
                     )
                 }
             }

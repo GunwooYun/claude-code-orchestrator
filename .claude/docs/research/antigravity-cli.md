@@ -108,6 +108,11 @@ agent's `read_file` tool open it.
 - `--dangerously-skip-permissions --sandbox` together also works (verified 2026-08-30):
   reads succeed while terminal commands are sandboxed. This is the template default for
   file-reading patterns, keeping the template self-contained (no per-machine config).
+- Further verified 2026-08-30 under those flags: a PNG **outside** the workspace was read
+  without `--add-dir` (the flags override `allowNonWorkspaceAccess`), and a one-page PDF
+  was read and its content extracted correctly. Video/audio remain untested via `-p`.
+- Caveat: the flags also auto-approve `write_file`, `read_url` and MCP tools for that
+  call, so the prompt (and `.agents/rules/AGENTS.md`) must forbid file changes.
 - Alternative (per machine): `"permissions": {"allow": ["read_file(*)"]}` in
   `~/.gemini/antigravity-cli/settings.json` (targets: `read_file(*)`, `read_file(/abs/path)`,
   `read_file(dir)`; recursive). Permissions cannot be defined inside the repo (`.agents/`

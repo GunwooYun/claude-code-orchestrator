@@ -11,7 +11,11 @@ Load shared project context from `.claude/` directory to ensure Antigravity CLI 
 
 ## When to Activate
 
-**ALWAYS** - This skill should run at the beginning of research or analysis tasks.
+At the beginning of research or analysis tasks that touch this project's code
+or design. Note: in headless (`agy -p`) calls, file reads only succeed when the
+caller passed the permission flags; if reads are denied, skip this skill and
+answer from the prompt alone. Prefer `DESIGN.md` and `docs/libraries/` over
+loading every rule file.
 
 ## Workflow
 
@@ -69,4 +73,5 @@ When providing research results:
 - Include code examples when relevant
 - Cite sources from web search
 - Note constraints relevant to this project
-- Save comprehensive findings to `.claude/docs/research/`
+- Return everything in the response — do not create or modify files
+  (Claude Code persists findings to `.claude/docs/research/`)

@@ -40,8 +40,12 @@ agy models   # 사용 가능한 모델 슬러그 확인
 
 > 참고: 헤드리스(`agy -p`) 호출에서 파일 읽기는 기본 거부(soft-deny: 조용히 건너뛰고 exit 0)되기 때문에,
 > 이 템플릿은 파일을 읽어야 하는 패턴(코드베이스 분석·멀티모달)에 `--dangerously-skip-permissions --sandbox`를
-> 붙여 **추가 설정 없이** 동작하도록 되어 있다. 더 엄격하게 쓰고 싶다면 (선택) `~/.gemini/antigravity-cli/settings.json`에
+> 붙여 **추가 설정 없이** 동작하도록 되어 있다. 이 플래그는 해당 호출 동안 agy의 파일 쓰기·MCP 도구도 자동 승인하므로,
+> 템플릿의 모든 해당 프롬프트는 "파일을 만들거나 수정하지 말고 응답으로만 반환"을 명시하고 `.agents/rules/AGENTS.md`도
+> agy를 읽기 전용으로 묶는다. 더 엄격하게 쓰고 싶다면 (선택) `~/.gemini/antigravity-cli/settings.json`에
 > `{ "permissions": { "allow": ["read_file(*)"] } }`를 넣고 플래그를 빼면 된다.
+>
+> 이미 루트에 `AGENTS.md`(Codex/Cursor 등 용)가 있는 프로젝트에서는 agy가 그 파일과 `.agents/rules/AGENTS.md`를 함께 로드한다.
 
 ## Architecture
 
@@ -181,6 +185,8 @@ Red → Green → Refactor 사이클을 강제한다.
 ### `/deep-reasoning` — 심층 추론 서브에이전트 연동
 
 설계 판단, 디버깅, 트레이드오프 분석 전용. Claude Fable이 격리된 컨텍스트에서 분석하고 간결한 권고만 반환한다.
+같은 이름이 두 곳에 있다: `/deep-reasoning` **스킬**은 "언제·어떻게 상담할지"의 가이드이고, `deep-reasoning` **에이전트**(`.claude/agents/`)가 `Task(subagent_type="deep-reasoning")`의 실제 대상이다.
+읽기 전용은 Edit/Write 도구를 제거하고 Bash 사용을 지시로 제한한 것이며, 커널 수준 샌드박스는 아니다.
 
 **트리거 예시:**
 - "어떻게 설계해야 하는가?" "어떻게 구현할까?"

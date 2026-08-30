@@ -34,26 +34,27 @@ context window.
 | Code implementation | Claude Code |
 | File editing | Claude Code |
 
-## Shared Context Access
+## Shared Context Access (READ-ONLY)
 
-You can read and **write to** project context:
+You may read project context, but you must **never create or modify files**:
 
 ```
 .claude/
 ├── docs/DESIGN.md        # Architecture decisions (read)
-├── docs/research/        # YOUR OUTPUT GOES HERE
-├── docs/libraries/       # Library docs (read/write)
+├── docs/research/        # Previous research (read)
+├── docs/libraries/       # Library docs (read)
 └── rules/                # Coding principles (read)
 ```
 
-**Save your research to `.claude/docs/research/{topic}.md`**
-This allows Claude Code and its subagents to reference your findings.
+**Return all findings in your response.** Claude Code (the calling subagent)
+persists them to `.claude/docs/research/{topic}.md`. Headless calls may run
+with tool permissions auto-approved; the read-only rule is what keeps that safe.
 
 ## How You're Called
 
 ```bash
 agy -p "{research question}"
-agy -p "Analyze the file at {absolute_path}. {question}"   # multimodal: read the file yourself
+agy -p "Read the file at {absolute_path} and {question}"   # multimodal: read the file yourself
 agy -p "{question}" --output-format json --print-timeout 10m   # scripted calls
 ```
 
@@ -94,12 +95,11 @@ Structure your response for Claude Code to use:
 1. **Be thorough** — Use your large context to find comprehensive answers
 2. **Cite sources** — Include URLs and references
 3. **Be actionable** — Focus on what Claude Code can use
-4. **Save findings** — Write to `.claude/docs/research/` for persistence
+4. **Never write files** — Return everything in the response; Claude persists it
 5. **Flag for Claude** — If you find design decisions needed, note them
 
-## CLI Logs
+## Consultation History
 
-agy 에의 입출력은 `.claude/logs/cli-tools.jsonl` 에 기록되고 있다.
-과거 상담 내용을 확인하려면 이 로그를 참조한다.
-
-`/checkpointing` 실행 후 아래에 Session History가 추가된다.
+Your past calls are logged by Claude Code in `.claude/logs/cli-tools.jsonl`
+(read-only for you). A `## Session History` section summarizing them may be
+appended below this line by Claude's `/checkpointing` skill.

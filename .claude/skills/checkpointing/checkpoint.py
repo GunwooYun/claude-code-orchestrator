@@ -196,7 +196,7 @@ def summarize_entries(entries: list[dict]) -> dict[str, list[dict]]:
         tool = entry.get("tool", "unknown")
 
         if date not in by_date:
-            by_date[date] = {"codex": [], "antigravity": []}
+            by_date[date] = {"antigravity": []}
 
         if tool in by_date[date]:
             by_date[date][tool].append({
@@ -220,14 +220,6 @@ def generate_session_history(by_date: dict) -> str:
         lines.append("")
 
         data = by_date[date]
-
-        if data.get("codex"):
-            lines.append("**Codex상담:**")
-            for item in data["codex"][:5]:  # Limit to 5 per day
-                prompt_summary = item["prompt"][:100].replace("\n", " ")
-                status = "✓" if item["success"] else "✗"
-                lines.append(f"- {status} {prompt_summary}...")
-            lines.append("")
 
         if data.get("antigravity"):
             lines.append("**agy조사:**")
@@ -275,7 +267,6 @@ def generate_full_checkpoint(since: str | None = None) -> Path | None:
     file_stats = get_file_stats(since)
 
     # Count CLI consultations
-    codex_count = sum(1 for e in entries if e.get("tool") == "codex")
     agy_count = sum(1 for e in entries if e.get("tool") == "antigravity")
 
     # Build checkpoint content
@@ -300,7 +291,6 @@ def generate_full_checkpoint(since: str | None = None) -> Path | None:
         f"{len(file_changes['created'])} created, "
         f"{len(file_changes['deleted'])} deleted)"
     )
-    lines.append(f"- **Codex consultations**: {codex_count}")
     lines.append(f"- **agy researches**: {agy_count}")
     if since:
         lines.append(f"- **Since**: {since}")
@@ -357,19 +347,7 @@ def generate_full_checkpoint(since: str | None = None) -> Path | None:
     lines.append("## CLI Tool Consultations")
     lines.append("")
 
-    codex_entries = [e for e in entries if e.get("tool") == "codex"]
     agy_entries = [e for e in entries if e.get("tool") == "antigravity"]
-
-    if codex_entries:
-        lines.append(f"### Codex ({len(codex_entries)} consultations)")
-        lines.append("")
-        for entry in codex_entries[:10]:
-            status = "✓" if entry.get("success", False) else "✗"
-            prompt = entry.get("prompt", "")[:80].replace("\n", " ")
-            lines.append(f"- {status} {prompt}...")
-        if len(codex_entries) > 10:
-            lines.append(f"- ... and {len(codex_entries) - 10} more consultations")
-        lines.append("")
 
     if agy_entries:
         lines.append(f"### Antigravity ({len(agy_entries)} researches)")

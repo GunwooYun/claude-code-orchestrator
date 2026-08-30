@@ -2,15 +2,17 @@
 """
 PostToolUse hook: Log Antigravity CLI (agy) input/output to JSONL file.
 
-Triggers after Bash tool calls containing 'agy' commands.
+Triggers after Bash tool calls that actually invoke `agy` in print mode
+(`agy -p|--print|--prompt "..."`). Quoted mentions of agy inside other
+commands (grep, echo, heredocs) are ignored.
 Logs are stored in .claude/logs/cli-tools.jsonl
 
 All agents (Claude Code, subagents, agy) can read this log.
 """
 
 import json
-import os
 import re
+import shlex
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,28 +20,96 @@ from pathlib import Path
 LOG_DIR = Path(__file__).parent.parent / "logs"
 LOG_FILE = LOG_DIR / "cli-tools.jsonl"
 
+PROMPT_FLAGS = {"-p", "--print", "--prompt"}
+# Tokens that may legitimately precede the agy binary in the same command segment.
+WRAPPER_COMMANDS = {"sudo", "nohup", "command", "exec", "env", "time"}
+ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+# Markers agy prints on stderr when a tool was auto-denied in headless mode.
+SOFT_DENY_MARKERS = ("auto-denied", "no output produced", "soft-den")
 
-AGY_COMMAND = re.compile(r"(?:^|[\s;&|])agy\s")
+
+def split_segments(command: str) -> list[list[str]]:
+    """Tokenize a shell command and split it into simple-command segments.
+
+    Shell control operators (; & | ( ) ) become segment boundaries; quoted
+    strings stay single tokens, so `grep 'agy -p "x"'` never yields a
+    segment that starts with agy.
+    """
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        tokens = list(lexer)
+    except ValueError:
+        # Unbalanced quotes (e.g. heredoc bodies) — not a plain agy call.
+        return []
+
+    segments: list[list[str]] = []
+    current: list[str] = []
+    for token in tokens:
+        if token and all(ch in ";&|()" for ch in token):
+            if current:
+                segments.append(current)
+            current = []
+        else:
+            current.append(token)
+    if current:
+        segments.append(current)
+    return segments
 
 
-def extract_agy_prompt(command: str) -> str | None:
-    """Extract prompt from an agy print-mode command."""
-    # Pattern: agy -p "prompt" | agy --print 'prompt' | agy --prompt "prompt"
-    patterns = [
-        r'agy\s+(?:-p|--print|--prompt)\s+"([^"]+)"',
-        r"agy\s+(?:-p|--print|--prompt)\s+'([^']+)'",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, command, re.DOTALL)
-        if match:
-            return match.group(1).strip()
+def find_agy_args(command: str) -> list[str] | None:
+    """Return the argv of the first real agy invocation, or None."""
+    for segment in split_segments(command):
+        tokens = list(segment)
+        # Skip env assignments and wrappers such as `timeout 60`.
+        while tokens:
+            head = tokens[0]
+            if ENV_ASSIGNMENT.match(head) or head in WRAPPER_COMMANDS:
+                tokens.pop(0)
+            elif head == "timeout" and len(tokens) > 1:
+                tokens = tokens[2:]
+            else:
+                break
+        if not tokens:
+            continue
+        if tokens[0] == "agy" or tokens[0].endswith("/agy"):
+            return tokens
     return None
 
 
-def extract_model(command: str) -> str | None:
-    """Extract model name from command."""
-    match = re.search(r"--model\s+(\S+)", command)
-    return match.group(1) if match else None
+def extract_agy_prompt(args: list[str]) -> str | None:
+    """Extract the print-mode prompt from agy argv (flag order agnostic)."""
+    for i, token in enumerate(args):
+        if token in PROMPT_FLAGS and i + 1 < len(args):
+            return args[i + 1].strip() or None
+        for flag in PROMPT_FLAGS:
+            if token.startswith(flag + "="):
+                return token[len(flag) + 1:].strip() or None
+    return None
+
+
+def extract_model(args: list[str]) -> str | None:
+    """Extract --model value from agy argv (supports --model X and --model=X)."""
+    for i, token in enumerate(args):
+        if token == "--model" and i + 1 < len(args):
+            return args[i + 1]
+        if token.startswith("--model="):
+            return token[len("--model="):]
+    return None
+
+
+def determine_success(stdout: str, stderr: str) -> bool:
+    """Best-effort success flag that reflects agy's headless soft-deny."""
+    combined = f"{stdout}\n{stderr}".lower()
+    if any(marker in combined for marker in SOFT_DENY_MARKERS):
+        return False
+    try:
+        payload = json.loads(stdout)
+    except (json.JSONDecodeError, TypeError):
+        return bool(stdout.strip())
+    if isinstance(payload, dict) and "status" in payload:
+        return payload.get("status") == "SUCCESS" and bool(payload.get("response"))
+    return bool(stdout.strip())
 
 
 def truncate_text(text: str, max_length: int = 2000) -> str:
@@ -56,63 +126,47 @@ def log_entry(entry: dict) -> None:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
+def build_entry(command: str, tool_response: dict) -> dict | None:
+    """Build a log entry for an agy command, or None if it is not one."""
+    args = find_agy_args(command)
+    if args is None:
+        return None
+    prompt = extract_agy_prompt(args)
+    if not prompt:
+        return None
+
+    stdout = tool_response.get("stdout", "") or tool_response.get("content", "") or ""
+    stderr = tool_response.get("stderr", "") or ""
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "tool": "antigravity",
+        "model": extract_model(args) or "default",
+        "prompt": truncate_text(prompt),
+        "response": truncate_text(stdout) if stdout else "",
+        "success": determine_success(stdout, stderr),
+    }
+
+
 def main() -> None:
-    # Read hook input from stdin
     try:
         hook_input = json.load(sys.stdin)
     except json.JSONDecodeError:
         return
 
-    # Only process Bash tool calls
-    tool_name = hook_input.get("tool_name", "")
-    if tool_name != "Bash":
+    if hook_input.get("tool_name", "") != "Bash":
         return
 
-    # Get command and output
-    tool_input = hook_input.get("tool_input", {})
-    tool_response = hook_input.get("tool_response", {})
+    command = hook_input.get("tool_input", {}).get("command", "")
+    tool_response = hook_input.get("tool_response", {}) or {}
+    if not isinstance(tool_response, dict):
+        tool_response = {"stdout": str(tool_response)}
 
-    command = tool_input.get("command", "")
-    output = tool_response.get("stdout", "") or tool_response.get("content", "")
-
-    # Check if this is an agy command (word-boundary match to avoid false hits)
-    if not AGY_COMMAND.search(command):
+    entry = build_entry(command, tool_response)
+    if entry is None:
         return
-
-    tool = "antigravity"
-    prompt = extract_agy_prompt(command)
-    model = extract_model(command) or "default"
-
-    if not prompt:
-        # Could not extract prompt, skip logging
-        return
-
-    # Determine success
-    exit_code = tool_response.get("exit_code", 0)
-    success = exit_code == 0 and bool(output)
-
-    # Create log entry
-    entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "tool": tool,
-        "model": model,
-        "prompt": truncate_text(prompt),
-        "response": truncate_text(output) if output else "",
-        "success": success,
-        "exit_code": exit_code,
-    }
 
     log_entry(entry)
-
-    # Output notification (shown to user via hook output)
-    print(
-        json.dumps(
-            {
-                "result": "continue",
-                "message": f"[LOG] {tool.capitalize()} call logged to .claude/logs/cli-tools.jsonl",
-            }
-        )
-    )
+    print(json.dumps({"systemMessage": "[LOG] Antigravity call logged to .claude/logs/cli-tools.jsonl"}))
 
 
 if __name__ == "__main__":

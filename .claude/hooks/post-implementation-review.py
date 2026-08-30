@@ -122,7 +122,8 @@ def main():
                         f"[Code Review Suggestion] {reason} in this session. "
                         "Consider having the deep-reasoning subagent review the implementation. "
                         "**Recommended**: Use Task tool with subagent_type='deep-reasoning' "
-                        "with git diff to preserve main context."
+                        "with git diff to preserve main context. "
+                        "If you are a subagent, report back to the orchestrator instead."
                     )
                 }
             }

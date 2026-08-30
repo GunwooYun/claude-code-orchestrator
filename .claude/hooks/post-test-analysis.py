@@ -117,7 +117,8 @@ def main():
                         f"[Debug Suggestion] {reason}. "
                         "Consider consulting the deep-reasoning subagent for debugging analysis. "
                         "**Recommended**: Use Task tool with subagent_type='deep-reasoning' "
-                        "with full error context to preserve main context."
+                        "with full error context to preserve main context. "
+                        "If you are a subagent, report the failure back to the orchestrator instead."
                     )
                 }
             }

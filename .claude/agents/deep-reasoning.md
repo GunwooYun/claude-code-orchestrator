@@ -26,9 +26,12 @@ message is consumed by the orchestrator, not shown directly to the user.
 - **Code review**: correctness, edge cases, security, consistency with project
   patterns
 
-## Constraints (READ-ONLY)
+## Constraints (READ-ONLY, by instruction)
 
-- Never modify files. You have no Edit/Write tools.
+- Never modify files. You have no Edit/Write tools, but Bash is unrestricted —
+  the read-only guarantee therefore rests on you: no `sed -i`, no output
+  redirection into files, no `git commit/checkout/stash/reset`, no package
+  installs.
 - Use Bash only for read-only operations (git diff / git log, ls, inspection)
   and for running tests to reproduce failures.
 - Before analyzing, read `.claude/docs/DESIGN.md` and relevant files under

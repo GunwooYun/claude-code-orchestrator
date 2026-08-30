@@ -11,7 +11,7 @@
 | 에이전트 | 강점 | 사용 목적 |
 |-------|----------|---------|
 | **Claude Code (메인)** | 오케스트레이션, 사용자 대화 | 전체 통합, 태스크 관리, 의사결정|
-| **deep-reasoning 서브에이전트 (Claude Fable)** | 깊은 추론, 설계 판단, 디버깅 | 설계 검토, 에러 분석, 트레이드오프 평가 (격리된 컨텍스트, 읽기 전용) |
+| **deep-reasoning 서브에이전트 (Claude Fable)** | 깊은 추론, 설계 판단, 디버깅 | 설계 검토, 에러 분석, 트레이드오프 평가 (격리된 컨텍스트, 읽기 전용 — Edit/Write 도구 없음, Bash는 지시로 제한) |
 | **Antigravity CLI (`agy`, Gemini 모델)** | 대규모 컨텍스트, 멀티모달, 웹 검색 | 대규모 코드 분석, 라이브러리 조사, PDF/이미지/영상 분석 |
 
 **IMPORTANT**: 각 에이전트는 단독으로도 강력하지만, **의도적으로 역할을 분리했을 때 성능이 폭발**한다.
@@ -39,7 +39,7 @@ Claude Code의 최대 컨텍스트는 **200k 토큰**이지만,
 Task(subagent_type="deep-reasoning", prompt="Review this design ... Return concise summary")
 
 # MUST: 대규모 리서치는 general-purpose 서브에이전트 경유로 agy 호출 (출력 큼)
-Task(subagent_type="general-purpose", prompt="agy에게 리서치 요청 후 요약만 반환")
+Task(subagent_type="general-purpose", prompt="Research X via agy, save to .claude/docs/research/, return a concise summary")
 
 # OK: 짧은 agy 질문은 직접 호출 (아주 짧은 출력)
 Bash("agy -p '한 문장으로 답변'")

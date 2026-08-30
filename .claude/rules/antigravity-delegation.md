@@ -131,8 +131,9 @@ prompt: |
 
   Run from the repository root (CWD is the workspace):
   agy -p "Analyze architecture, key modules, data flow,
-  and entry points of this repository." \
-    --dangerously-skip-permissions --sandbox
+  and entry points of this repository.
+  Do not create or modify any files; return everything in your response." \
+    --dangerously-skip-permissions --sandbox --print-timeout 10m
 
   Save to .claude/docs/research/codebase-analysis.md
   Return architecture summary and key insights.
@@ -143,11 +144,13 @@ prompt: |
 prompt: |
   Extract information from {file}.
 
-  agy -p "Read the file at {absolute_path} and {extraction prompt}" \
+  agy -p "Read the file at {absolute_path} and {extraction prompt}.
+  Do not create or modify any files; return everything in your response." \
     --dangerously-skip-permissions --sandbox
 
   (stdin file redirection is NOT supported — pass the absolute path
-   in the prompt; agy reads the file with its own tools)
+   in the prompt; agy reads the file with its own tools. Verified for
+   images and PDF; video/audio untested.)
 
   Save to .claude/docs/research/{output}.md
   Return key extracted information.
@@ -173,10 +176,12 @@ For use within subagents:
 agy -p "{question}"
 
 # Codebase analysis (reads repo files → headless flags required; CWD is the workspace)
-agy -p "{question}" --dangerously-skip-permissions --sandbox [--add-dir {path}]
+agy -p "{question} Do not create or modify any files." \
+  --dangerously-skip-permissions --sandbox --print-timeout 10m [--add-dir {path}]
 
 # Multimodal (path-in-prompt; no stdin redirection; headless flags required)
-agy -p "Read the file at {absolute_path} and {question}" --dangerously-skip-permissions --sandbox
+agy -p "Read the file at {absolute_path} and {question} Do not create or modify any files." \
+  --dangerously-skip-permissions --sandbox
 
 # Scripted/CI calls (recommended for automation)
 agy -p "{question}" --output-format json --print-timeout 10m
@@ -193,9 +198,18 @@ agy -p "{question}" --output-format json --print-timeout 10m
   SUCCESS). This template therefore appends
   `--dangerously-skip-permissions --sandbox` to every pattern that must read
   files (codebase analysis, multimodal). `--sandbox` restricts terminal
-  commands during that call; file reads still work (verified). Use these flags
-  only with read-only research prompts in a git-tracked repo. Pure web
-  research prompts do not need them.
+  commands during that call; file reads still work (verified for a workspace
+  PNG, an out-of-workspace PNG, and a PDF). Pure web research prompts do not
+  need the flags.
+- **What the flags expose**: `write_file`, `read_url`, and MCP tools are also
+  auto-approved for that call, and `Bash(agy:*)` in `settings.json` lets
+  subagents run such calls without a Claude-side prompt. The real guard is the
+  prompt: every flagged template must say *"Do not create or modify any files;
+  return everything in your response"* (also enforced by `.agents/rules/AGENTS.md`),
+  and the calls run only inside git-tracked repos.
+- Whole-repo analysis can exceed the 5m default — flagged patterns include
+  `--print-timeout 10m`. Files outside the workspace can also be exposed
+  explicitly with `--add-dir <dir>`.
 - Optional hardening (per machine, not part of the template): allow reads
   globally with `{"permissions": {"allow": ["read_file(*)"]}}` in
   `~/.gemini/antigravity-cli/settings.json` and drop the flags.

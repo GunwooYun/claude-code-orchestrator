@@ -54,6 +54,7 @@ Task tool parameters:
        2. Relevant existing code and patterns
        3. Library recommendations
        4. Technical considerations
+       Do not create or modify any files; return everything in your response.
        " --dangerously-skip-permissions --sandbox --print-timeout 10m
 
     2. Save full output to: .claude/docs/research/{feature}.md

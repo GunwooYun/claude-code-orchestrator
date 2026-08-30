@@ -23,10 +23,10 @@ metadata:
 
 | 상황 | 방법 |
 |------|------|
-|코드 기반 분석 | 하위 에이전트를 통해(권장) |
-| 라이브러리 조사 | 서브 에이전트를 통해 (권장) |
-| 멀티모달 | 서브에이전트 경유(권장) |
-| 짧은 질문 (1-2 문 답변) | 직접 호출 확인 |
+| 코드베이스 분석 | 서브에이전트 경유 (권장) |
+| 라이브러리 조사 | 서브에이전트 경유 (권장) |
+| 멀티모달 | 서브에이전트 경유 (권장) |
+| 짧은 질문 (1-2 문 답변) | 직접 호출 OK |
 
 ## Antigravity vs deep-reasoning
 
@@ -87,7 +87,7 @@ agy -p "Brief question"
 
 ```bash
 # Codebase analysis (reads repo files → headless flags required; run from repo root)
-agy -p "{question}" --dangerously-skip-permissions --sandbox
+agy -p "{question}" --dangerously-skip-permissions --sandbox --print-timeout 10m
 
 # Multimodal (path-in-prompt; stdin redirection NOT supported; headless flags required)
 agy -p "Read the file at {absolute_path} and {prompt}" --dangerously-skip-permissions --sandbox
@@ -99,10 +99,11 @@ agy -p "{question}" --output-format json --print-timeout 10m
 **Headless caveats**: permission-denied tools are silently skipped with exit 0
 (soft-deny) — if results look empty, check stderr or the JSON `.status` field.
 File reads are denied by default in headless mode, so every pattern that reads
-files carries `--dangerously-skip-permissions --sandbox` (auto-approve tools,
-terminal sandboxed; use with read-only research prompts only). Web research
-prompts need no flags. Default print timeout is 5m. Pin models with
-`--model {slug}` (`agy models`).
+files carries `--dangerously-skip-permissions --sandbox` (auto-approves agy's
+tools incl. write_file; terminal sandboxed). Those prompts MUST include
+"Do not create or modify any files; return everything in your response".
+Web research prompts need no flags. Default print timeout is 5m (repo analysis
+adds `--print-timeout 10m`). Pin models with `--model {slug}` (`agy models`).
 
 ### Workflow (Subagent)
 
@@ -149,7 +150,9 @@ agy -p "Analyze this repository:
 2. Key modules and responsibilities
 3. Data flow between components
 4. Entry points and extension points
-5. Existing patterns to follow" --dangerously-skip-permissions --sandbox
+5. Existing patterns to follow
+Do not create or modify any files; return everything in your response." \
+  --dangerously-skip-permissions --sandbox --print-timeout 10m
 ```
 
 ### Library Research
@@ -157,6 +160,9 @@ agy -p "Analyze this repository:
 See: `references/lib-research-task.md`
 
 ### Multimodal Analysis
+
+Verified headless: images (PNG) and PDF. Video/audio untested via `-p`.
+Add "Do not create or modify any files." to each prompt.
 
 ```bash
 # Video

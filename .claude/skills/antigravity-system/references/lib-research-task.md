@@ -11,7 +11,7 @@ Use Google Search to find:
 - Official documentation
 - GitHub README, Issues, Discussions
 - PyPI / npm pages
-- Latest blog posts, tutorials (2024-2025)
+- Latest blog posts, tutorials (2026)
 
 ---
 
@@ -50,7 +50,7 @@ Provide documentation in this structure:
 ---
 
 Output in markdown format suitable for saving to .claude/docs/libraries/{library_name}.md
-Output documentation content in Korean.
+Output documentation content in English.
 ```
 
 ## Example Invocation
@@ -63,7 +63,7 @@ Use Google Search to find:
 - Official documentation
 - GitHub README, Issues, Discussions
 - PyPI pages
-- Latest blog posts, tutorials (2024-2025)
+- Latest blog posts, tutorials (2026)
 
 [Template structure as above...]
 "
