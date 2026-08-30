@@ -24,11 +24,11 @@ CLI 상담 이력을 각 에이전트의 구성 파일에 추가한다.
 │                      ↓                                      │
 │  /checkpointing                                             │
 │                      ↓                                      │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐ │
-│  │  CLAUDE.md   │ │ AGENTS.md    │ │ GEMINI.md            │ │
-│  │ ## Session   │ │ ## Session   │ │ ## Session           │ │
-│  │ History      │ │ History      │ │ History              │ │
-│  └──────────────┘ └──────────────┘ └──────────────────────┘ │
+│  ┌──────────────┐ ┌───────────────────────────┐             │
+│  │  CLAUDE.md   │ │ .agents/rules/AGENTS.md   │             │
+│  │ ## Session   │ │ ## Session                │             │
+│  │ History      │ │ History                   │             │
+│  └──────────────┘ └───────────────────────────┘             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -41,7 +41,7 @@ CLI 상담 이력을 각 에이전트의 구성 파일에 추가한다.
 │  Data Sources:                                              │
 │  ├─ git log (commits)                                       │
 │  ├─ git diff (file changes)                                 │
-│  └─ cli-tools.jsonl (Gemini logs)                           │
+│  └─ cli-tools.jsonl (agy logs)                              │
 │                      ↓                                      │
 │  /checkpointing --full                                      │
 │                      ↓                                      │
@@ -49,7 +49,7 @@ CLI 상담 이력을 각 에이전트의 구성 파일에 추가한다.
 │  ├─ Summary (commits, files, consultations)                 │
 │  ├─ Git History (commits list)                              │
 │  ├─ File Changes (created, modified, deleted)               │
-│  └─ CLI Consultations (Gemini)                              │
+│  └─ CLI Consultations (agy)                                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -113,7 +113,7 @@ python checkpoint.py --full --analyze
 ### Session History 모드
 
 1. `.claude/logs/cli-tools.jsonl` 구문 분석
-2. Gemini 상담 내용을 날짜별로 정리
+2. agy 상담 내용을 날짜별로 정리
 3. 각 에이전트 구성 파일에 `## Session History` 추가
 
 ### Full Checkpoint 모드
@@ -124,7 +124,7 @@ python checkpoint.py --full --analyze
    - `git diff --numstat`로 행 수 변경
 
 2. **CLI 상담 로그 분석**
-   - Gemini조사 내용 및 상태
+   - agy조사 내용 및 상태
 
 3. **체크포인트 파일 생성**
    - `.claude/checkpoints/YYYY-MM-DD-HHMMSS.md`
@@ -137,7 +137,7 @@ python checkpoint.py --full --analyze
 ## Summary
 - **Commits**: 5
 - **Files changed**: 12 (8 modified, 3 created, 1 deleted)
-- **Gemini researches**: 2
+- **agy researches**: 2
 
 ## Git History
 
@@ -159,7 +159,7 @@ python checkpoint.py --full --analyze
 
 ## CLI Tool Consultations
 
-### Gemini (2 researches)
+### Antigravity (2 researches)
 - ✓ 조사: Git integration best practices
 ```
 
@@ -170,7 +170,7 @@ python checkpoint.py --full --analyze
 
 ### 2026-01-26
 
-**Gemini조사:**
+**agy조사:**
 - ✓ MCP vs CLI 비교 조사...
 ```
 

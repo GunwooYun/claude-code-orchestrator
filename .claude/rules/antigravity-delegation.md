@@ -1,11 +1,11 @@
-# Gemini Delegation Rule
+# Antigravity Delegation Rule
 
-**Gemini CLI is your research specialist with massive context and multimodal capabilities.**
+**Antigravity CLI (`agy`) is your research specialist with massive context and multimodal capabilities (Gemini models).**
 
 ## Context Management (CRITICAL)
 
-**컨텍스트 소비를 의식해서 Gemini를 사용한다.**  
-Gemini는 출력이 커지기 쉬우므로, **서브 에이전트 경유를 권장**한다.
+**컨텍스트 소비를 의식해서 agy를 사용한다.**
+agy는 출력이 커지기 쉬우므로, **서브 에이전트 경유를 권장**한다.
 
 | 상황 | 권장 방법 |
 |------|-----------|
@@ -22,28 +22,28 @@ Gemini는 출력이 커지기 쉬우므로, **서브 에이전트 경유를 권�
 │                                                          │
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  Subagent (general-purpose)                         │ │
-│  │  → Calls Gemini CLI                                 │ │
+│  │  → Calls Antigravity CLI (agy)                      │ │
 │  │  → Saves full output to .claude/docs/research/      │ │
 │  │  → Returns key findings only                        │ │
 │  └────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────┘
 ```
 
-## About Gemini
+## About Antigravity CLI
 
-Gemini CLI excels at:
-- **1M token context window** — Analyze entire codebases at once
+Antigravity CLI (`agy`) is the successor of Gemini CLI and excels at:
+- **Massive context (Gemini models)** — Analyze entire codebases at once
 - **Google Search grounding** — Access latest information
-- **Multimodal processing** — Video, audio, PDF analysis
+- **Multimodal processing** — PDF, image, video analysis
 
-Think of Gemini as your research assistant who can quickly gather and synthesize information.
+Think of agy as your research assistant who can quickly gather and synthesize information.
 
-**When you need research → Delegate to subagent → Subagent consults Gemini.**
+**When you need research → Delegate to subagent → Subagent consults agy.**
 
-## Gemini vs deep-reasoning: Choose the Right Tool
+## Antigravity vs deep-reasoning: Choose the Right Tool
 
-| Task | deep-reasoning | Gemini |
-|------|----------------|--------|
+| Task | deep-reasoning | Antigravity (agy) |
+|------|----------------|-------------------|
 | Design decisions | ✓ | |
 | Debugging | ✓ | |
 | Code implementation | ✓ | |
@@ -51,32 +51,32 @@ Think of Gemini as your research assistant who can quickly gather and synthesize
 | Large codebase understanding | | ✓ |
 | Pre-implementation research | | ✓ |
 | Latest docs/library research | | ✓ |
-| Video/Audio/PDF analysis | | ✓ |
+| PDF/image/video analysis | | ✓ |
 
-## When to Consult Gemini
+## When to Consult agy
 
-ALWAYS consult Gemini BEFORE:
+ALWAYS consult agy BEFORE:
 
 1. **Pre-implementation research** - Best practices, library comparison
 2. **Large codebase analysis** - Repository-wide understanding
 3. **Documentation search** - Latest official docs, breaking changes
-4. **Multimodal tasks** - Video, audio, PDF content extraction
+4. **Multimodal tasks** - PDF, image, video content extraction
 
 ### Trigger Phrases (User Input)
 
-Consult Gemini when user says:
+Consult agy when user says:
 
 | Korean | English |
 |----------|---------|
 | "조사해 줘", "리서치해 줘", "조사해" | "Research" "Investigate" "Look up" |
-| "이 PDF/영상/오디오를 봐줘"  | "Analyze this PDF/video/audio" |
+| "이 PDF/영상/이미지를 봐줘"  | "Analyze this PDF/video/image" |
 | "코드베이스 전체를 이해해 줘" | "Understand the entire codebase" |
 | "최신 문서를 확인해 줘" | "Check the latest documentation" |
 | "~에 대한 정보를 모아줘" | "Gather information about X" |
 
 ## When NOT to Consult
 
-Skip Gemini for:
+Skip agy for:
 
 - Design decisions (use deep-reasoning subagent instead)
 - Code implementation (main Claude or general-purpose subagent)
@@ -99,8 +99,8 @@ Task tool parameters:
 - prompt: |
     Research: {topic}
 
-    1. Call Gemini CLI:
-       gemini -p "{research question}" 2>/dev/null
+    1. Call Antigravity CLI:
+       agy -p "{research question}"
 
     2. Save full output to: .claude/docs/research/{topic}.md
 
@@ -117,8 +117,8 @@ Task tool parameters:
 prompt: |
   Research best practices for {topic}.
 
-  gemini -p "Research: {topic}. Include recommended approaches,
-  common pitfalls, and library recommendations." 2>/dev/null
+  agy -p "Research: {topic}. Include recommended approaches,
+  common pitfalls, and library recommendations."
 
   Save to .claude/docs/research/{topic}.md
   Return 5-7 key bullet points.
@@ -129,8 +129,9 @@ prompt: |
 prompt: |
   Analyze codebase for {purpose}.
 
-  gemini -p "Analyze architecture, key modules, data flow,
-  and entry points." --include-directories . 2>/dev/null
+  Run from the repository root (CWD is the workspace):
+  agy -p "Analyze architecture, key modules, data flow,
+  and entry points of this repository."
 
   Save to .claude/docs/research/codebase-analysis.md
   Return architecture summary and key insights.
@@ -141,7 +142,10 @@ prompt: |
 prompt: |
   Extract information from {file}.
 
-  gemini -p "{extraction prompt}" < {file_path} 2>/dev/null
+  agy -p "Read the file at {absolute_path} and {extraction prompt}"
+
+  (stdin file redirection is NOT supported — pass the absolute path
+   in the prompt; agy reads the file with its own tools)
 
   Save to .claude/docs/research/{output}.md
   Return key extracted information.
@@ -158,26 +162,46 @@ While subagent is processing, you can:
 
 Subagent returns concise summary. Full output available in `.claude/docs/research/` if needed.
 
-## Gemini CLI Commands Reference
+## Antigravity CLI Commands Reference
 
 For use within subagents:
 
 ```bash
-# Research
-gemini -p "{question}" 2>/dev/null
+# Research (simple)
+agy -p "{question}"
 
-# Codebase analysis
-gemini -p "{question}" --include-directories . 2>/dev/null
+# Codebase analysis (CWD is the workspace; add extra dirs if needed)
+agy -p "{question}" --add-dir {path}
 
-# Multimodal
-gemini -p "{prompt}" < /path/to/file.pdf 2>/dev/null
+# Multimodal (path-in-prompt; no stdin redirection)
+agy -p "Read the file at {absolute_path} and {question}"
 
-# JSON output
-gemini -p "{question}" --output-format json 2>/dev/null
+# Scripted/CI calls (recommended for automation)
+agy -p "{question}" --output-format json --print-timeout 10m
 ```
 
+### Headless Caveats (IMPORTANT)
+
+- **soft-deny trap**: In print mode, a tool that cannot get permission is
+  silently skipped and the run still exits 0. If research comes back empty,
+  check stderr for soft-deny notices or use `--output-format json` and gate
+  on `.status == "SUCCESS"`.
+- **File reads are denied in headless mode by default** (verified 2026-08-30:
+  `read_file` on a workspace image was auto-denied → empty response, status
+  SUCCESS). Codebase analysis and multimodal calls therefore need a one-time
+  allow rule in `~/.gemini/antigravity-cli/settings.json`:
+  `{"permissions": {"allow": ["read_file(*)"]}}` — or, per call,
+  `--dangerously-skip-permissions` (auto-approves ALL tools; use only for
+  read-only research prompts in trusted repos). Pure web research prompts
+  work without either.
+- **Default timeout is 5m** — set `--print-timeout` explicitly for long tasks.
+- Model can be pinned with `--model {slug}` (list: `agy models`,
+  e.g. `gemini-3.1-pro-high`); unknown slugs fail loudly.
+- Do NOT redirect stderr to /dev/null in subagent calls — it carries the
+  soft-deny diagnostics.
+
 **Language protocol:**
-1. Ask Gemini in **English**
+1. Ask agy in **English**
 2. Subagent receives response in **English**
 3. Subagent summarizes and saves full output
 4. Main receives summary, reports to user in **Korean**
@@ -185,8 +209,8 @@ gemini -p "{question}" --output-format json 2>/dev/null
 ## Why Subagent Pattern?
 
 - **Context preservation**: Main orchestrator stays lightweight
-- **Full capture**: Subagent can save entire Gemini output to file
+- **Full capture**: Subagent can save entire agy output to file
 - **Concise handoff**: Main only receives key findings
 - **Parallel work**: Background subagents enable concurrent research
 
-**Use Gemini (via subagent) for research, the deep-reasoning subagent for reasoning, Claude for orchestration.**
+**Use agy (via subagent) for research, the deep-reasoning subagent for reasoning, Claude for orchestration.**

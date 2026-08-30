@@ -1,26 +1,26 @@
-# Gemini CLI Use Cases
+# Antigravity CLI (agy) Use Cases
 
 ## Use Case Categories
 
 ### 1. Pre-Implementation Research
 
-Before implementing a new feature, use Gemini to research best practices.
+Before implementing a new feature, use agy to research best practices.
 
 ```bash
 # General research
-gemini -p "Research best practices for implementing OAuth2 in Python.
+agy -p "Research best practices for implementing OAuth2 in Python.
 Include:
 - Recommended libraries (compare authlib vs python-oauth2 vs others)
 - Security considerations
 - Common pitfalls to avoid
-- Example implementations" 2>/dev/null
+- Example implementations"
 
 # Framework-specific research
-gemini -p "Research FastAPI authentication patterns in 2025.
+agy -p "Research FastAPI authentication patterns in 2025.
 Focus on:
 - JWT vs session-based auth
 - Dependency injection patterns
-- Testing strategies" 2>/dev/null
+- Testing strategies"
 ```
 
 ### 2. Repository-Wide Understanding
@@ -29,18 +29,18 @@ Leverage the 1M token context window for comprehensive codebase analysis.
 
 ```bash
 # Full repository analysis
-gemini -p "Analyze this entire codebase and provide:
+agy -p "Analyze this entire codebase and provide:
 1. Architecture diagram (describe in text)
 2. Module dependency graph
 3. Key abstractions and their purposes
-4. Suggested areas for improvement" --include-directories src,lib,tests 2>/dev/null
+4. Suggested areas for improvement"
 
 # Specific aspect analysis
-gemini -p "Trace the data flow for user authentication:
+agy -p "Trace the data flow for user authentication:
 - Entry points (API endpoints)
 - Middleware processing
 - Database interactions
-- Response formatting" --include-directories src 2>/dev/null
+- Response formatting"
 ```
 
 ### 3. Multimodal Data Analysis
@@ -49,92 +49,92 @@ gemini -p "Trace the data flow for user authentication:
 
 ```bash
 # Tutorial video analysis
-gemini -p "Analyze this tutorial video:
+agy -p "Read the file at ./tutorial.mp4. Analyze this tutorial video:
 - Summarize the main concepts taught
 - List step-by-step instructions
 - Note any important warnings or tips
-- Identify timestamps for key sections" < tutorial.mp4 2>/dev/null
+- Identify timestamps for key sections"
 
 # Code review video
-gemini -p "Extract code patterns and best practices demonstrated in this video" < code-review.mp4 2>/dev/null
+agy -p "Read the file at ./code-review.mp4. Extract code patterns and best practices demonstrated in this video"
 ```
 
 #### Audio Analysis
 
 ```bash
 # Meeting recording
-gemini -p "Transcribe and summarize this technical discussion:
+agy -p "Read the file at ./meeting.mp3. Transcribe and summarize this technical discussion:
 - Key decisions made
 - Action items
 - Open questions
-- Technical terms mentioned" < meeting.mp3 2>/dev/null
+- Technical terms mentioned"
 
 # Podcast/talk analysis
-gemini -p "Extract technical insights from this talk about {topic}" < conference-talk.mp3 2>/dev/null
+agy -p "Read the file at ./conference-talk.mp3. Extract technical insights from this talk about {topic}"
 ```
 
 #### PDF Analysis
 
 ```bash
 # API documentation
-gemini -p "Extract from this API documentation:
+agy -p "Read the file at ./api-spec.pdf. Extract from this API documentation:
 - All available endpoints
 - Request/response schemas
 - Authentication requirements
-- Rate limiting rules" < api-spec.pdf 2>/dev/null
+- Rate limiting rules"
 
 # Technical specification
-gemini -p "Summarize this technical specification:
+agy -p "Read the file at ./spec.pdf. Summarize this technical specification:
 - Core requirements
 - Constraints
 - Interface definitions
-- Edge cases to handle" < spec.pdf 2>/dev/null
+- Edge cases to handle"
 
 # Research paper
-gemini -p "Analyze this paper and explain:
+agy -p "Read the file at ./paper.pdf. Analyze this paper and explain:
 - Problem being solved
 - Proposed approach
 - Key algorithms
-- How to apply this in practice" < paper.pdf 2>/dev/null
+- How to apply this in practice"
 ```
 
 ### 4. Documentation & Web Research
 
 ```bash
 # Latest documentation
-gemini -p "Find and summarize the latest React 19 features and migration guide from official docs" 2>/dev/null
+agy -p "Find and summarize the latest React 19 features and migration guide from official docs"
 
 # Compare libraries
-gemini -p "Compare these Python HTTP clients in 2025:
+agy -p "Compare these Python HTTP clients in 2025:
 - httpx vs aiohttp vs requests
 - Performance benchmarks
 - Feature comparison
-- Community activity" 2>/dev/null
+- Community activity"
 
 # Troubleshooting
-gemini -p "Research common causes and solutions for: {error message}
-Search Stack Overflow, GitHub Issues, and official docs" 2>/dev/null
+agy -p "Research common causes and solutions for: {error message}
+Search Stack Overflow, GitHub Issues, and official docs"
 ```
 
 ### 5. Code Migration Analysis
 
 ```bash
 # Framework migration
-gemini -p "Analyze our codebase for Django to FastAPI migration:
+agy -p "Analyze our codebase for Django to FastAPI migration:
 - Identify all Django-specific patterns used
 - Map to FastAPI equivalents
 - Estimate migration complexity per module
-- Suggest migration order" --include-directories src 2>/dev/null
+- Suggest migration order"
 
 # Version upgrade
-gemini -p "Research breaking changes from Python 3.11 to 3.13.
+agy -p "Research breaking changes from Python 3.11 to 3.13.
 Cross-reference with our codebase to identify:
 - Deprecated features we use
 - New features we could adopt
-- Required changes" --include-directories . 2>/dev/null
+- Required changes"
 ```
 
-## When NOT to Use Gemini
+## When NOT to Use Antigravity
 
 | Task | Reason | Use Instead |
 |------|--------|-------------|
@@ -149,21 +149,18 @@ Cross-reference with our codebase to identify:
 ### JSON Output for Structured Data
 
 ```bash
-gemini -p "List all API endpoints in this codebase with their HTTP methods" \
-  --output-format json 2>/dev/null
+agy -p "List all API endpoints in this codebase with their HTTP methods" \
+  --output-format json
 ```
 
 ### Piping to Files
 
 ```bash
-gemini -p "Generate comprehensive documentation for src/auth/" \
-  --include-directories src/auth > docs/auth-module.md 2>/dev/null
+agy -p "Generate comprehensive documentation for src/auth/" > docs/auth-module.md
 ```
 
-## Rate Limits
+## Quota
 
-Free tier (personal Google account):
-- 60 requests/minute
-- 1,000 requests/day
-
-Plan accordingly for large research tasks.
+agy draws on the Google account's Antigravity quota. When it is exhausted the CLI
+prints `Individual quota reached ... Resets in Xh` and exits with an error — wait for
+the reset (or upgrade the plan). Plan accordingly for large research tasks.

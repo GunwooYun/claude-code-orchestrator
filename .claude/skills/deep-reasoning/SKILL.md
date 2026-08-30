@@ -125,13 +125,13 @@ See: `references/code-review-task.md`
 
 See: `references/refactoring-task.md`
 
-## Integration with Gemini
+## Integration with Antigravity (agy)
 
 | Task | Use |
 |------|-----|
-| Need research first | Gemini → then deep-reasoning |
+| Need research first | agy → then deep-reasoning |
 | Design decision | deep-reasoning directly |
-| Library comparison | Gemini research → deep-reasoning decision |
+| Library comparison | agy research → deep-reasoning decision |
 
 ## Why deep-reasoning?
 

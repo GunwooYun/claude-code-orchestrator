@@ -13,12 +13,12 @@ metadata:
 
 ## Overview
 
-이 스킬은 Claude(오케스트레이션 + deep-reasoning 서브에이전트)와 Gemini를 협조시켜 프로젝트 개시부터 구현후 리뷰까지를 커버한다.
+이 스킬은 Claude(오케스트레이션 + deep-reasoning 서브에이전트)와 Antigravity CLI(agy)를 협조시켜 프로젝트 개시부터 구현후 리뷰까지를 커버한다.
 
 ## Workflow
 
 ```
-Phase 1: Research (Gemini via Subagent)
+Phase 1: Research (agy via Subagent)
     ↓
 Phase 2: Requirements & Planning (Claude)
     ↓
@@ -35,9 +35,9 @@ Phase 6: Multi-Session Review (New Session + deep-reasoning)
 
 ---
 
-## Phase 1: Gemini Research (Background)
+## Phase 1: Antigravity Research (Background)
 
-**Task tool에서 하위 에이전트를 시작하고 Gemini에서 리포지토리 분석한다.**
+**Task tool에서 하위 에이전트를 시작하고 agy로 리포지토리 분석한다.**
 
 ```
 Task tool parameters:
@@ -46,15 +46,15 @@ Task tool parameters:
 - prompt: |
     Research for: {feature}
 
-    1. Call Gemini CLI:
-       gemini -p "Analyze this repository for: {feature}
+    1. Call Antigravity CLI (from the repository root):
+       agy -p "Analyze this repository for: {feature}
 
        Provide:
        1. Repository structure and architecture
        2. Relevant existing code and patterns
        3. Library recommendations
        4. Technical considerations
-       " --include-directories . 2>/dev/null
+       " --print-timeout 10m
 
     2. Save full output to: .claude/docs/research/{feature}.md
 
@@ -74,7 +74,7 @@ Ask in Korean:
 3. **기술적 요건**: 특정 라이브러리, 제약은?
 4. **성공기준**: 완료의 판단기준은?
 
-**Draft implementation plan based on Gemini research + user answers.**
+**Draft implementation plan based on agy research + user answers.**
 
 ---
 
@@ -193,7 +193,7 @@ Present final plan to user (in Korean):
 ```markdown
 ## 프로젝트 계획 : {feature}
 
-### 조사 결과 (Gemini)
+### 조사 결과 (agy)
 {Key findings - 3-5 bullet points}
 
 ### 설계 정책 (deep-reasoning 검토)
@@ -219,7 +219,7 @@ Present final plan to user (in Korean):
 
 | File | Purpose |
 |------|---------|
-| `.claude/docs/research/{feature}.md` | Gemini research output |
+| `.claude/docs/research/{feature}.md` | agy research output |
 | `CLAUDE.md` | Updated with project context |
 | Task list (internal) | Progress tracking |
 
@@ -227,7 +227,7 @@ Present final plan to user (in Korean):
 
 ## Tips
 
-- **All deep-reasoning/Gemini work through subagents** to preserve main context
+- **All deep-reasoning/agy work through subagents** to preserve main context
 - **Update CLAUDE.md** to persist context across sessions
 - **Use multi-session review** for better quality assurance
 - **Ctrl+T**: Toggle task list visibility

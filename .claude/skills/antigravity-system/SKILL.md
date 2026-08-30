@@ -1,0 +1,186 @@
+---
+name: antigravity-system
+description: |
+  PROACTIVELY consult Antigravity CLI (agy) for research, large codebase
+  comprehension, and multimodal data processing. Powered by Gemini models:
+  massive context windows, Google Search grounding, PDF/image/video analysis,
+  and repository-wide understanding. Use for pre-implementation research,
+  documentation analysis, and multimodal tasks.
+  Explicit triggers: "research", "investigate", "analyze PDF/image/video", "understand codebase".
+metadata:
+  short-description: Claude Code ↔ Antigravity CLI collaboration (research & multimodal)
+---
+
+# Antigravity System — Research & Multimodal Specialist
+
+**Antigravity CLI (`agy`, Gemini models) is your research specialist with massive context.**
+
+> **상세규칙**: `.claude/rules/antigravity-delegation.md`
+
+## Context Management (CRITICAL)
+
+**서브에이전트 경유 권장한다**. agy 출력은 커지기 쉽기 때문에.
+
+| 상황 | 방법 |
+|------|------|
+|코드 기반 분석 | 하위 에이전트를 통해(권장) |
+| 라이브러리 조사 | 서브 에이전트를 통해 (권장) |
+| 멀티모달 | 서브에이전트 경유(권장) |
+| 짧은 질문 (1-2 문 답변) | 직접 호출 확인 |
+
+## Antigravity vs deep-reasoning
+
+| Task | Antigravity (agy) | deep-reasoning |
+|------|-------------------|----------------|
+|**리포지토리 전체 이해**|✓| |
+|**라이브러리 조사**|✓| |
+|**멀티모달(PDF/이미지/동영상)**|✓| |
+|**최신 문서 검색**|✓| |
+|**디자인 판단**| |✓|
+|**디버그** | |✓|
+|**코드 구현** | | (main Claude / general-purpose) |
+
+## When to Consult (MUST)
+
+| Situation | Trigger Examples |
+|-----------|------------------|
+| **Research** | "검색" "리서치" / "Research" "Investigate" |
+| **Library docs** | "라이브러리" "문서" / "Library" "Docs" |
+| **Codebase analysis** | "코드베이스 전체" / "Entire codebase" |
+| **Multimodal** | "PDF" "이미지" "동영상" / "PDF" "Image" "Video" |
+
+## When NOT to Consult
+
+- Design decisions (use deep-reasoning subagent)
+- Debugging (use deep-reasoning subagent)
+- Code implementation (main Claude or general-purpose subagent)
+- Simple file operations (do directly)
+
+## How to Consult
+
+### Recommended: Subagent Pattern
+
+**Use Task tool with `subagent_type='general-purpose'` to preserve main context.**
+
+```
+Task tool parameters:
+- subagent_type: "general-purpose"
+- run_in_background: true (optional, for parallel work)
+- prompt: |
+    Research: {topic}
+
+    agy -p "{research question}"
+
+    Save full output to: .claude/docs/research/{topic}.md
+    Return CONCISE summary (5-7 bullet points).
+```
+
+### Direct Call (Short Questions Only)
+
+For quick questions expecting brief answers:
+
+```bash
+agy -p "Brief question"
+```
+
+### CLI Options Reference
+
+```bash
+# Codebase analysis (run from repo root; CWD is the workspace)
+agy -p "{question}" --add-dir {extra_path}
+
+# Multimodal (path-in-prompt; stdin redirection NOT supported)
+agy -p "Read the file at {absolute_path} and {prompt}"
+
+# JSON output (scripted calls; gate on .status == "SUCCESS")
+agy -p "{question}" --output-format json --print-timeout 10m
+```
+
+**Headless caveats**: permission-denied tools are silently skipped with exit 0
+(soft-deny) — if results look empty, check stderr or the JSON `.status` field.
+File reads are denied by default in headless mode, so codebase analysis and
+multimodal calls need `"permissions": {"allow": ["read_file(*)"]}` in
+`~/.gemini/antigravity-cli/settings.json` (one-time) or
+`--dangerously-skip-permissions` per call. Default print timeout is 5m.
+Pin models with `--model {slug}` (`agy models`).
+
+### Workflow (Subagent)
+
+1. **Spawn subagent** with agy research prompt
+2. **Continue your work** → Subagent runs in parallel
+3. **Receive summary** → Subagent returns key findings
+4. **Full output saved** → `.claude/docs/research/{topic}.md`
+
+## Language Protocol
+
+1. Ask agy in **English**
+2. Receive response in **English**
+3. Synthesize and apply findings
+4. Report to user in **Korean**
+
+## Output Location
+
+Save agy research results to:
+```
+.claude/docs/research/{topic}.md
+```
+
+This allows Claude (and the deep-reasoning subagent) to reference the research later.
+
+## Task Templates
+
+### Pre-Implementation Research
+
+```bash
+agy -p "Research best practices for {feature} in Python 2026.
+Include:
+- Common patterns and anti-patterns
+- Library recommendations (with comparison)
+- Performance considerations
+- Security concerns
+- Code examples"
+```
+
+### Repository Analysis
+
+```bash
+agy -p "Analyze this repository:
+1. Architecture overview
+2. Key modules and responsibilities
+3. Data flow between components
+4. Entry points and extension points
+5. Existing patterns to follow"
+```
+
+### Library Research
+
+See: `references/lib-research-task.md`
+
+### Multimodal Analysis
+
+```bash
+# Video
+agy -p "Read the file at /path/to/tutorial.mp4 and analyze: main concepts, key points, timestamps"
+
+# PDF
+agy -p "Read the file at /path/to/api-docs.pdf and extract: API specs, examples, constraints"
+
+# Image
+agy -p "Read the file at /path/to/diagram.png and describe the architecture it shows"
+```
+
+## Integration with deep-reasoning
+
+| Workflow | Steps |
+|----------|-------|
+| **New feature** | agy research → deep-reasoning design review |
+| **Library choice** | agy comparison → deep-reasoning decision |
+| **Bug investigation** | agy codebase search → deep-reasoning debug |
+
+## Why Antigravity?
+
+- **Massive context (Gemini models)**: Entire repositories at once
+- **Google Search**: Latest information and docs
+- **Multimodal**: PDF/image/video understanding
+- **Fast exploration**: Quick overview before deep work
+- **Shared context**: Results saved for Claude and its subagents
