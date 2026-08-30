@@ -86,11 +86,11 @@ agy -p "Brief question"
 ### CLI Options Reference
 
 ```bash
-# Codebase analysis (run from repo root; CWD is the workspace)
-agy -p "{question}" --add-dir {extra_path}
+# Codebase analysis (reads repo files → headless flags required; run from repo root)
+agy -p "{question}" --dangerously-skip-permissions --sandbox
 
-# Multimodal (path-in-prompt; stdin redirection NOT supported)
-agy -p "Read the file at {absolute_path} and {prompt}"
+# Multimodal (path-in-prompt; stdin redirection NOT supported; headless flags required)
+agy -p "Read the file at {absolute_path} and {prompt}" --dangerously-skip-permissions --sandbox
 
 # JSON output (scripted calls; gate on .status == "SUCCESS")
 agy -p "{question}" --output-format json --print-timeout 10m
@@ -98,11 +98,11 @@ agy -p "{question}" --output-format json --print-timeout 10m
 
 **Headless caveats**: permission-denied tools are silently skipped with exit 0
 (soft-deny) — if results look empty, check stderr or the JSON `.status` field.
-File reads are denied by default in headless mode, so codebase analysis and
-multimodal calls need `"permissions": {"allow": ["read_file(*)"]}` in
-`~/.gemini/antigravity-cli/settings.json` (one-time) or
-`--dangerously-skip-permissions` per call. Default print timeout is 5m.
-Pin models with `--model {slug}` (`agy models`).
+File reads are denied by default in headless mode, so every pattern that reads
+files carries `--dangerously-skip-permissions --sandbox` (auto-approve tools,
+terminal sandboxed; use with read-only research prompts only). Web research
+prompts need no flags. Default print timeout is 5m. Pin models with
+`--model {slug}` (`agy models`).
 
 ### Workflow (Subagent)
 
@@ -149,7 +149,7 @@ agy -p "Analyze this repository:
 2. Key modules and responsibilities
 3. Data flow between components
 4. Entry points and extension points
-5. Existing patterns to follow"
+5. Existing patterns to follow" --dangerously-skip-permissions --sandbox
 ```
 
 ### Library Research
@@ -160,13 +160,13 @@ See: `references/lib-research-task.md`
 
 ```bash
 # Video
-agy -p "Read the file at /path/to/tutorial.mp4 and analyze: main concepts, key points, timestamps"
+agy -p "Read the file at /path/to/tutorial.mp4 and analyze: main concepts, key points, timestamps" --dangerously-skip-permissions --sandbox
 
 # PDF
-agy -p "Read the file at /path/to/api-docs.pdf and extract: API specs, examples, constraints"
+agy -p "Read the file at /path/to/api-docs.pdf and extract: API specs, examples, constraints" --dangerously-skip-permissions --sandbox
 
 # Image
-agy -p "Read the file at /path/to/diagram.png and describe the architecture it shows"
+agy -p "Read the file at /path/to/diagram.png and describe the architecture it shows" --dangerously-skip-permissions --sandbox
 ```
 
 ## Integration with deep-reasoning

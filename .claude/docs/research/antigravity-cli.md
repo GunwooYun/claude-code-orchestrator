@@ -105,9 +105,13 @@ agent's `read_file` tool open it.
   workspace reads are auto-allowed does NOT hold in print mode.
 - Same prompt with `--dangerously-skip-permissions` → the image was read and described
   accurately. So path-in-prompt multimodal works once `read_file` is permitted.
-- Fix: `"permissions": {"allow": ["read_file(*)"]}` in `~/.gemini/antigravity-cli/settings.json`
-  (targets: `read_file(*)`, `read_file(/abs/path)`, `read_file(dir)`; recursive) or the
-  per-call `--dangerously-skip-permissions` flag.
+- `--dangerously-skip-permissions --sandbox` together also works (verified 2026-08-30):
+  reads succeed while terminal commands are sandboxed. This is the template default for
+  file-reading patterns, keeping the template self-contained (no per-machine config).
+- Alternative (per machine): `"permissions": {"allow": ["read_file(*)"]}` in
+  `~/.gemini/antigravity-cli/settings.json` (targets: `read_file(*)`, `read_file(/abs/path)`,
+  `read_file(dir)`; recursive). Permissions cannot be defined inside the repo (`.agents/`
+  has no permissions file), which is why the flag approach was chosen.
 
 ## 6. Skills
 

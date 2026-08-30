@@ -60,11 +60,11 @@ When research or large-scale analysis is needed:
 # Research
 agy -p "{research question}"
 
-# Codebase analysis (CWD is the workspace; extra dirs via --add-dir)
-agy -p "{question}" --add-dir {path}
+# Codebase analysis (reads repo files → headless flags required; CWD is the workspace)
+agy -p "{question}" --dangerously-skip-permissions --sandbox
 
 # Multimodal (PDF, image, video) — path in prompt; stdin redirection NOT supported
-agy -p "Read the file at {absolute_path} and {extraction prompt}"
+agy -p "Read the file at {absolute_path} and {extraction prompt}" --dangerously-skip-permissions --sandbox
 
 # Scripted (soft-deny safe): gate on .status == "SUCCESS"
 agy -p "{question}" --output-format json --print-timeout 10m
@@ -72,11 +72,10 @@ agy -p "{question}" --output-format json --print-timeout 10m
 
 Do not redirect stderr to /dev/null — it carries soft-deny notices when a
 tool was skipped for lack of permission (the run still exits 0). File reads
-are denied in headless mode unless `read_file(*)` is allowed in
-`~/.gemini/antigravity-cli/settings.json`; if a codebase/multimodal call returns
-an empty response with a read_file notice on stderr, report that to the
-orchestrator (or retry with `--dangerously-skip-permissions` for a read-only
-research prompt).
+are denied in headless mode, which is why file-reading patterns carry
+`--dangerously-skip-permissions --sandbox`; use them only with read-only
+research prompts. If a call still returns an empty response with a
+permission notice on stderr, report that to the orchestrator.
 
 **When to call agy:**
 - Library research: "Best practices for X in 2025"

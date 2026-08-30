@@ -38,12 +38,10 @@ agy          # 최초 실행 시 Google 로그인 (인증은 ~/.gemini/ 에 전�
 agy models   # 사용 가능한 모델 슬러그 확인
 ```
 
-헤드리스(`agy -p`) 호출에서 파일 읽기는 기본 거부되므로(soft-deny: 조용히 건너뛰고 exit 0),
-코드베이스 분석·멀티모달을 쓰려면 `~/.gemini/antigravity-cli/settings.json`에 1회 허용 규칙을 추가한다:
-
-```json
-{ "permissions": { "allow": ["read_file(*)"] } }
-```
+> 참고: 헤드리스(`agy -p`) 호출에서 파일 읽기는 기본 거부(soft-deny: 조용히 건너뛰고 exit 0)되기 때문에,
+> 이 템플릿은 파일을 읽어야 하는 패턴(코드베이스 분석·멀티모달)에 `--dangerously-skip-permissions --sandbox`를
+> 붙여 **추가 설정 없이** 동작하도록 되어 있다. 더 엄격하게 쓰고 싶다면 (선택) `~/.gemini/antigravity-cli/settings.json`에
+> `{ "permissions": { "allow": ["read_file(*)"] } }`를 넣고 플래그를 빼면 된다.
 
 ## Architecture
 

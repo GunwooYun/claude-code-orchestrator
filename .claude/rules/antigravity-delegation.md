@@ -124,25 +124,27 @@ prompt: |
   Return 5-7 key bullet points.
 ```
 
-**Codebase Analysis Pattern:**
+**Codebase Analysis Pattern** (reads repo files → needs the headless flags):
 ```
 prompt: |
   Analyze codebase for {purpose}.
 
   Run from the repository root (CWD is the workspace):
   agy -p "Analyze architecture, key modules, data flow,
-  and entry points of this repository."
+  and entry points of this repository." \
+    --dangerously-skip-permissions --sandbox
 
   Save to .claude/docs/research/codebase-analysis.md
   Return architecture summary and key insights.
 ```
 
-**Multimodal Pattern:**
+**Multimodal Pattern** (reads a file → needs the headless flags):
 ```
 prompt: |
   Extract information from {file}.
 
-  agy -p "Read the file at {absolute_path} and {extraction prompt}"
+  agy -p "Read the file at {absolute_path} and {extraction prompt}" \
+    --dangerously-skip-permissions --sandbox
 
   (stdin file redirection is NOT supported — pass the absolute path
    in the prompt; agy reads the file with its own tools)
@@ -170,11 +172,11 @@ For use within subagents:
 # Research (simple)
 agy -p "{question}"
 
-# Codebase analysis (CWD is the workspace; add extra dirs if needed)
-agy -p "{question}" --add-dir {path}
+# Codebase analysis (reads repo files → headless flags required; CWD is the workspace)
+agy -p "{question}" --dangerously-skip-permissions --sandbox [--add-dir {path}]
 
-# Multimodal (path-in-prompt; no stdin redirection)
-agy -p "Read the file at {absolute_path} and {question}"
+# Multimodal (path-in-prompt; no stdin redirection; headless flags required)
+agy -p "Read the file at {absolute_path} and {question}" --dangerously-skip-permissions --sandbox
 
 # Scripted/CI calls (recommended for automation)
 agy -p "{question}" --output-format json --print-timeout 10m
@@ -188,12 +190,15 @@ agy -p "{question}" --output-format json --print-timeout 10m
   on `.status == "SUCCESS"`.
 - **File reads are denied in headless mode by default** (verified 2026-08-30:
   `read_file` on a workspace image was auto-denied → empty response, status
-  SUCCESS). Codebase analysis and multimodal calls therefore need a one-time
-  allow rule in `~/.gemini/antigravity-cli/settings.json`:
-  `{"permissions": {"allow": ["read_file(*)"]}}` — or, per call,
-  `--dangerously-skip-permissions` (auto-approves ALL tools; use only for
-  read-only research prompts in trusted repos). Pure web research prompts
-  work without either.
+  SUCCESS). This template therefore appends
+  `--dangerously-skip-permissions --sandbox` to every pattern that must read
+  files (codebase analysis, multimodal). `--sandbox` restricts terminal
+  commands during that call; file reads still work (verified). Use these flags
+  only with read-only research prompts in a git-tracked repo. Pure web
+  research prompts do not need them.
+- Optional hardening (per machine, not part of the template): allow reads
+  globally with `{"permissions": {"allow": ["read_file(*)"]}}` in
+  `~/.gemini/antigravity-cli/settings.json` and drop the flags.
 - **Default timeout is 5m** — set `--print-timeout` explicitly for long tasks.
 - Model can be pinned with `--model {slug}` (list: `agy models`,
   e.g. `gemini-3.1-pro-high`); unknown slugs fail loudly.

@@ -25,7 +25,8 @@ Focus on:
 
 ### 2. Repository-Wide Understanding
 
-Leverage the 1M token context window for comprehensive codebase analysis.
+Leverage the massive context window for comprehensive codebase analysis.
+Reading repo files in headless mode requires `--dangerously-skip-permissions --sandbox`.
 
 ```bash
 # Full repository analysis
@@ -33,14 +34,14 @@ agy -p "Analyze this entire codebase and provide:
 1. Architecture diagram (describe in text)
 2. Module dependency graph
 3. Key abstractions and their purposes
-4. Suggested areas for improvement"
+4. Suggested areas for improvement" --dangerously-skip-permissions --sandbox
 
 # Specific aspect analysis
 agy -p "Trace the data flow for user authentication:
 - Entry points (API endpoints)
 - Middleware processing
 - Database interactions
-- Response formatting"
+- Response formatting" --dangerously-skip-permissions --sandbox
 ```
 
 ### 3. Multimodal Data Analysis
@@ -53,10 +54,10 @@ agy -p "Read the file at ./tutorial.mp4. Analyze this tutorial video:
 - Summarize the main concepts taught
 - List step-by-step instructions
 - Note any important warnings or tips
-- Identify timestamps for key sections"
+- Identify timestamps for key sections" --dangerously-skip-permissions --sandbox
 
 # Code review video
-agy -p "Read the file at ./code-review.mp4. Extract code patterns and best practices demonstrated in this video"
+agy -p "Read the file at ./code-review.mp4. Extract code patterns and best practices demonstrated in this video" --dangerously-skip-permissions --sandbox
 ```
 
 #### Audio Analysis
@@ -67,10 +68,10 @@ agy -p "Read the file at ./meeting.mp3. Transcribe and summarize this technical 
 - Key decisions made
 - Action items
 - Open questions
-- Technical terms mentioned"
+- Technical terms mentioned" --dangerously-skip-permissions --sandbox
 
 # Podcast/talk analysis
-agy -p "Read the file at ./conference-talk.mp3. Extract technical insights from this talk about {topic}"
+agy -p "Read the file at ./conference-talk.mp3. Extract technical insights from this talk about {topic}" --dangerously-skip-permissions --sandbox
 ```
 
 #### PDF Analysis
@@ -81,21 +82,21 @@ agy -p "Read the file at ./api-spec.pdf. Extract from this API documentation:
 - All available endpoints
 - Request/response schemas
 - Authentication requirements
-- Rate limiting rules"
+- Rate limiting rules" --dangerously-skip-permissions --sandbox
 
 # Technical specification
 agy -p "Read the file at ./spec.pdf. Summarize this technical specification:
 - Core requirements
 - Constraints
 - Interface definitions
-- Edge cases to handle"
+- Edge cases to handle" --dangerously-skip-permissions --sandbox
 
 # Research paper
 agy -p "Read the file at ./paper.pdf. Analyze this paper and explain:
 - Problem being solved
 - Proposed approach
 - Key algorithms
-- How to apply this in practice"
+- How to apply this in practice" --dangerously-skip-permissions --sandbox
 ```
 
 ### 4. Documentation & Web Research
@@ -124,14 +125,14 @@ agy -p "Analyze our codebase for Django to FastAPI migration:
 - Identify all Django-specific patterns used
 - Map to FastAPI equivalents
 - Estimate migration complexity per module
-- Suggest migration order"
+- Suggest migration order" --dangerously-skip-permissions --sandbox
 
 # Version upgrade
 agy -p "Research breaking changes from Python 3.11 to 3.13.
 Cross-reference with our codebase to identify:
 - Deprecated features we use
 - New features we could adopt
-- Required changes"
+- Required changes" --dangerously-skip-permissions --sandbox
 ```
 
 ## When NOT to Use Antigravity
@@ -150,13 +151,14 @@ Cross-reference with our codebase to identify:
 
 ```bash
 agy -p "List all API endpoints in this codebase with their HTTP methods" \
-  --output-format json
+  --dangerously-skip-permissions --sandbox --output-format json
 ```
 
 ### Piping to Files
 
 ```bash
-agy -p "Generate comprehensive documentation for src/auth/" > docs/auth-module.md
+agy -p "Generate comprehensive documentation for src/auth/" \
+  --dangerously-skip-permissions --sandbox > docs/auth-module.md
 ```
 
 ## Quota
