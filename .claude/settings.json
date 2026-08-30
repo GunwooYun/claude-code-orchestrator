@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/suggest-gemini-research.py\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/suggest-antigravity-research.py\"",
             "timeout": 5
           }
         ]
@@ -148,7 +148,7 @@
       "Bash(source:*)",
       "Bash(docker:*)",
       "Bash(docker-compose:*)",
-      "Bash(gemini:*)",
+      "Bash(agy:*)",
       "Bash(pkill:*)",
       "Bash(for:*)",
       "Bash(do)",

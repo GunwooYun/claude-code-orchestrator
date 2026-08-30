@@ -3,7 +3,7 @@
 UserPromptSubmit hook: Route to appropriate agent based on user intent.
 
 Analyzes user prompts and suggests the most appropriate agent
-(deep-reasoning subagent for design/debug, Gemini for research/multimodal).
+(deep-reasoning subagent for design/debug, Antigravity CLI for research/multimodal).
 """
 
 import json
@@ -31,8 +31,8 @@ DEEP_REASONING_TRIGGERS = {
     ],
 }
 
-# Triggers for Gemini (research, multimodal, large context)
-GEMINI_TRIGGERS = {
+# Triggers for Antigravity CLI (research, multimodal, large context)
+ANTIGRAVITY_TRIGGERS = {
     "ko": [
         "검사해", "리서치해", "조사해",
         "PDF", "동영상", "오디오", "이미지",
@@ -60,11 +60,11 @@ def detect_agent(prompt: str) -> tuple[str | None, str]:
             if trigger in prompt_lower:
                 return "deep-reasoning", trigger
 
-    # Check Gemini triggers
-    for triggers in GEMINI_TRIGGERS.values():
+    # Check Antigravity triggers
+    for triggers in ANTIGRAVITY_TRIGGERS.values():
         for trigger in triggers:
             if trigger in prompt_lower:
-                return "gemini", trigger
+                return "antigravity", trigger
 
     return None, ""
 
@@ -94,14 +94,14 @@ def main():
             }
             print(json.dumps(output))
 
-        elif agent == "gemini":
+        elif agent == "antigravity":
             output = {
                 "hookSpecificOutput": {
                     "hookEventName": "UserPromptSubmit",
                     "additionalContext": (
                         f"[Agent Routing] Detected '{trigger}' - this task may benefit from "
-                        "Gemini CLI's research capabilities. Consider: "
-                        '`gemini -p "Research: {topic}" 2>/dev/null` '
+                        "Antigravity CLI's research capabilities. Consider: "
+                        '`agy -p "Research: {topic}"` (via general-purpose subagent) '
                         "for documentation, library research, or multimodal content."
                     )
                 }

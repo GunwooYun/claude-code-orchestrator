@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-PostToolUse hook: Log Gemini CLI input/output to JSONL file.
+PostToolUse hook: Log Antigravity CLI (agy) input/output to JSONL file.
 
-Triggers after Bash tool calls containing 'gemini' commands.
+Triggers after Bash tool calls containing 'agy' commands.
 Logs are stored in .claude/logs/cli-tools.jsonl
 
-All agents (Claude Code, subagents, Gemini) can read this log.
+All agents (Claude Code, subagents, agy) can read this log.
 """
 
 import json
@@ -19,12 +19,15 @@ LOG_DIR = Path(__file__).parent.parent / "logs"
 LOG_FILE = LOG_DIR / "cli-tools.jsonl"
 
 
-def extract_gemini_prompt(command: str) -> str | None:
-    """Extract prompt from gemini command."""
-    # Pattern: gemini -p "prompt" or gemini -p 'prompt'
+AGY_COMMAND = re.compile(r"(?:^|[\s;&|])agy\s")
+
+
+def extract_agy_prompt(command: str) -> str | None:
+    """Extract prompt from an agy print-mode command."""
+    # Pattern: agy -p "prompt" | agy --print 'prompt' | agy --prompt "prompt"
     patterns = [
-        r'gemini\s+-p\s+"([^"]+)"',
-        r"gemini\s+-p\s+'([^']+)'",
+        r'agy\s+(?:-p|--print|--prompt)\s+"([^"]+)"',
+        r"agy\s+(?:-p|--print|--prompt)\s+'([^']+)'",
     ]
     for pattern in patterns:
         match = re.search(pattern, command, re.DOTALL)
@@ -72,13 +75,13 @@ def main() -> None:
     command = tool_input.get("command", "")
     output = tool_response.get("stdout", "") or tool_response.get("content", "")
 
-    # Check if this is a gemini command
-    if "gemini" not in command.lower():
+    # Check if this is an agy command (word-boundary match to avoid false hits)
+    if not AGY_COMMAND.search(command):
         return
 
-    tool = "gemini"
-    prompt = extract_gemini_prompt(command)
-    model = extract_model(command) or "gemini-3-pro-preview"
+    tool = "antigravity"
+    prompt = extract_agy_prompt(command)
+    model = extract_model(command) or "default"
 
     if not prompt:
         # Could not extract prompt, skip logging
