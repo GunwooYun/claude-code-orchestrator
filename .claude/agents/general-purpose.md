@@ -57,7 +57,7 @@ consults the `deep-reasoning` subagent for those.
 When research or large-scale analysis is needed:
 
 ```bash
-# Research — pick the tier (rules/antigravity-delegation.md → Model Policy)
+# Research — the orchestrator picks the tier in the Task prompt (rules/antigravity-delegation.md → Model Policy)
 agy -p "{one-fact question}" --model gemini-3.7-flash-low      # T1
 agy -p "{summarize one source}" --model gemini-3.7-flash-high  # T2
 agy -p "{research question}" --model gemini-3.1-pro-high       # T3
@@ -71,7 +71,7 @@ agy -p "Read the file at {absolute_path} and {extraction prompt}. Do not create 
   --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # Scripted (soft-deny safe): gate on .status == "SUCCESS"
-agy -p "{question}" --output-format json --print-timeout 10m
+agy -p "{question}" --model {slug} --output-format json --print-timeout 10m
 ```
 
 Do not redirect stderr to /dev/null — it carries soft-deny notices when a

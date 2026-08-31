@@ -81,7 +81,7 @@ File: src/services/llm_client.py (read it)
 
 [Principles and patterns as above...]
 
-Return the refactored code and change rationale; the orchestrator applies it.
+Return a unified diff (not the full file) and the change rationale; the orchestrator applies it.
 """)
 ```
 

@@ -70,6 +70,26 @@ class DetectAgyInvocationTests(unittest.TestCase):
         self.assert_prompt("agy --help", None)
 
 
+class PositionalPromptTests(unittest.TestCase):
+    def test_flag_directly_after_p_is_not_the_prompt(self):
+        args = ["agy", "-p", "--model", "gemini-3.7-flash-low", "q"]
+        self.assertEqual(hook.extract_agy_prompt(args), "q")
+
+    def test_value_flags_are_skipped(self):
+        args = ["agy", "-p", "--output-format", "json", "--print-timeout", "10m", "real prompt"]
+        self.assertEqual(hook.extract_agy_prompt(args), "real prompt")
+
+    def test_print_flag_without_prompt(self):
+        self.assertIsNone(hook.extract_agy_prompt(["agy", "-p"]))
+
+    def test_no_print_flag_is_not_print_mode(self):
+        self.assertIsNone(hook.extract_agy_prompt(["agy", "models"]))
+
+    def test_loop_body_is_detected(self):
+        self.assertEqual(hook.extract_agy_prompt(hook.find_agy_args('for f in a b; do agy -p "Sum $f"; done')),
+                         "Sum $f")
+
+
 class ExtractModelTests(unittest.TestCase):
     def test_model_space_form(self):
         self.assertEqual(hook.extract_model(["agy", "--model", "gemini-3.1-pro-high", "-p", "x"]),
@@ -100,6 +120,47 @@ class DetermineSuccessTests(unittest.TestCase):
     def test_soft_deny_marker_on_stderr(self):
         stderr = 'no output produced — a tool required the "read_file" permission ... auto-denied.'
         self.assertFalse(hook.determine_success("", stderr))
+
+    def test_soft_deny_words_in_stdout_are_not_a_failure(self):
+        stdout = "In headless mode, tools without permission are auto-denied and no output produced."
+        self.assertTrue(hook.determine_success(stdout, ""))
+
+    def test_stream_json_uses_last_result_line(self):
+        stream = '{"event":"init"}\n{"event":"step_update"}\n{"status":"ERROR","response":"","error":"x"}'
+        self.assertFalse(hook.determine_success(stream, ""))
+        stream_ok = '{"event":"init"}\n{"status":"SUCCESS","response":"done"}'
+        self.assertTrue(hook.determine_success(stream_ok, ""))
+
+
+class ProcessHookInputTests(unittest.TestCase):
+    def test_non_dict_payload_is_ignored(self):
+        self.assertIsNone(hook.process_hook_input([1, 2]))
+        self.assertIsNone(hook.process_hook_input("agy -p x"))
+
+    def test_null_tool_input_is_ignored(self):
+        self.assertIsNone(hook.process_hook_input({"tool_name": "Bash", "tool_input": None}))
+
+    def test_non_bash_tool_is_ignored(self):
+        self.assertIsNone(hook.process_hook_input({"tool_name": "Read", "tool_input": {"command": 'agy -p "x"'}}))
+
+    def test_string_tool_response_is_accepted(self):
+        entry = hook.process_hook_input({"tool_name": "Bash", "tool_input": {"command": 'agy -p "x"'},
+                                         "tool_response": "plain text answer"})
+        self.assertIsNotNone(entry)
+        self.assertTrue(entry["success"])
+
+    def test_log_entry_writes_one_json_line(self):
+        import tempfile, json as _json
+        with tempfile.TemporaryDirectory() as tmp:
+            original_dir, original_file = hook.LOG_DIR, hook.LOG_FILE
+            hook.LOG_DIR = Path(tmp); hook.LOG_FILE = Path(tmp) / "cli-tools.jsonl"
+            try:
+                hook.log_entry({"tool": "antigravity", "prompt": "한글"})
+                lines = hook.LOG_FILE.read_text(encoding="utf-8").splitlines()
+            finally:
+                hook.LOG_DIR, hook.LOG_FILE = original_dir, original_file
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(_json.loads(lines[0])["prompt"], "한글")
 
 
 class BuildEntryTests(unittest.TestCase):

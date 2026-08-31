@@ -101,7 +101,7 @@ def main():
                     "additionalContext": (
                         f"[Agent Routing] Detected '{trigger}' - this task may benefit from "
                         "Antigravity CLI's research capabilities. Consider: "
-                        '`agy -p "Research: {topic}"` (via general-purpose subagent) '
+                        '`agy -p "Research: {topic}" --model {slug per Model Policy}` (via general-purpose subagent) '
                         "for documentation, library research, or multimodal content."
                     )
                 }

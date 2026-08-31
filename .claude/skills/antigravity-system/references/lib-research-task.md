@@ -66,7 +66,7 @@ Use Google Search to find:
 - Latest blog posts, tutorials (2026)
 
 [Template structure as above...]
-"
+" --model gemini-3.1-pro-high
 
 # Research with specific focus
 agy -p "Research 'pydantic' v2 with focus on:
@@ -76,14 +76,14 @@ agy -p "Research 'pydantic' v2 with focus on:
 - Breaking changes
 
 [Template structure as above...]
-"
+" --model gemini-3.1-pro-high
 ```
 
 ## Workflow
 
 1. **Run agy research** (background)
    ```bash
-   agy -p "Research: {library}"
+   agy -p "Research: {library}" --model gemini-3.1-pro-high
    ```
 
 2. **Save output to docs**

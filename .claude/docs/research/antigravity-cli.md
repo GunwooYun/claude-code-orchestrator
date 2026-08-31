@@ -67,7 +67,8 @@ Ways to let tools run headlessly: `--dangerously-skip-permissions`, `permissions
 in settings.json, or `--mode accept-edits` (file edits only).
 
 Other flags: `--print-timeout` (**default 5m**), `--add-dir` (repeatable; replaces
-`--include-directories`), `--effort low|medium|high`, `--sandbox`, `--agent`, `--project`,
+`--include-directories`), `--effort low|medium|high` (this template does not use it — the
+slug suffix is the only effort knob; precedence between the two is undocumented), `--sandbox`, `--agent`, `--project`,
 `--disable-slash-commands` (use with templated prompts), `--log-file`.
 **`--cwd` does not exist** despite the best-practices page.
 

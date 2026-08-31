@@ -13,7 +13,9 @@ and is NOT the target of this skill; a root-level `AGENTS.md` must not be create
 ## Important
 
 - Only update the `## 기술 스택(Tech Stack)` section and the `## Current Project` block (create it if missing)
-- Do **NOT** modify the orchestration sections (agent table, context management, quick reference, workflow, language protocol)
+- Do **NOT** modify any other section: agent table, `## 컨텍스트 관리`, `## 빠른 사용 가이드`, `## Workflow`, `## 문서구조`, `## 운영 주의사항 (Operational Notes)`, `## 언어 프로토콜`, or an existing `## Session History`
+- Insert `## Current Project` **before** `## Session History` if that section exists (`/checkpointing` rewrites the Session History section; content placed inside it is lost)
+- Do not add a second H1 or a separate language section — CLAUDE.md already has `## 언어 프로토콜`
 
 ## Steps
 
@@ -43,30 +45,35 @@ Use AskUserQuestion tool to ask:
 
 ### 3. Partial Update of CLAUDE.md
 
-Use Edit tool to replace the `## 기술 스택(Tech Stack)` section and to add/refresh a `## Current Project` block at the end, using this format:
+Use Edit tool to replace the body of `## 기술 스택(Tech Stack)` and to add/refresh a `## Current Project` block (placed after `## 언어 프로토콜` and before any `## Session History`), using this format:
 
 ```markdown
-# Project Overview
-
-{User's answer}
-
-## Language Settings
-
-- **Thinking/Reasoning**: English
-- **Code**: {Based on analysis - English or Korean}
-- **User Communication**: Korean
-
-## Tech Stack
+## 기술 스택(Tech Stack)
 
 - **Language**: {Detected language}
 - **Package Manager**: {Detected tools}
 - **Dev Tools**: {Detected tools}
 - **Main Libraries**: {Detected libraries}
+- 공통 명령어
+    ```
+    {detected commands}
+    ```
+
+→ 참고: `.claude/rules/dev-environment.md`
+
+## Current Project
+
+### Overview
+{User's answer, 1-2 sentences}
+
+### Conventions
+- Code language: {English or Korean, from the user's answer}
+- {Additional rules from the user}
 ```
 
 ### 4. Update Common Commands
 
-Inside the Tech Stack section, replace the `공통 명령어` block with the detected commands:
+The `공통 명령어` block inside the Tech Stack section holds the detected commands:
 
 ```markdown
 ## Common Commands

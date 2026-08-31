@@ -1,3 +1,6 @@
+> **Historical (pre-migration, upstream 2026-01).** References to Codex CLI / `gemini -p` /
+> `gemini-3-pro-preview` below are obsolete; see `antigravity-cli.md` for the current setup.
+
 # CLI vs MCP: Codex/Gemini Integration Comparison
 
 ## Executive Summary

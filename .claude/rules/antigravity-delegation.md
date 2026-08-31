@@ -99,8 +99,8 @@ Task tool parameters:
 - prompt: |
     Research: {topic}
 
-    1. Call Antigravity CLI (pick the model tier — see Model Policy):
-       agy -p "{research question}" --model gemini-3.1-pro-high
+    1. Call Antigravity CLI (the orchestrator fills {slug} per the Model Policy):
+       agy -p "{research question}" --model {slug}
 
     2. Save full output to: .claude/docs/research/{topic}.md
 
@@ -118,7 +118,7 @@ prompt: |
   Research best practices for {topic}.
 
   agy -p "Research: {topic}. Include recommended approaches,
-  common pitfalls, and library recommendations." --model gemini-3.1-pro-high
+  common pitfalls, and library recommendations." --model {slug}   # T3 → gemini-3.1-pro-high
 
   Save to .claude/docs/research/{topic}.md
   Return 5-7 key bullet points.
@@ -173,12 +173,24 @@ The global default is set by the user via `/model` in the agy TUI (currently
 `gemini-3.1-pro-high`). Templates pin the model **per call** so quota is spent
 where it matters. Slugs come from `agy models`; the suffix is the effort tier.
 
+**Who decides**: the **main orchestrator** picks the tier when it writes the
+Task prompt (it knows the user's intent) and puts the concrete slug into the
+command; the general-purpose subagent executes it as given. Templates therefore
+show `--model {slug}` — never a hard-coded slug — unless the tier is fixed by
+the task shape (T4).
+
 | Tier | Task shape | `--model` | Notes |
 |------|-----------|-----------|-------|
-| **T1 Quick lookup** | One fact / yes-no / version check; answer ≤ 1 paragraph; single source | `gemini-3.7-flash-low` | Cheapest. Web research only, no file reads |
-| **T2 Summarize / extract** | Summarize one page or one file; pull structured fields from a known input; explain one module | `gemini-3.7-flash-high` | Add `--output-format json` (+ `--json-schema`) for structured extraction |
-| **T3 Research report** | Library comparison, best practices, multi-source synthesis, migration guides | `gemini-3.1-pro-high` | Save output to `.claude/docs/research/` |
-| **T4 Whole-repo / multimodal** | Repository-wide analysis, cross-module tracing, PDF/image/video understanding | `gemini-3.1-pro-high` + `--print-timeout 10m` | Always with the headless file flags; never downgrade |
+| **T1 Quick lookup** | One fact / yes-no / version check; answer ≤ 1 paragraph; single web source | `gemini-3.7-flash-low` | Cheapest. Ask for the source URL in the prompt (do not auto-escalate when it is missing) |
+| **T2 Summarize / extract** | Summarize **one web page** or **one small local file**; pull structured fields from a known input | `gemini-3.7-flash-high` | If the output is **machine-consumed** (`--json-schema`, piped into a script) use `gemini-3.1-pro-low` instead — schema enforces shape, not completeness |
+| **T3 Research report** | Library comparison, best practices, multi-source synthesis, migration/breaking-change guides | `gemini-3.1-pro-high` | Save output to `.claude/docs/research/` |
+| **T4 Whole-repo / multimodal** | Repository-wide analysis, "explain this module/directory", cross-module tracing, PDF/image/video | `gemini-3.1-pro-high` + `--print-timeout 10m` | Never downgrade |
+
+**Headless flags are keyed on the INPUT, not the tier.** Whenever the prompt
+names a local file, directory, module, or "this repo" — at *any* tier — the
+command must carry `--dangerously-skip-permissions --sandbox` **and** the
+sentence "Do not create or modify any files; return everything in your
+response." Pure web prompts never need them.
 
 Decision rules:
 
@@ -186,22 +198,36 @@ Decision rules:
    re-run, which costs more than the Pro call it tried to avoid.
 2. **Never downgrade T4.** Large-context accuracy is the whole point of agy.
 3. **User instruction wins** ("use flash", "use pro") over this table.
-4. Escalate instead of retrying: if a T1/T2 answer is empty, hedged, or clearly
-   shallow, re-run once at T3 — do not loop at the same tier.
+4. **Empty answer → check for soft-deny first, then escalate once.** If stderr
+   says `auto-denied` (or JSON `.status`/`response` shows an empty success),
+   it is a *flag* problem: re-run at the **same** tier with the headless flags.
+   Only if a flagged/web call is genuinely hedged or shallow, re-run **once** on
+   `gemini-3.1-pro-high` with the same flags — never loop at the same tier.
+5. Do **not** pass `--effort`; the slug suffix (`-low/-high`) is the only
+   effort knob. Calls without `--model` fall back to the user's global default
+   (currently the most expensive tier) and are logged as `"default"` — pin.
 
 Rationale: savings come from the call *distribution* (most calls are T1/T2),
-not from table granularity; more than ~5 tiers makes routing itself error-prone.
+not from table granularity; more rows enlarge the overlap between descriptions
+and make routing itself error-prone. Keep 4 tiers; after a few weeks,
+`jq .model .claude/logs/cli-tools.jsonl` shows the real distribution — refine
+only if the T3 share is high.
 
 ## Antigravity CLI Commands Reference
 
 For use within subagents:
 
 ```bash
-# T1 quick lookup
-agy -p "{one-fact question}" --model gemini-3.7-flash-low
+# T1 quick lookup (web)
+agy -p "{one-fact question}. Include the source URL." --model gemini-3.7-flash-low
 
-# T2 summarize / extract (single source)
-agy -p "{summarize or extract}" --model gemini-3.7-flash-high [--output-format json]
+# T2 summarize / extract — web page
+agy -p "{summarize or extract}" --model gemini-3.7-flash-high
+# T2 summarize / extract — one local file (input names a file → flags + read-only sentence)
+agy -p "Read the file at {absolute_path} and {summarize}. Do not create or modify any files." \
+  --model gemini-3.7-flash-high --dangerously-skip-permissions --sandbox
+# T2 machine-consumed extraction (schema enforces shape, not completeness → pro-low)
+agy -p "{extract fields}" --model gemini-3.1-pro-low --output-format json --json-schema '{...}'
 
 # T3 research report
 agy -p "{comparison / best-practices question}" --model gemini-3.1-pro-high

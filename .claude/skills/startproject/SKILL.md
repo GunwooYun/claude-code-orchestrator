@@ -126,7 +126,9 @@ Use TodoWrite to create tasks:
 
 **프로젝트 관련 정보를 CLAUDE.md에 추가한다.**
 
-Add to CLAUDE.md:
+Add to CLAUDE.md — **before** any existing `## Session History` section (that section is
+rewritten by `/checkpointing`; anything placed after it is lost). Replace an existing
+`## Current Project` block instead of appending a second one:
 
 ```markdown
 ---

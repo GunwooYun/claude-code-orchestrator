@@ -286,7 +286,7 @@ claude        # 폴더 신뢰 → 첫 세션
 구현한 세션은 자기 코드에 편향된다. 리뷰는 **git worktree**로 격리한 새 세션에서 받는다:
 
 ```bash
-git worktree add ../<project>-review main
+git worktree add --detach ../<project>-review main   # main이 체크아웃된 상태라 --detach 필요
 cd ../<project>-review && claude
 # → "git diff <base>..main 을 리뷰하고 결과를 .claude/docs/review-report.md 에만 작성해. 다른 파일은 수정하지 마."
 ```
@@ -299,7 +299,7 @@ cd ../<project>-review && claude
 
 - **웹 리서치는 플래그 없이** `agy -p "..."`. **저장소 파일을 읽어야 하면** 템플릿 패턴대로 `--dangerously-skip-permissions --sandbox`(+ 긴 분석은 `--print-timeout 10m`). 그 프롬프트에는 반드시 "파일을 만들거나 수정하지 말 것"이 들어가야 한다.
 - **빈 응답은 실패다.** 헤드리스 agy는 권한 없는 도구를 조용히 건너뛰고 exit 0을 낸다(soft-deny). `--output-format json`으로 `.status`와 `response`를 함께 보고, stderr를 버리지 않는다. `log-cli-tools.py`도 이 경우 `success: false`로 기록한다.
-- **모델은 작업 등급으로 자동 선택**: 템플릿 호출은 `--model`을 항상 명시한다 — T1 한 줄 사실 확인 `gemini-3.7-flash-low`, T2 단일 문서 요약·추출 `gemini-3.7-flash-high`, T3 비교·종합 리서치 `gemini-3.1-pro-high`, T4 레포 전체·멀티모달 `gemini-3.1-pro-high` + `--print-timeout 10m`. 애매하면 상위 등급, T4는 하향 금지, 얕은 답이면 T3로 1회 재실행. 전역 기본값(`agy` TUI의 `/model`)은 `--model`이 없는 호출에만 적용된다. 정책 전문: `.claude/rules/antigravity-delegation.md`.
+- **모델은 규칙에 따라 오케스트레이터가 선택**(자동 판별이 아니라 표를 따르는 판단): 템플릿 호출은 `--model`을 항상 명시한다 — T1 한 줄 사실 확인 `gemini-3.7-flash-low`, T2 웹 페이지 하나·작은 파일 하나 요약 `gemini-3.7-flash-high`(스크립트가 소비하는 추출은 `gemini-3.1-pro-low`), T3 비교·종합·마이그레이션 가이드 `gemini-3.1-pro-high`, T4 레포 전체·모듈 설명·멀티모달 `gemini-3.1-pro-high` + `--print-timeout 10m`. 헤드리스 플래그는 등급이 아니라 **입력이 파일/디렉토리/레포를 언급하는지**로 결정한다. 애매하면 상위 등급, T4는 하향 금지, 빈 답은 먼저 soft-deny(stderr `auto-denied`)인지 확인한 뒤에만 Pro로 1회 재실행. 전역 기본값(`agy` TUI의 `/model`)은 `--model`이 없는 호출에만 적용된다. 정책 전문: `.claude/rules/antigravity-delegation.md`.
 - **쿼터**: "Individual quota reached … Resets in Xh"가 뜨면 리셋까지 기다린다. 큰 리서치는 하나의 잘 짜인 프롬프트로 몰아서 보낸다.
 - **멀티모달**: 이미지·PDF는 검증됨. 절대경로를 프롬프트에 넣는다(stdin 리다이렉트 불가). 영상·음성은 미검증.
 - 상세: `.claude/docs/research/antigravity-cli.md`, `.claude/rules/antigravity-delegation.md`.
@@ -346,10 +346,11 @@ uv add --dev <package>     # 개발 종속성 추가
 uv sync                    # 종속성 동기화
 
 # 품질 점검
-poe lint                   # ruff check + format
-poe typecheck              # mypy
-poe test                   # pytest
-poe all                    # 전체 검사 실행
+poe lint                   # ruff check --fix (포맷은 poe format)
+poe format                 # ruff format
+poe typecheck              # mypy src/  ← src/ 디렉토리가 있어야 동작 (이 템플릿 저장소에는 없음)
+poe test                   # pytest (tests/)
+poe all                    # lint → format → typecheck → test
 
 # 직접 실행
 uv run pytest -v

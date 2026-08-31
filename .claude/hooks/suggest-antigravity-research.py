@@ -87,7 +87,8 @@ def main():
                         "For comprehensive research, consider Antigravity CLI (agy, Gemini models with massive context). "
                         "**Recommended**: Use Task tool with subagent_type='general-purpose' "
                         "to consult agy and save results to .claude/docs/research/. "
-                        "(Direct call OK for quick questions: `agy -p '...'`)"
+                        "(Direct call OK for quick questions: `agy -p '...' --model gemini-3.7-flash-low`). "
+                        "If you are a subagent, do the research yourself or report back to the orchestrator."
                     )
                 }
             }

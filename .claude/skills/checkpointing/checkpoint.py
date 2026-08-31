@@ -186,13 +186,26 @@ def get_file_stats(since: str | None = None) -> dict[str, tuple[int, int]]:
     return stats
 
 
+def local_date(timestamp: str) -> str:
+    """Return the local calendar date (YYYY-MM-DD) of an ISO timestamp."""
+    if not timestamp:
+        return "unknown"
+    try:
+        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return timestamp[:10]
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone().date().isoformat()
+
+
 def summarize_entries(entries: list[dict]) -> dict[str, list[dict]]:
     """Group and summarize entries by tool and date."""
     by_date: dict[str, dict[str, list]] = {}
 
     for entry in entries:
         ts = entry.get("timestamp", "")
-        date = ts[:10] if ts else "unknown"
+        date = local_date(ts)
         tool = entry.get("tool", "unknown")
 
         if date not in by_date:
@@ -239,17 +252,35 @@ def update_context_file(file_path: Path, session_history: str) -> bool:
         return False
 
     content = file_path.read_text(encoding="utf-8")
-
-    # Remove existing session history section
-    pattern = rf"{re.escape(SESSION_HISTORY_HEADER)}.*"
-    content = re.sub(pattern, "", content, flags=re.DOTALL)
-    content = content.rstrip() + "\n\n"
-
-    # Append new session history
-    content += session_history
-
-    file_path.write_text(content, encoding="utf-8")
+    file_path.write_text(replace_session_history(content, session_history), encoding="utf-8")
     return True
+
+
+# Matches a Session History H2 heading on its own line (never an inline mention),
+# through the end of that section: up to the next H2 heading or end of file.
+SESSION_HISTORY_SECTION = re.compile(
+    rf"^{re.escape(SESSION_HISTORY_HEADER)}[ \t]*\n(?:(?!^## ).*\n?)*",
+    flags=re.MULTILINE,
+)
+
+
+def replace_session_history(content: str, session_history: str) -> str:
+    """Replace (or append) the Session History section without touching anything else.
+
+    Only a heading line that is exactly `## Session History` starts the section,
+    so inline mentions in prose are safe. The section ends at the next `## `
+    heading, so content after it (e.g. `## Current Project`) survives.
+    """
+    new_section = session_history.rstrip() + "\n"
+    match = SESSION_HISTORY_SECTION.search(content)
+    if match:
+        before = content[: match.start()].rstrip("\n")
+        after = content[match.end():].lstrip("\n")
+        result = before + "\n\n" + new_section
+        if after:
+            result += "\n" + after
+        return result
+    return content.rstrip() + "\n\n" + new_section
 
 
 def generate_full_checkpoint(since: str | None = None) -> Path | None:

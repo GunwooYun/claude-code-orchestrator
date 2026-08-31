@@ -53,9 +53,10 @@ with tool permissions auto-approved; the read-only rule is what keeps that safe.
 ## How You're Called
 
 ```bash
-agy -p "{research question}"
-agy -p "Read the file at {absolute_path} and {question}"   # multimodal: read the file yourself
-agy -p "{question}" --output-format json --print-timeout 10m   # scripted calls
+agy -p "{research question}" --model {slug}
+agy -p "Read the file at {absolute_path} and {question}. Do not create or modify any files." \
+  --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox   # multimodal: read the file yourself
+agy -p "{question}" --model {slug} --output-format json --print-timeout 10m   # scripted calls
 ```
 
 When given a file path, read the file with your own tools before answering.
@@ -101,5 +102,5 @@ Structure your response for Claude Code to use:
 ## Consultation History
 
 Your past calls are logged by Claude Code in `.claude/logs/cli-tools.jsonl`
-(read-only for you). A `## Session History` section summarizing them may be
+(read-only for you). A Session History section summarizing them may be
 appended below this line by Claude's `/checkpointing` skill.

@@ -54,7 +54,8 @@ def main():
             sys.exit(0)
 
         tool_input = data.get("tool_input", {})
-        tool_output = data.get("tool_output", "")
+        response = data.get("tool_response", data.get("tool_output", ""))
+        tool_output = response if isinstance(response, str) else str(response or "")
 
         should_suggest, reason = should_suggest_review(tool_input, tool_output)
 

@@ -39,14 +39,16 @@ agy -p "Analyze this entire codebase and provide:
 1. Architecture diagram (describe in text)
 2. Module dependency graph
 3. Key abstractions and their purposes
-4. Suggested areas for improvement" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
+4. Suggested areas for improvement
+Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
 
 # Specific aspect analysis
 agy -p "Trace the data flow for user authentication:
 - Entry points (API endpoints)
 - Middleware processing
 - Database interactions
-- Response formatting" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
+- Response formatting
+Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
 ```
 
 ### 3. Multimodal Data Analysis
@@ -62,10 +64,11 @@ agy -p "Read the file at /path/to/tutorial.mp4. Analyze this tutorial video:
 - Summarize the main concepts taught
 - List step-by-step instructions
 - Note any important warnings or tips
-- Identify timestamps for key sections" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
+- Identify timestamps for key sections
+Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # Code review video
-agy -p "Read the file at /path/to/code-review.mp4. Extract code patterns and best practices demonstrated in this video" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
+agy -p "Read the file at /path/to/code-review.mp4. Extract code patterns and best practices demonstrated in this video. Do not create or modify any files." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 ```
 
 #### Audio Analysis
@@ -76,10 +79,11 @@ agy -p "Read the file at /path/to/meeting.mp3. Transcribe and summarize this tec
 - Key decisions made
 - Action items
 - Open questions
-- Technical terms mentioned" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
+- Technical terms mentioned
+Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # Podcast/talk analysis
-agy -p "Read the file at /path/to/conference-talk.mp3. Extract technical insights from this talk about {topic}" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
+agy -p "Read the file at /path/to/conference-talk.mp3. Extract technical insights from this talk about {topic}. Do not create or modify any files." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 ```
 
 #### PDF Analysis
@@ -90,28 +94,31 @@ agy -p "Read the file at /path/to/api-spec.pdf. Extract from this API documentat
 - All available endpoints
 - Request/response schemas
 - Authentication requirements
-- Rate limiting rules" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
+- Rate limiting rules
+Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # Technical specification
 agy -p "Read the file at /path/to/spec.pdf. Summarize this technical specification:
 - Core requirements
 - Constraints
 - Interface definitions
-- Edge cases to handle" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
+- Edge cases to handle
+Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # Research paper
 agy -p "Read the file at /path/to/paper.pdf. Analyze this paper and explain:
 - Problem being solved
 - Proposed approach
 - Key algorithms
-- How to apply this in practice" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
+- How to apply this in practice
+Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 ```
 
 ### 4. Documentation & Web Research
 
 ```bash
 # Latest documentation
-agy -p "Find and summarize the latest React 19 features and migration guide from official docs" --model gemini-3.7-flash-high
+agy -p "Find and summarize the latest React 19 features and migration guide from official docs" --model gemini-3.1-pro-high   # migration guide = T3
 
 # Compare libraries
 agy -p "Compare these Python HTTP clients in 2026:
@@ -120,9 +127,8 @@ agy -p "Compare these Python HTTP clients in 2026:
 - Feature comparison
 - Community activity" --model gemini-3.1-pro-high
 
-# Troubleshooting
-agy -p "Research common causes and solutions for: {error message}
-Search Stack Overflow, GitHub Issues, and official docs" --model gemini-3.1-pro-high
+# Troubleshooting — agy only for "search this exact error string" (T1); root-cause analysis goes to deep-reasoning
+agy -p "Search for this exact error string and list the top known causes with source URLs: {error message}" --model gemini-3.7-flash-low
 ```
 
 ### 5. Code Migration Analysis
@@ -133,14 +139,16 @@ agy -p "Analyze our codebase for Django to FastAPI migration:
 - Identify all Django-specific patterns used
 - Map to FastAPI equivalents
 - Estimate migration complexity per module
-- Suggest migration order" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
+- Suggest migration order
+Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
 
 # Version upgrade
 agy -p "Research breaking changes from Python 3.11 to 3.13.
 Cross-reference with our codebase to identify:
 - Deprecated features we use
 - New features we could adopt
-- Required changes" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
+- Required changes
+Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
 ```
 
 ## When NOT to Use Antigravity
@@ -158,15 +166,17 @@ Cross-reference with our codebase to identify:
 ### JSON Output for Structured Data
 
 ```bash
-agy -p "List all API endpoints in this codebase with their HTTP methods" \
-  --dangerously-skip-permissions --sandbox --output-format json
+agy -p "List all API endpoints in this codebase with their HTTP methods.
+Do not create or modify any files; return everything in your response." \
+  --model gemini-3.1-pro-low --output-format json --dangerously-skip-permissions --sandbox --print-timeout 10m   # machine-consumed → pro-low
 ```
 
 ### Piping to Files
 
 ```bash
-agy -p "Generate comprehensive documentation for src/auth/" \
-  --dangerously-skip-permissions --sandbox > docs/auth-module.md
+agy -p "Generate comprehensive documentation for src/auth/ and return it as markdown.
+Do not create or modify any files; return everything in your response." \
+  --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m > docs/auth-module.md
 ```
 
 ## Quota

@@ -99,7 +99,11 @@ def main():
             sys.exit(0)
 
         tool_input = data.get("tool_input", {})
-        tool_output = data.get("tool_output", "")
+        response = data.get("tool_response", data.get("tool_output", ""))
+        if isinstance(response, dict):
+            tool_output = f"{response.get('stdout', '')}\n{response.get('stderr', '')}"
+        else:
+            tool_output = str(response or "")
         command = tool_input.get("command", "")
 
         # Check if it's a test/build command

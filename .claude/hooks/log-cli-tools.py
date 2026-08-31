@@ -21,10 +21,19 @@ LOG_DIR = Path(__file__).parent.parent / "logs"
 LOG_FILE = LOG_DIR / "cli-tools.jsonl"
 
 PROMPT_FLAGS = {"-p", "--print", "--prompt"}
+# agy flags that consume the following token as their value.
+VALUE_FLAGS = {
+    "--model", "--output-format", "--print-timeout", "--add-dir", "--agent",
+    "--json-schema", "--input-format", "--effort", "--mode", "--project",
+    "--conversation", "--log-file",
+}
 # Tokens that may legitimately precede the agy binary in the same command segment.
-WRAPPER_COMMANDS = {"sudo", "nohup", "command", "exec", "env", "time"}
+# Known false negatives (accepted): `bash -c 'agy …'`, `uv run agy …`,
+# `timeout -k 5 60 agy …` — the binary is not the segment head there.
+WRAPPER_COMMANDS = {"sudo", "nohup", "command", "exec", "env", "time", "do", "then", "else"}
 ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
-# Markers agy prints on stderr when a tool was auto-denied in headless mode.
+# Markers agy prints on STDERR when a tool was auto-denied in headless mode.
+# Matched against stderr only — stdout may legitimately discuss these strings.
 SOFT_DENY_MARKERS = ("auto-denied", "no output produced", "soft-den")
 
 
@@ -78,13 +87,31 @@ def find_agy_args(command: str) -> list[str] | None:
 
 
 def extract_agy_prompt(args: list[str]) -> str | None:
-    """Extract the print-mode prompt from agy argv (flag order agnostic)."""
-    for i, token in enumerate(args):
-        if token in PROMPT_FLAGS and i + 1 < len(args):
-            return args[i + 1].strip() or None
+    """Extract the print-mode prompt from agy argv (flag order agnostic).
+
+    `-p/--print` is a boolean flag and the prompt is positional, so the prompt
+    is the first non-flag token after the print flag that is not the value of
+    a value-taking flag (e.g. `agy -p --model X "q"` → "q").
+    """
+    if not any(t in PROMPT_FLAGS or t.split("=", 1)[0] in PROMPT_FLAGS for t in args[1:]):
+        return None
+    for token in args[1:]:
         for flag in PROMPT_FLAGS:
-            if token.startswith(flag + "="):
-                return token[len(flag) + 1:].strip() or None
+            if token.startswith(flag + "=") and token[len(flag) + 1:].strip():
+                return token[len(flag) + 1:].strip()
+    skip_next = False
+    for token in args[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if token in PROMPT_FLAGS:
+            continue
+        if token in VALUE_FLAGS:
+            skip_next = True
+            continue
+        if token.startswith("-"):
+            continue
+        return token.strip() or None
     return None
 
 
@@ -98,18 +125,31 @@ def extract_model(args: list[str]) -> str | None:
     return None
 
 
+def _parse_result_payload(stdout: str) -> dict | None:
+    """Parse agy's JSON envelope; for stream-json use the last non-empty line."""
+    candidates = [stdout.strip()]
+    lines = [ln for ln in stdout.strip().splitlines() if ln.strip()]
+    if lines:
+        candidates.append(lines[-1])
+    for text in candidates:
+        try:
+            payload = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(payload, dict) and "status" in payload:
+            return payload
+    return None
+
+
 def determine_success(stdout: str, stderr: str) -> bool:
     """Best-effort success flag that reflects agy's headless soft-deny."""
-    combined = f"{stdout}\n{stderr}".lower()
-    if any(marker in combined for marker in SOFT_DENY_MARKERS):
+    stderr_lower = (stderr or "").lower()
+    if any(marker in stderr_lower for marker in SOFT_DENY_MARKERS):
         return False
-    try:
-        payload = json.loads(stdout)
-    except (json.JSONDecodeError, TypeError):
-        return bool(stdout.strip())
-    if isinstance(payload, dict) and "status" in payload:
+    payload = _parse_result_payload(stdout or "")
+    if payload is not None:
         return payload.get("status") == "SUCCESS" and bool(payload.get("response"))
-    return bool(stdout.strip())
+    return bool((stdout or "").strip())
 
 
 def truncate_text(text: str, max_length: int = 2000) -> str:
@@ -138,7 +178,8 @@ def build_entry(command: str, tool_response: dict) -> dict | None:
     stdout = tool_response.get("stdout", "") or tool_response.get("content", "") or ""
     stderr = tool_response.get("stderr", "") or ""
     return {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        # Local time with offset so checkpoint day-grouping matches the user's calendar.
+        "timestamp": datetime.now(timezone.utc).astimezone().isoformat(),
         "tool": "antigravity",
         "model": extract_model(args) or "default",
         "prompt": truncate_text(prompt),
@@ -147,25 +188,37 @@ def build_entry(command: str, tool_response: dict) -> dict | None:
     }
 
 
+def process_hook_input(hook_input: object) -> dict | None:
+    """Validate a PostToolUse payload and build a log entry (None = ignore)."""
+    if not isinstance(hook_input, dict):
+        return None
+    if hook_input.get("tool_name", "") != "Bash":
+        return None
+    tool_input = hook_input.get("tool_input") or {}
+    if not isinstance(tool_input, dict):
+        return None
+    command = tool_input.get("command", "")
+    if not isinstance(command, str) or not command:
+        return None
+    tool_response = hook_input.get("tool_response") or {}
+    if not isinstance(tool_response, dict):
+        tool_response = {"stdout": str(tool_response)}
+    return build_entry(command, tool_response)
+
+
 def main() -> None:
     try:
         hook_input = json.load(sys.stdin)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, ValueError):
         return
-
-    if hook_input.get("tool_name", "") != "Bash":
+    try:
+        entry = process_hook_input(hook_input)
+        if entry is None:
+            return
+        log_entry(entry)
+    except Exception as exc:  # never break the calling tool because of logging
+        print(f"log-cli-tools hook error: {exc}", file=sys.stderr)
         return
-
-    command = hook_input.get("tool_input", {}).get("command", "")
-    tool_response = hook_input.get("tool_response", {}) or {}
-    if not isinstance(tool_response, dict):
-        tool_response = {"stdout": str(tool_response)}
-
-    entry = build_entry(command, tool_response)
-    if entry is None:
-        return
-
-    log_entry(entry)
     print(json.dumps({"systemMessage": "[LOG] Antigravity call logged to .claude/logs/cli-tools.jsonl"}))
 
 
