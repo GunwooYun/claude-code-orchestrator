@@ -227,20 +227,51 @@ Red → Green → Refactor 사이클을 강제한다.
 
 ### 1. 적용 절차 (프로젝트당 1회)
 
+복사 자체는 세 경로면 끝이다. 시간이 드는 건 그 뒤의 **프로젝트 맞춤화**이고, 이건 대부분 첫 세션의 오케스트레이터에게 시킬 수 있다.
+
+**Step A — 복사 (1분)**
+
 ```bash
 cd <your-project>
 git clone --depth 1 https://github.com/GunwooYun/claude-code-orchestrator.git .starter \
   && cp -r .starter/.claude .starter/.agents .starter/CLAUDE.md . && rm -rf .starter
-claude        # 폴더 신뢰 → 첫 세션
 ```
 
-첫 세션에서 할 일 (순서대로):
+> 이미 쓰고 있던 다른 프로젝트의 사본에서 복사할 때는 런타임 파일을 빼고 가져온다:
+> `rsync -a --exclude logs/ --exclude checkpoints/ --exclude __pycache__/ --exclude settings.local.json <src>/.claude/ ./.claude/`
+> (`settings.local.json`은 머신·세션별 권한 기록이라 옮기면 안 된다.)
 
-1. **`/init`** — 프로젝트 스택을 감지시켜 `CLAUDE.md`의 기술 스택 섹션과 `## Current Project` 블록을 채우고, 결과를 직접 검토한다. 불필요한 규칙 파일도 이때 제안받는다.
-2. **`.claude/rules/dev-environment.md`와 `hooks/lint-on-save.py`를 실제 프로젝트에 맞춘다.** 템플릿 기본값은 Python + uv/ruff/ty/pytest다. Django(pip)나 프론트엔드 프로젝트라면 이 둘을 고치지 않는 한 규칙과 린트 훅(`uv run ruff`/`ty`)은 헛돌거나 조용히 건너뛴다.
-3. **`.agents/rules/AGENTS.md`**에 프로젝트 한 줄 설명을 추가한다 — agy가 리서치할 때 읽는 유일한 프로젝트 컨텍스트다.
-4. **`.claude/docs/DESIGN.md`**를 열어 현재 아키텍처를 5줄이라도 적는다. deep-reasoning이 리뷰 전에 항상 이 파일을 읽는다.
-5. 스모크 테스트: `/deep-reasoning`·`/antigravity-system` 스킬이 목록에 뜨는지, `agy -p "Reply with OK"`가 동작하는지.
+**Step B — 커밋할지 정한다 (회사·공유 저장소라면 먼저)**
+
+| 선택 | 방법 | 언제 |
+|---|---|---|
+| 로컬 전용 | `printf '%s\n' .claude/ .agents/ CLAUDE.md >> .git/info/exclude` | 팀 합의 전, 개인 실험. `.gitignore`와 문법이 같지만 커밋되지 않는 개인 무시 목록 |
+| 저장소에 커밋 | 브랜치에서 커밋 + `.gitignore`에 `.claude/logs/`, `.claude/checkpoints/`, `.claude/settings.local.json` 추가 | 팀 전체가 같은 훅·규칙을 쓰기로 한 경우 |
+
+**Step C — 스택이 템플릿 기본값(Python + uv/ruff/ty/pytest)과 다르면 맞춘다**
+
+| 파일 | 왜 | 예: Django(pip)+Vue+Docker 프로젝트에서 한 일 |
+|---|---|---|
+| `CLAUDE.md` 기술 스택 섹션 | 세션이 매번 읽는 유일한 스택 정보 | 백엔드/프론트/실행 방식/품질 도구/커밋 규칙으로 교체 |
+| `.claude/rules/dev-environment.md` | 규칙이 uv 명령을 강요함 | pip·Docker·black/isort/flake8·pytest-django 기준으로 재작성, 보안 민감 디렉토리 명시 |
+| `.claude/hooks/lint-on-save.py` | `uv run ruff`를 호출 → 없는 도구면 조용히 무동작 | 프로젝트 도구(black→isort→flake8, eslint)로 교체하고 도구를 로컬에 같은 버전으로 설치(`pipx install black==<핀 버전>`), 또는 `settings.json`에서 훅 등록 제거 |
+| `.claude/rules/testing.md` | `uv run pytest` 표기 | 실제 테스트 명령으로 |
+| `.claude/settings.json` `permissions.allow` | 프로젝트 도구 명령 자동 허용 | `Bash(isort:*)`, `Bash(flake8:*)`, `Bash(docker compose:*)` 추가 |
+
+스택이 템플릿과 같은 Python/uv 프로젝트면 이 단계는 통째로 건너뛴다.
+
+**Step D — 프로젝트 컨텍스트 채우기**
+
+1. **`.agents/rules/AGENTS.md`** 상단에 프로젝트 설명 한 단락 — agy가 리서치할 때 읽는 유일한 프로젝트 컨텍스트다. 보안 민감 프로젝트면 "키·비밀값은 출력 금지"도 여기에.
+2. **`.claude/docs/DESIGN.md`** — 아키텍처 5줄, 주요 라이브러리 표, 미결 질문. deep-reasoning이 리뷰 전에 항상 읽는다.
+3. `/init`은 C·D를 직접 했다면 생략 가능. 첫 기능 작업 때 `/startproject`가 `## Current Project` 블록을 만든다.
+
+**가장 쉬운 방법**: Step A·B만 손으로 하고 `claude`를 연 뒤 이렇게 시키면 C·D를 오케스트레이터가 수행한다 —
+> "이 저장소를 조사해서 README의 적용 절차 Step C·D대로 CLAUDE.md 기술 스택, rules/dev-environment.md, hooks/lint-on-save.py, .agents/rules/AGENTS.md, docs/DESIGN.md를 이 프로젝트에 맞게 수정해 줘. 도구 설치가 필요하면 먼저 물어봐."
+
+**Step E — 스모크 테스트**: `/deep-reasoning`·`/antigravity-system` 스킬이 목록에 뜨는지, `agy -p "Reply with OK" --model gemini-3.7-flash-low`가 동작하는지, 파일 하나 편집 후 린트 훅 출력과 `git diff`(포매터가 과하게 손대지 않는지)를 확인한다.
+
+남는 판단(테스트 실행 방식, 기존 린트 지적 처리 등)은 `DESIGN.md`의 TODO에 적어 두고 실제 작업하면서 오케스트레이터와 함께 정하면 된다 — `design-tracker`가 결정을 기록한다.
 
 ### 2. 질문 유형별 라우팅 — 누구에게 시킬 것인가
 
