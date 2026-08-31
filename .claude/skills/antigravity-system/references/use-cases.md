@@ -2,6 +2,9 @@
 
 ## Use Case Categories
 
+Every example pins `--model` per the Model Policy in `.claude/rules/antigravity-delegation.md`
+(T1 `gemini-3.7-flash-low`, T2 `gemini-3.7-flash-high`, T3/T4 `gemini-3.1-pro-high`).
+
 ### 1. Pre-Implementation Research
 
 Before implementing a new feature, use agy to research best practices.
@@ -13,14 +16,14 @@ Include:
 - Recommended libraries (compare authlib vs python-oauth2 vs others)
 - Security considerations
 - Common pitfalls to avoid
-- Example implementations"
+- Example implementations" --model gemini-3.1-pro-high
 
 # Framework-specific research
 agy -p "Research FastAPI authentication patterns in 2026.
 Focus on:
 - JWT vs session-based auth
 - Dependency injection patterns
-- Testing strategies"
+- Testing strategies" --model gemini-3.1-pro-high
 ```
 
 ### 2. Repository-Wide Understanding
@@ -36,14 +39,14 @@ agy -p "Analyze this entire codebase and provide:
 1. Architecture diagram (describe in text)
 2. Module dependency graph
 3. Key abstractions and their purposes
-4. Suggested areas for improvement" --dangerously-skip-permissions --sandbox --print-timeout 10m
+4. Suggested areas for improvement" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
 
 # Specific aspect analysis
 agy -p "Trace the data flow for user authentication:
 - Entry points (API endpoints)
 - Middleware processing
 - Database interactions
-- Response formatting" --dangerously-skip-permissions --sandbox --print-timeout 10m
+- Response formatting" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
 ```
 
 ### 3. Multimodal Data Analysis
@@ -59,10 +62,10 @@ agy -p "Read the file at /path/to/tutorial.mp4. Analyze this tutorial video:
 - Summarize the main concepts taught
 - List step-by-step instructions
 - Note any important warnings or tips
-- Identify timestamps for key sections" --dangerously-skip-permissions --sandbox
+- Identify timestamps for key sections" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # Code review video
-agy -p "Read the file at /path/to/code-review.mp4. Extract code patterns and best practices demonstrated in this video" --dangerously-skip-permissions --sandbox
+agy -p "Read the file at /path/to/code-review.mp4. Extract code patterns and best practices demonstrated in this video" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 ```
 
 #### Audio Analysis
@@ -73,10 +76,10 @@ agy -p "Read the file at /path/to/meeting.mp3. Transcribe and summarize this tec
 - Key decisions made
 - Action items
 - Open questions
-- Technical terms mentioned" --dangerously-skip-permissions --sandbox
+- Technical terms mentioned" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # Podcast/talk analysis
-agy -p "Read the file at /path/to/conference-talk.mp3. Extract technical insights from this talk about {topic}" --dangerously-skip-permissions --sandbox
+agy -p "Read the file at /path/to/conference-talk.mp3. Extract technical insights from this talk about {topic}" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 ```
 
 #### PDF Analysis
@@ -87,39 +90,39 @@ agy -p "Read the file at /path/to/api-spec.pdf. Extract from this API documentat
 - All available endpoints
 - Request/response schemas
 - Authentication requirements
-- Rate limiting rules" --dangerously-skip-permissions --sandbox
+- Rate limiting rules" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # Technical specification
 agy -p "Read the file at /path/to/spec.pdf. Summarize this technical specification:
 - Core requirements
 - Constraints
 - Interface definitions
-- Edge cases to handle" --dangerously-skip-permissions --sandbox
+- Edge cases to handle" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # Research paper
 agy -p "Read the file at /path/to/paper.pdf. Analyze this paper and explain:
 - Problem being solved
 - Proposed approach
 - Key algorithms
-- How to apply this in practice" --dangerously-skip-permissions --sandbox
+- How to apply this in practice" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 ```
 
 ### 4. Documentation & Web Research
 
 ```bash
 # Latest documentation
-agy -p "Find and summarize the latest React 19 features and migration guide from official docs"
+agy -p "Find and summarize the latest React 19 features and migration guide from official docs" --model gemini-3.7-flash-high
 
 # Compare libraries
 agy -p "Compare these Python HTTP clients in 2026:
 - httpx vs aiohttp vs requests
 - Performance benchmarks
 - Feature comparison
-- Community activity"
+- Community activity" --model gemini-3.1-pro-high
 
 # Troubleshooting
 agy -p "Research common causes and solutions for: {error message}
-Search Stack Overflow, GitHub Issues, and official docs"
+Search Stack Overflow, GitHub Issues, and official docs" --model gemini-3.1-pro-high
 ```
 
 ### 5. Code Migration Analysis
@@ -130,14 +133,14 @@ agy -p "Analyze our codebase for Django to FastAPI migration:
 - Identify all Django-specific patterns used
 - Map to FastAPI equivalents
 - Estimate migration complexity per module
-- Suggest migration order" --dangerously-skip-permissions --sandbox --print-timeout 10m
+- Suggest migration order" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
 
 # Version upgrade
 agy -p "Research breaking changes from Python 3.11 to 3.13.
 Cross-reference with our codebase to identify:
 - Deprecated features we use
 - New features we could adopt
-- Required changes" --dangerously-skip-permissions --sandbox --print-timeout 10m
+- Required changes" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
 ```
 
 ## When NOT to Use Antigravity

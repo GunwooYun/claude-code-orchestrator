@@ -99,8 +99,8 @@ Task tool parameters:
 - prompt: |
     Research: {topic}
 
-    1. Call Antigravity CLI:
-       agy -p "{research question}"
+    1. Call Antigravity CLI (pick the model tier — see Model Policy):
+       agy -p "{research question}" --model gemini-3.1-pro-high
 
     2. Save full output to: .claude/docs/research/{topic}.md
 
@@ -118,7 +118,7 @@ prompt: |
   Research best practices for {topic}.
 
   agy -p "Research: {topic}. Include recommended approaches,
-  common pitfalls, and library recommendations."
+  common pitfalls, and library recommendations." --model gemini-3.1-pro-high
 
   Save to .claude/docs/research/{topic}.md
   Return 5-7 key bullet points.
@@ -133,7 +133,7 @@ prompt: |
   agy -p "Analyze architecture, key modules, data flow,
   and entry points of this repository.
   Do not create or modify any files; return everything in your response." \
-    --dangerously-skip-permissions --sandbox --print-timeout 10m
+    --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
 
   Save to .claude/docs/research/codebase-analysis.md
   Return architecture summary and key insights.
@@ -146,7 +146,7 @@ prompt: |
 
   agy -p "Read the file at {absolute_path} and {extraction prompt}.
   Do not create or modify any files; return everything in your response." \
-    --dangerously-skip-permissions --sandbox
+    --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
   (stdin file redirection is NOT supported — pass the absolute path
    in the prompt; agy reads the file with its own tools. Verified for
@@ -167,24 +167,55 @@ While subagent is processing, you can:
 
 Subagent returns concise summary. Full output available in `.claude/docs/research/` if needed.
 
+## Model Policy (choose `--model` by task tier)
+
+The global default is set by the user via `/model` in the agy TUI (currently
+`gemini-3.1-pro-high`). Templates pin the model **per call** so quota is spent
+where it matters. Slugs come from `agy models`; the suffix is the effort tier.
+
+| Tier | Task shape | `--model` | Notes |
+|------|-----------|-----------|-------|
+| **T1 Quick lookup** | One fact / yes-no / version check; answer ≤ 1 paragraph; single source | `gemini-3.7-flash-low` | Cheapest. Web research only, no file reads |
+| **T2 Summarize / extract** | Summarize one page or one file; pull structured fields from a known input; explain one module | `gemini-3.7-flash-high` | Add `--output-format json` (+ `--json-schema`) for structured extraction |
+| **T3 Research report** | Library comparison, best practices, multi-source synthesis, migration guides | `gemini-3.1-pro-high` | Save output to `.claude/docs/research/` |
+| **T4 Whole-repo / multimodal** | Repository-wide analysis, cross-module tracing, PDF/image/video understanding | `gemini-3.1-pro-high` + `--print-timeout 10m` | Always with the headless file flags; never downgrade |
+
+Decision rules:
+
+1. **Unsure between two tiers → pick the higher one.** A wrong downgrade means a
+   re-run, which costs more than the Pro call it tried to avoid.
+2. **Never downgrade T4.** Large-context accuracy is the whole point of agy.
+3. **User instruction wins** ("use flash", "use pro") over this table.
+4. Escalate instead of retrying: if a T1/T2 answer is empty, hedged, or clearly
+   shallow, re-run once at T3 — do not loop at the same tier.
+
+Rationale: savings come from the call *distribution* (most calls are T1/T2),
+not from table granularity; more than ~5 tiers makes routing itself error-prone.
+
 ## Antigravity CLI Commands Reference
 
 For use within subagents:
 
 ```bash
-# Research (simple)
-agy -p "{question}"
+# T1 quick lookup
+agy -p "{one-fact question}" --model gemini-3.7-flash-low
 
-# Codebase analysis (reads repo files → headless flags required; CWD is the workspace)
+# T2 summarize / extract (single source)
+agy -p "{summarize or extract}" --model gemini-3.7-flash-high [--output-format json]
+
+# T3 research report
+agy -p "{comparison / best-practices question}" --model gemini-3.1-pro-high
+
+# T4 codebase analysis (reads repo files → headless flags required; CWD is the workspace)
 agy -p "{question} Do not create or modify any files." \
-  --dangerously-skip-permissions --sandbox --print-timeout 10m [--add-dir {path}]
+  --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m [--add-dir {path}]
 
-# Multimodal (path-in-prompt; no stdin redirection; headless flags required)
+# T4 multimodal (path-in-prompt; no stdin redirection; headless flags required)
 agy -p "Read the file at {absolute_path} and {question} Do not create or modify any files." \
-  --dangerously-skip-permissions --sandbox
+  --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
-# Scripted/CI calls (recommended for automation)
-agy -p "{question}" --output-format json --print-timeout 10m
+# Scripted/CI calls (any tier; gate on .status == "SUCCESS")
+agy -p "{question}" --model {slug} --output-format json --print-timeout 10m
 ```
 
 ### Headless Caveats (IMPORTANT)
@@ -214,8 +245,8 @@ agy -p "{question}" --output-format json --print-timeout 10m
   globally with `{"permissions": {"allow": ["read_file(*)"]}}` in
   `~/.gemini/antigravity-cli/settings.json` and drop the flags.
 - **Default timeout is 5m** — set `--print-timeout` explicitly for long tasks.
-- Model can be pinned with `--model {slug}` (list: `agy models`,
-  e.g. `gemini-3.1-pro-high`); unknown slugs fail loudly.
+- Pin the model per call with `--model {slug}` following the Model Policy
+  above (list: `agy models`); unknown slugs fail loudly.
 - Do NOT redirect stderr to /dev/null in subagent calls — it carries the
   soft-deny diagnostics.
 

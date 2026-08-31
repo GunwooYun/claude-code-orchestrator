@@ -69,7 +69,7 @@ Task tool parameters:
 - prompt: |
     Research: {topic}
 
-    agy -p "{research question}"
+    agy -p "{research question}" --model gemini-3.1-pro-high   # T3; use flash tiers for lookups
 
     Save full output to: .claude/docs/research/{topic}.md
     Return CONCISE summary (5-7 bullet points).
@@ -80,20 +80,39 @@ Task tool parameters:
 For quick questions expecting brief answers:
 
 ```bash
-agy -p "Brief question"
+agy -p "Brief question" --model gemini-3.7-flash-low
 ```
+
+### Model Tiers (pin `--model` per call)
+
+| Tier | Task | `--model` |
+|------|------|-----------|
+| T1 | One-fact lookup, version check | `gemini-3.7-flash-low` |
+| T2 | Summarize/extract from one source | `gemini-3.7-flash-high` |
+| T3 | Comparison, best practices, research report | `gemini-3.1-pro-high` |
+| T4 | Whole-repo analysis, PDF/image/video | `gemini-3.1-pro-high` + `--print-timeout 10m` |
+
+Unsure → higher tier. Never downgrade T4. Empty/shallow T1–T2 answer → re-run once at T3.
+Full policy: `.claude/rules/antigravity-delegation.md` → "Model Policy".
 
 ### CLI Options Reference
 
 ```bash
-# Codebase analysis (reads repo files → headless flags required; run from repo root)
-agy -p "{question}" --dangerously-skip-permissions --sandbox --print-timeout 10m
+# T1 / T2 / T3 (web research, no file reads)
+agy -p "{question}" --model gemini-3.7-flash-low        # quick fact
+agy -p "{summarize X}" --model gemini-3.7-flash-high    # single-source summary
+agy -p "{compare A vs B}" --model gemini-3.1-pro-high   # research report
 
-# Multimodal (path-in-prompt; stdin redirection NOT supported; headless flags required)
-agy -p "Read the file at {absolute_path} and {prompt}" --dangerously-skip-permissions --sandbox
+# T4 codebase analysis (reads repo files → headless flags required; run from repo root)
+agy -p "{question} Do not create or modify any files." \
+  --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
 
-# JSON output (scripted calls; gate on .status == "SUCCESS")
-agy -p "{question}" --output-format json --print-timeout 10m
+# T4 multimodal (path-in-prompt; stdin redirection NOT supported; headless flags required)
+agy -p "Read the file at {absolute_path} and {prompt}. Do not create or modify any files." \
+  --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
+
+# JSON output (any tier; gate on .status == "SUCCESS")
+agy -p "{question}" --model {slug} --output-format json --print-timeout 10m
 ```
 
 **Headless caveats**: permission-denied tools are silently skipped with exit 0
@@ -139,7 +158,7 @@ Include:
 - Library recommendations (with comparison)
 - Performance considerations
 - Security concerns
-- Code examples"
+- Code examples" --model gemini-3.1-pro-high
 ```
 
 ### Repository Analysis
@@ -152,7 +171,7 @@ agy -p "Analyze this repository:
 4. Entry points and extension points
 5. Existing patterns to follow
 Do not create or modify any files; return everything in your response." \
-  --dangerously-skip-permissions --sandbox --print-timeout 10m
+  --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
 ```
 
 ### Library Research
@@ -166,13 +185,13 @@ Add "Do not create or modify any files." to each prompt.
 
 ```bash
 # Video
-agy -p "Read the file at /path/to/tutorial.mp4 and analyze: main concepts, key points, timestamps" --dangerously-skip-permissions --sandbox
+agy -p "Read the file at /path/to/tutorial.mp4 and analyze: main concepts, key points, timestamps" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # PDF
-agy -p "Read the file at /path/to/api-docs.pdf and extract: API specs, examples, constraints" --dangerously-skip-permissions --sandbox
+agy -p "Read the file at /path/to/api-docs.pdf and extract: API specs, examples, constraints" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # Image
-agy -p "Read the file at /path/to/diagram.png and describe the architecture it shows" --dangerously-skip-permissions --sandbox
+agy -p "Read the file at /path/to/diagram.png and describe the architecture it shows" --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 ```
 
 ## Integration with deep-reasoning
