@@ -137,6 +137,17 @@ Bash("agy -p '한 문장으로 답변'")
 
 ---
 
+## 운영 주의사항 (Operational Notes)
+
+- **서브에이전트는 서브에이전트를 못 띄운다.** general-purpose 안에서 설계 판단이 필요해지면 결과만 보고하고, 메인이 `Task(subagent_type="deep-reasoning")`를 호출한다.
+- **`/checkpointing`(기본 모드)은 `CLAUDE.md`와 `.agents/rules/AGENTS.md`의 `## Session History`를 덮어쓴다.** 실행 전에 커밋해 두고, 리뷰 전용 세션에서는 실행하지 않는다.
+- **리뷰는 별도 세션에서.** 구현한 세션은 자기 코드에 편향되므로 `git worktree`로 격리한 새 `claude` 세션에서 "리포트 파일만 작성, 다른 파일 수정 금지"로 리뷰를 받고, 원 세션에서 반영한다. 세션 안에서의 가벼운 리뷰는 deep-reasoning 서브에이전트로 충분하다.
+- **훅 파일명을 바꾸면 `.claude/settings.json` 등록 경로를 같은 커밋에서 함께 바꾼다.** 어긋나면 PreToolUse 훅 오류로 모든 Edit이 막힌다.
+- **agy 헤드리스 호출의 빈 응답은 실패다** (soft-deny, exit 0). stderr를 버리지 말고 `--output-format json`의 `.status`/`response`로 판단한다. 파일을 읽는 호출은 템플릿 패턴의 플래그와 "파일 수정 금지" 문구를 그대로 쓴다.
+- **deep-reasoning의 읽기 전용은 도구 제거 + 지시**이지 커널 샌드박스가 아니다. 커밋 전 `git status`로 의도치 않은 변경을 확인한다.
+
+---
+
 ## 언어 프로토콜(Language Protocol)
 
 - **사고/코드/로그**: 영어
