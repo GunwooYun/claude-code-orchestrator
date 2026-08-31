@@ -1,101 +1,89 @@
 ---
 name: init
-description: Analyze project structure and update CLAUDE.md (Claude Code context) with the detected tech stack and commands. Do NOT touch .agents/rules/AGENTS.md (agy context).
+description: First-session setup after copying the orchestrator template into a project. Detects the stack, adapts CLAUDE.md / rules / lint hook / permissions when the stack differs from the template default (Python + uv/ruff/ty/pytest), and seeds the agy context (.agents/rules/AGENTS.md) and DESIGN.md. Run once per project.
 disable-model-invocation: true
 ---
 
-# Initialize Project Configuration
+# Initialize Project Configuration (first session)
 
-Analyze this project and update **only the project-specific sections** of `CLAUDE.md`
-(the Claude Code context file). `.agents/rules/AGENTS.md` is Antigravity CLI's context
-and is NOT the target of this skill; a root-level `AGENTS.md` must not be created.
+You have just been copied into a new project together with `.claude/`, `.agents/`
+and `CLAUDE.md`. Make the template fit **this** project. Work through the steps
+in order; skip a step when it does not apply and say so in the final report.
 
-## Important
+## Ground rules
 
-- Only update the `## 기술 스택(Tech Stack)` section and the `## Current Project` block (create it if missing)
-- Do **NOT** modify any other section: agent table, `## 컨텍스트 관리`, `## 빠른 사용 가이드`, `## Workflow`, `## 문서구조`, `## 운영 주의사항 (Operational Notes)`, `## 언어 프로토콜`, or an existing `## Session History`
-- Insert `## Current Project` **before** `## Session History` if that section exists (`/checkpointing` rewrites the Session History section; content placed inside it is lost)
-- Do not add a second H1 or a separate language section — CLAUDE.md already has `## 언어 프로토콜`
+- `CLAUDE.md`: touch only `## 기술 스택(Tech Stack)` and `## Current Project`
+  (create it if missing, place it after `## 언어 프로토콜` and **before** any
+  `## Session History`). Never edit the other sections, never add a second H1.
+- `.agents/rules/AGENTS.md` is Antigravity CLI's context: add a project
+  paragraph, keep its read-only rules intact, never create a root `AGENTS.md`.
+- Ask before installing anything or changing what gets committed.
 
-## Steps
+## Step 1 — Detect the stack
 
-### 1. Project Analysis
+Look for: `pyproject.toml` / `uv.lock` / `requirements*.txt` / `setup.py`,
+`package.json` (+ scripts), `Cargo.toml`, `go.mod`, `Makefile`, `Dockerfile*`,
+`docker-compose*.yml`, CI configs, existing lint/format configs
+(`ruff.toml`, `.flake8`, `setup.cfg`, `.eslintrc*`, `.pre-commit-config.yaml`),
+test layout, and the commit-message convention from `git log --oneline -20`.
+Record: languages, package manager, formatter/linter/type-checker **with pinned
+versions**, test runner and how it is invoked (locally or inside a container),
+default branch, commit convention.
 
-Find these files to identify the tech stack:
+## Step 2 — Ask the user (one AskUserQuestion, several questions)
 
-- `package.json` → Node.js/TypeScript project
-- `pyproject.toml` / `setup.py` / `requirements.txt` → Python project
-- `Cargo.toml` → Rust project
-- `go.mod` → Go project
-- `Makefile` / `Dockerfile` → Build/deploy config
-- `.github/workflows/` → CI/CD config
+1. **Project overview** — what does it do, in 1–2 sentences (used for
+   `AGENTS.md` and `DESIGN.md`).
+2. **Repository policy** — commit `.claude/ .agents/ CLAUDE.md` to the repo, or
+   keep them local-only? If local-only, append them to `.git/info/exclude`.
+   If committed, make sure `.gitignore` covers `.claude/logs/`,
+   `.claude/checkpoints/`, `.claude/settings.local.json`.
+3. **Lint hook** (only if the stack is not uv/ruff) — install the project's own
+   formatter/linter locally at the pinned versions (e.g.
+   `pipx install black==<ver>`), disable `lint-on-save.py` in `settings.json`,
+   or keep it as report-only.
+4. **Code language** for identifiers/comments (English default) and any extra
+   conventions.
 
-Also detect:
+## Step 3 — CLAUDE.md
 
-- npm scripts / poe tasks / make targets → Common commands
-- Major libraries/frameworks
+Replace the body of `## 기술 스택(Tech Stack)` with the detected stack: language
+and framework versions, package manager, quality tools with versions, how the
+project runs (container vs local), a `공통 명령어` block with the **real**
+commands, the commit convention and default branch, then
+`→ 참고: .claude/rules/dev-environment.md`. Add/refresh `## Current Project`
+with the overview and conventions from Step 2.
 
-### 2. Ask User
+## Step 4 — Adapt rules and hooks (skip entirely if the stack is Python + uv/ruff/ty/pytest)
 
-Use AskUserQuestion tool to ask:
+| File | What to do |
+|---|---|
+| `.claude/rules/dev-environment.md` | Rewrite for the real toolchain: layout table, package manager, how to run, formatter/linter/type-checker table with versions and exact invocations, test commands, pre-commit checklist in the project's commit convention. Add a security-posture section if the domain is sensitive. |
+| `.claude/hooks/lint-on-save.py` | Replace the `uv run ruff` / `ty` calls with the project's tools (format → import sort → check-only linter; frontend linter only when `node_modules` exists). Read the file path from **stdin JSON** (`tool_input.file_path`). Resolve tools via `shutil.which` with a `~/.local/bin` fallback. Skip generated dirs (`migrations/`, `node_modules/`). Never block. Or remove its registration from `settings.json` if the user chose to disable it. |
+| `.claude/rules/testing.md` | Replace `uv run pytest` with the real test command (e.g. `docker compose … exec backend pytest`, `npm test`). |
+| `.claude/settings.json` | Add `Bash(<tool>:*)` allow entries for the project's tools (`isort`, `flake8`, `docker compose`, `cargo`, `go`, …). |
+| Rules that do not apply | Suggest removal (e.g. `testing.md` for a repo without tests) — do not delete without confirmation. |
 
-1. **Project overview**: What does this project do? (1-2 sentences)
-2. **Code language**: English or Korean for comments/variable names?
-3. **Additional rules**: Any other coding conventions to follow?
+Verify with `python3 -m py_compile .claude/hooks/*.py` and by piping a sample
+payload (`{"tool_name":"Edit","tool_input":{"file_path":"<a scratch file>"}}`)
+into the lint hook.
 
-### 3. Partial Update of CLAUDE.md
+## Step 5 — Seed agy context and design doc
 
-Use Edit tool to replace the body of `## 기술 스택(Tech Stack)` and to add/refresh a `## Current Project` block (placed after `## 언어 프로토콜` and before any `## Session History`), using this format:
+1. `.agents/rules/AGENTS.md`: insert `## This Project: <name>` right after the
+   title — domain, main directories/apps, companion systems, and any "never
+   print secrets/keys" instruction. Keep the rest of the file unchanged.
+2. `.claude/docs/DESIGN.md`: fill Overview, an Architecture block (directories →
+   components → data flow), the Libraries table with versions, any decision
+   made in this session (e.g. lint settings) with today's date, and open
+   questions you could not resolve (test invocation, CI, etc.) as TODO items.
 
-```markdown
-## 기술 스택(Tech Stack)
+## Step 6 — Smoke test and report
 
-- **Language**: {Detected language}
-- **Package Manager**: {Detected tools}
-- **Dev Tools**: {Detected tools}
-- **Main Libraries**: {Detected libraries}
-- 공통 명령어
-    ```
-    {detected commands}
-    ```
-
-→ 참고: `.claude/rules/dev-environment.md`
-
-## Current Project
-
-### Overview
-{User's answer, 1-2 sentences}
-
-### Conventions
-- Code language: {English or Korean, from the user's answer}
-- {Additional rules from the user}
-```
-
-### 4. Update Common Commands
-
-The `공통 명령어` block inside the Tech Stack section holds the detected commands:
-
-```markdown
-## Common Commands
-
-```bash
-# Detected commands (example)
-{npm run dev / poe test / make build etc.}
-```
-```
-
-### 5. Check Unnecessary Rules
-
-Check rules in `.claude/rules/` and suggest removing unnecessary ones:
-
-- Non-Python project → `dev-environment.md` (uv/ruff/ty) may not be needed; also adjust `hooks/lint-on-save.py`
-- No-test project → `testing.md` may not be needed
-- Also point out the mypy-vs-ty mismatch between `pyproject.toml` and the rules if the project keeps Python tooling
-
-### 6. Report Completion
-
-Report to user (in Korean):
-
-- Detected tech stack
-- Updated sections
-- Recommended rules to remove (if any)
+- Skills list shows `/deep-reasoning`, `/antigravity-system`, `/startproject`.
+- `agy -p "Reply with exactly: OK" --model gemini-3.7-flash-low` returns OK
+  (if agy is installed; otherwise note it).
+- Report in Korean: detected stack, what was changed per file, what was
+  skipped and why, what the user still has to decide (also written to
+  `DESIGN.md` TODO), and a reminder to check `git diff` after the first edit
+  if a formatter was enabled.

@@ -217,9 +217,9 @@ Red → Green → Refactor 사이클을 강제한다.
 
 `/research-lib <lib>`는 라이브러리 조사 결과를 `.claude/docs/libraries/<lib>.md`에 저장하고, `/update-lib-docs`는 기존 문서를 최신화한다. deep-reasoning 코드 리뷰와 agy 리서치가 이 문서를 제약 조건으로 참조한다.
 
-### `/init` — 프로젝트 스택 감지
+### `/init` — 첫 세션 설정 (프로젝트당 1회)
 
-프로젝트 구조를 분석해 `CLAUDE.md`의 기술 스택 섹션과 `## Current Project` 블록을 채우고, 불필요한 규칙 파일을 제안한다. 템플릿 적용 직후 1회 실행 후 결과를 검토한다. (agy 컨텍스트인 `.agents/rules/AGENTS.md`는 건드리지 않는다.)
+템플릿을 복사한 직후 실행한다. 스택을 감지하고 → 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 물은 뒤 → `CLAUDE.md` 기술 스택/`## Current Project`를 채우고 → 스택이 uv/ruff와 다르면 `rules/dev-environment.md`·`hooks/lint-on-save.py`·`rules/testing.md`·`settings.json` 권한을 프로젝트 도구로 맞추고 → `.agents/rules/AGENTS.md`에 프로젝트 단락, `docs/DESIGN.md`에 아키텍처 시드를 쓰고 → 스모크 테스트 후 보고한다. 설치·커밋 정책 변경은 반드시 먼저 묻는다.
 
 ## 실전 활용 가이드 — 120% 뽑아내기
 
@@ -264,10 +264,16 @@ git clone --depth 1 https://github.com/GunwooYun/claude-code-orchestrator.git .s
 
 1. **`.agents/rules/AGENTS.md`** 상단에 프로젝트 설명 한 단락 — agy가 리서치할 때 읽는 유일한 프로젝트 컨텍스트다. 보안 민감 프로젝트면 "키·비밀값은 출력 금지"도 여기에.
 2. **`.claude/docs/DESIGN.md`** — 아키텍처 5줄, 주요 라이브러리 표, 미결 질문. deep-reasoning이 리뷰 전에 항상 읽는다.
-3. `/init`은 C·D를 직접 했다면 생략 가능. 첫 기능 작업 때 `/startproject`가 `## Current Project` 블록을 만든다.
 
-**가장 쉬운 방법**: Step A·B만 손으로 하고 `claude`를 연 뒤 이렇게 시키면 C·D를 오케스트레이터가 수행한다 —
-> "이 저장소를 조사해서 README의 적용 절차 Step C·D대로 CLAUDE.md 기술 스택, rules/dev-environment.md, hooks/lint-on-save.py, .agents/rules/AGENTS.md, docs/DESIGN.md를 이 프로젝트에 맞게 수정해 줘. 도구 설치가 필요하면 먼저 물어봐."
+**실제로는 이렇게 한다 — C·D는 `/init`이 수행한다.** 오케스트레이터는 첫 세션에서 스스로 맞춤화를 시작하지 않는다(그런 지시가 CLAUDE.md에 없고, README는 복사되지 않는다). 그래서 사람이 할 일은 세 가지뿐이다:
+
+```bash
+# A. 복사  → B. 커밋 여부(로컬 전용이면 .git/info/exclude) → 첫 세션
+claude
+> /init
+```
+
+`/init`은 스택을 감지하고, 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 묻고, 스택이 템플릿 기본값과 다르면 Step C의 파일들을 고치고, Step D의 `AGENTS.md`·`DESIGN.md`를 채운 뒤 스모크 테스트와 보고로 끝난다. 스택이 uv/ruff 그대로면 "맞출 게 없음"이라고 보고한다. 남은 판단은 `DESIGN.md` TODO에 기록되어 이후 세션이 이어받는다.
 
 **Step E — 스모크 테스트**: `/deep-reasoning`·`/antigravity-system` 스킬이 목록에 뜨는지, `agy -p "Reply with OK" --model gemini-3.7-flash-low`가 동작하는지, 파일 하나 편집 후 린트 훅 출력과 `git diff`(포매터가 과하게 손대지 않는지)를 확인한다.
 
