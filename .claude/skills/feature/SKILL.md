@@ -1,19 +1,25 @@
 ---
-name: startproject
+name: feature
 description: |
-  Start a new project/feature implementation with multi-agent collaboration.
-  Includes multi-session review workflow for quality assurance.
+  Kick off ONE unit of work (a ticket, a feature, a structural change) with
+  multi-agent collaboration: agy research -> requirements -> deep-reasoning
+  design review -> task list -> implementation -> review. Run it again for every
+  new unit of work, including follow-up tickets on a feature it already built.
+  Skip it for changes with no design decision (bug fixes, wording, config values).
 metadata:
-  short-description: Project kickoff with multi-agent collaboration
+  short-description: Per-work-unit kickoff with multi-agent collaboration
 ---
 
-# Start Project
+# Feature Kickoff
 
-**멀티 에이전트 협업으로 프로젝트를 시작한다.**
+**멀티 에이전트 협업으로 작업 단위 하나를 시작한다.**
+작업(티켓) 하나당 한 번 실행하며, 같은 기능의 후속 수정 티켓에도 다시 실행한다.
 
 ## Overview
 
-이 스킬은 Claude(오케스트레이션 + deep-reasoning 서브에이전트)와 Antigravity CLI(agy)를 협조시켜 프로젝트 개시부터 구현후 리뷰까지를 커버한다.
+이 스킬은 Claude(오케스트레이션 + deep-reasoning 서브에이전트)와 Antigravity CLI(agy)를 협조시켜 작업 개시부터 구현 후 리뷰까지를 커버한다.
+
+프로젝트 전체 설정은 이 스킬이 아니라 `/initproject`가 프로젝트당 한 번 수행한다.
 
 ## Workflow
 

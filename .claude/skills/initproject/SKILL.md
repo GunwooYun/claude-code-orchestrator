@@ -1,5 +1,5 @@
 ---
-name: init
+name: initproject
 description: First-session setup after copying the orchestrator template into a project. Detects the stack, confirms the per-agent model matrix with the user, adapts CLAUDE.md / rules / lint hook / permissions when the stack differs from the template default (Python + uv/ruff/ty/pytest), and seeds the agy context (.agents/rules/AGENTS.md) and DESIGN.md. Run once per project.
 disable-model-invocation: true
 ---
@@ -110,7 +110,7 @@ into the lint hook.
 
 ## Step 7 — Smoke test and report
 
-- Skills list shows `/deep-reasoning`, `/antigravity-system`, `/startproject`.
+- Skills list shows `/deep-reasoning`, `/antigravity-system`, `/feature`.
 - `grep -n '^model:' .claude/agents/*.md` matches the matrix agreed in Step 3,
   and no prose names a model that is not pinned.
 - `agy -p "Reply with exactly: OK" --model gemini-3.7-flash-low` returns OK

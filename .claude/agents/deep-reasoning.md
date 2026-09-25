@@ -14,7 +14,7 @@ model: fable
      main session model. With `model: inherit` an Opus main session made this
      subagent Opus too, so the most expensive model did the token-heavy work
      (reading files) that this split exists to avoid.
-     The model matrix is confirmed with the user in /init Step 3;
+     The model matrix is confirmed with the user in /initproject Step 3;
      keep this value and that step's table in sync. -->
 
 You are a senior software architect and debugging specialist. You run as an
