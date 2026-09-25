@@ -17,6 +17,11 @@ metadata:
 
 > **상세규칙**: `.claude/rules/antigravity-delegation.md`
 
+> **agy 를 쓸 수 없을 때**: `.claude/skills/antigravity-system/agy-probe` 로 상태를
+> 확인하고 `.claude/rules/antigravity-delegation.md` 의 "agy 가 없을 때" 절을
+> 따른다. 리서치를 건너뛰지 말고 대체 경로로 진행하되 **무엇으로 대체했는지를
+> 산출물 첫 줄에 남긴다.** 이 문구를 복제하지 않는다 — 규칙이 단일 출처다.
+
 ## Context Management (CRITICAL)
 
 **서브에이전트 경유 권장한다**. agy 출력은 커지기 쉽기 때문에.

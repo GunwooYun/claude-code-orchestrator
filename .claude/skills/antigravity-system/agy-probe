@@ -1,0 +1,72 @@
+#!/bin/sh
+# Report whether Antigravity CLI (agy) is usable right now.
+#
+# Owned by the antigravity-system skill, not by .claude/scripts/ — that directory
+# is the project's verification contract and nothing else belongs in it.
+#
+# Usage: agy-probe [--quiet]
+#
+# Exit 0  -> usable. First stdout word: READY
+# Exit 1  -> not usable. First stdout word says which state and what to do:
+#              MISSING          agy is not on PATH: install it
+#              UNAUTHENTICATED  installed but no valid session: log in
+#              DEGRADED         answered, but the answer was empty (soft-deny,
+#                               quota, or network) — treat as unusable for now
+#
+# Callers gate on the exit code and read the word to pick the remedy. The states
+# exist because the remedies differ: installing, logging in and waiting are three
+# different asks, and the previous template collapsed them into "agy is not
+# installed, note it".
+set -u
+
+quiet=0
+[ "${1:-}" = "--quiet" ] && quiet=1
+
+say() {
+    [ "$quiet" -eq 1 ] && return 0
+    printf '%s\n' "$1"
+}
+
+if ! command -v agy >/dev/null 2>&1; then
+    say "MISSING"
+    say "agy is not on PATH. Install Antigravity CLI, then run: agy  (and log in)."
+    exit 1
+fi
+
+# One cheap call on the cheapest tier. Ask for an exact token so an empty or
+# hedged answer is detectable — a soft-denied call exits 0 with no content, which
+# is the trap documented in .claude/rules/antigravity-delegation.md.
+output=$(agy -p "Reply with exactly: PROBE_OK" \
+    --model gemini-3.7-flash-low \
+    --print-timeout 60s 2>/tmp/.agy-probe-err.$$ )
+status=$?
+stderr=$(cat "/tmp/.agy-probe-err.$$" 2>/dev/null)
+rm -f "/tmp/.agy-probe-err.$$"
+
+# Authentication problems are reported differently across versions, so match on
+# the words rather than on an exit code.
+case "$output$stderr" in
+    *[Uu]nauthenticated*|*"not logged in"*|*"log in"*|*"login"*|*"credential"*|\
+    *"API key"*|*"authenticate"*|*"auth error"*|*401*|*403*)
+        say "UNAUTHENTICATED"
+        say "agy is installed but has no valid session. Run: agy  then log in."
+        exit 1
+        ;;
+esac
+
+case "$output" in
+    *PROBE_OK*)
+        say "READY"
+        [ -n "$stderr" ] && say "note: agy wrote to stderr: $stderr"
+        exit 0
+        ;;
+esac
+
+say "DEGRADED"
+if [ "$status" -ne 0 ]; then
+    say "agy exited $status. stderr: ${stderr:-<empty>}"
+else
+    say "agy exited 0 but returned no usable answer (soft-deny, quota, or network)."
+    say "stderr: ${stderr:-<empty>}"
+fi
+exit 1

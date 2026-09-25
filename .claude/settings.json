@@ -157,7 +157,8 @@
       "Bash(fi)",
       "Bash(done)",
       "Bash(true)",
-      "Bash(.claude/scripts/*)"
+      "Bash(.claude/scripts/*)",
+      "Bash(.claude/skills/antigravity-system/agy-probe)"
     ],
     "deny": [
       "Read(./.env)",

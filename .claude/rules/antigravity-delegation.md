@@ -40,6 +40,53 @@ Think of agy as your research assistant who can quickly gather and synthesize in
 
 **When you need research → Delegate to subagent → Subagent consults agy.**
 
+## agy 가 없을 때 (CRITICAL)
+
+**agy 설치·로그인은 전제이지 보장이 아니다.** 폐쇄망, 만료된 세션, 소진된 쿼터,
+설치되지 않은 머신 — 어느 경우든 작업 중에 발생할 수 있다.
+
+### 상태 판별
+
+```sh
+.claude/skills/antigravity-system/agy-probe
+```
+
+종료 코드 `0` 이면 쓸 수 있다. `0 이외` 면 첫 단어가 상태다.
+
+| 상태 | 뜻 | 조치 |
+|---|---|---|
+| `READY` | 설치·인증·응답 정상 | 그대로 진행 |
+| `MISSING` | PATH 에 없음 | 아래 대체 경로로 진행 + 설치를 사용자에게 알림 |
+| `UNAUTHENTICATED` | 설치됐지만 세션 없음 | 대체 경로 + **로그인만 하면 된다**고 알림 |
+| `DEGRADED` | 응답이 비었음 (soft-deny·쿼터·네트워크) | 대체 경로 + 무엇이 비었는지 알림 |
+
+**작업 단위마다 한 번만 확인한다.** 호출마다 프로브를 돌리면 그 자체가 낭비다.
+`/feature` Phase 1 에서 한 번 확인하고 결과를 그 작업 내내 재사용한다.
+
+### 대체 경로 (agy 없이 같은 목적을 달성한다)
+
+| agy 의 역할 | 대체 | 무엇을 잃는가 |
+|---|---|---|
+| 웹 리서치 (T1~T3) | general-purpose 서브에이전트가 `WebSearch`/`WebFetch` 로 조사 → `.claude/docs/research/` 저장 → 요약 반환 | Google 그라운딩의 넓이. Claude 토큰을 씀 |
+| 레포 전체 분석 (T4) | general-purpose 서브에이전트가 `Grep`/`Glob`/`Read` 로 **표적 탐색** | 전수 조사가 아님 — 무엇을 읽었는지 명시해야 함 |
+| PDF·이미지 | Claude 의 `Read` 도구가 직접 읽는다 | 거의 없음 |
+| 영상·음성 | **대체 불가** | 그 작업은 할 수 없다 |
+| deep-reasoning 앞단 프리필터 | 생략하고 deep-reasoning 이 직접 읽는다 | 비싼 모델이 넓게 읽음 (토큰 증가) |
+
+### 절대 규칙
+
+- **조용히 degrade 하지 않는다.** agy 없이 만든 리서치 문서는 **첫 줄에 그 사실과
+  무엇으로 대체했는지**를 적는다. 나중에 읽는 사람이 Gemini 전수 조사로 오해하면
+  그 문서를 근거로 잘못된 결정을 한다.
+- **리서치를 건너뛰고 계획을 세우지 않는다.** 대체 경로도 불가능하면
+  "조사하지 못했다"를 계획에 명시하고 그 불확실성을 리스크로 올린다. 없는 조사를
+  있는 것처럼 두면 `/feature` Phase 3 이 검토할 근거가 사라진다.
+- **대체 불가한 것(영상·음성)은 대체 불가라고 말한다.** 비슷한 것으로 갈음하지
+  않는다.
+- 상태를 사용자에게 **한 번** 알린다. 매 호출마다 반복하면 무시하게 된다.
+- `/initproject` 는 설정 시점에 이 판별을 하고 설치·로그인을 요청한다. 실행 중에는
+  사용자를 기다릴 수 없으므로 대체 경로로 진행하고 사실만 보고한다.
+
 ## Antigravity vs deep-reasoning: Choose the Right Tool
 
 | Task | deep-reasoning | Antigravity (agy) |

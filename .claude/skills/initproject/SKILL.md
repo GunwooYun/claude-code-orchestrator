@@ -1,6 +1,6 @@
 ---
 name: initproject
-description: First-session setup after copying the orchestrator template into a project. Detects the stack, confirms the per-agent model matrix with the user, writes the four verification scripts in .claude/scripts/ that form this project's contract with the orchestrator, adapts CLAUDE.md / rules / permissions where the template's own toolchain shows through, and seeds the agy context (.agents/rules/AGENTS.md) and DESIGN.md. Run once per project.
+description: First-session setup after copying the orchestrator template into a project. Detects the stack, confirms the per-agent model matrix with the user, checks whether agy is installed and logged in (asking for installation or login while a person is present), writes the four verification scripts in .claude/scripts/ that form this project's contract with the orchestrator, adapts CLAUDE.md / rules / permissions where the template's own toolchain shows through, and seeds the agy context (.agents/rules/AGENTS.md) and DESIGN.md. Run once per project.
 disable-model-invocation: true
 ---
 
@@ -75,6 +75,38 @@ Procedure:
    `.claude/rules/deep-reasoning-delegation.md`,
    `.claude/skills/deep-reasoning/SKILL.md`) so no document claims a model that
    is not pinned. This drift is what the step exists to prevent.
+
+### Step 3b — agy: installed? logged in?
+
+The template assumes agy is installed and authenticated. That assumption is worth
+checking **here**, while a person is present and can act on it — during a work
+session nobody can be asked to log in.
+
+```sh
+.claude/skills/antigravity-system/agy-probe
+```
+
+Branch on the first word it prints:
+
+| State | What to do |
+|---|---|
+| `READY` | Report agy's model policy (the `agy research` row above) and move on. Nothing to install. |
+| `MISSING` | **Ask the user to install Antigravity CLI**, then to run `agy` once and log in. Offer to wait: re-run the probe when they say they are done. Do not install it yourself — Step 2's ground rule is to ask before installing anything. |
+| `UNAUTHENTICATED` | agy is already there, so this is the short path: **ask the user to run `agy` and log in**, then re-run the probe. Say explicitly that no installation is needed. |
+| `DEGRADED` | Installed and authenticated but the probe came back empty. Show the probe's detail line (soft-deny, quota, or network) and ask whether to wait and retry or proceed without agy. |
+
+If the user declines, or the state does not become `READY`:
+
+1. Say plainly which capabilities are reduced — cite the fallback table in
+   `.claude/rules/antigravity-delegation.md`, and that video and audio analysis
+   become impossible rather than degraded.
+2. Record the state and the date in `.claude/docs/DESIGN.md` under Open
+   Questions, so a later session does not rediscover it.
+3. Continue setup. A missing agy is not a reason to abandon `/initproject` —
+   every other step still applies.
+
+**Do not loop.** Ask once, re-probe once after the user says they are done, then
+take the answer as final and move on.
 
 ## Step 4 — CLAUDE.md
 
@@ -199,9 +231,11 @@ the bug this step exists to prevent.
 - Each verification script written in Step 5 runs by hand and honours the
   contract (0 = pass and silent, non-zero = fail with a reason); the gate has
   been seen to fail once on an injected violation.
-- `agy -p "Reply with exactly: OK" --model gemini-3.7-flash-low` returns OK
-  (if agy is installed; otherwise note it).
-- Report in Korean: detected stack, the final model matrix, which verification
+- `.claude/skills/antigravity-system/agy-probe` prints the state agreed in
+  Step 3b. `READY` exits 0; any other state must already be recorded in
+  `DESIGN.md` Open Questions with today's date.
+- Report in Korean: detected stack, the final model matrix, agy's state and
+  what it costs if not `READY`, which verification
   tiers exist and which were skipped and why, what was changed per file, what was
   skipped and why, what the user still has to decide (also written to
   `DESIGN.md` TODO), and a reminder to check `git diff` after the first edit

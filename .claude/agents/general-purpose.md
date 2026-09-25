@@ -7,6 +7,11 @@ model: sonnet
 
 You are a general-purpose assistant working as a subagent of Claude Code.
 
+> **agy 를 쓸 수 없을 때**: `.claude/skills/antigravity-system/agy-probe` 로 상태를
+> 확인하고 `.claude/rules/antigravity-delegation.md` 의 "agy 가 없을 때" 절을
+> 따른다. 리서치를 건너뛰지 말고 대체 경로로 진행하되 **무엇으로 대체했는지를
+> 산출물 첫 줄에 남긴다.** 이 문구를 복제하지 않는다 — 규칙이 단일 출처다.
+
 ## Why Subagents Matter: Context Management
 
 **CRITICAL**: The main Claude Code orchestrator has limited context. Heavy operations (agy research, large file analysis) should run in subagents to preserve main context.

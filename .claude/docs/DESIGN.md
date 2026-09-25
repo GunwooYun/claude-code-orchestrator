@@ -44,6 +44,9 @@
 | This repository is not a package (`[tool.uv] package = false`) | A hatchling build-system for a non-existent `src/` made every `uv run` fail, which took down `poe lint`/`test`/`all` with it | Add `tool.hatch.build.targets.wheel` and keep the build backend | 2026-09-25 |
 | This repository type-checks with `ty`; the checker is chosen per project by `/initproject` | Pure-Python repo with no Django, and the rules and lint hook already assumed `ty`. Measured: on Django models `ty` reports 3 false positives on 3 correct lines because it has no plugin for the field descriptors, while `mypy` + `django-stubs` is clean — so the choice cannot be a template-wide default | Template-wide mypy; template-wide ty | 2026-09-25 |
 | `poe lint` no longer auto-fixes; the gate is read-only and `poe fix` mutates | A gate that rewrites files can never fail on a lint or format issue, so `poe all` gave false assurance | Leave `--fix` in the gate | 2026-09-25 |
+| agy availability is three states, not a boolean | "Not installed", "not logged in" and "answered with nothing" need three different remedies — install, log in, wait — and the template collapsed all of them into "if agy is installed; otherwise note it". A soft-denied call exits 0 with an empty answer, so a boolean check would also have called that success | A single is-it-there check | 2026-09-25 |
+| The probe lives in the antigravity skill, not `.claude/scripts/` | That directory is the project's verification contract; a probe is not a tier and would read as a fifth entrypoint. A test asserts it is not there | Put it beside the verify-* scripts | 2026-09-25 |
+| Degrading without agy must be declared in the artefact's first line | A research document written with Grep and WebSearch has different breadth from a Gemini sweep. A later reader who cannot tell which they are holding will over-trust it, and `/feature` Phase 3 will review a plan whose evidence base it cannot judge | Degrade silently; skip research entirely | 2026-09-25 |
 | Which files count as implementation is decided by EXCLUSION, not by a list of languages | The hook listed seven extensions, so work in any other language was invisible — the same hard-coding the template is being cured of elsewhere. Missing a language costs a hook that never fires; counting one extra file type costs one early suggestion, so the asymmetry favours excluding documents, config, data, assets and lockfiles and counting the rest | Extend the inclusion list; read the extensions from a config file | 2026-09-25 |
 | Per-session state removes the need for a SessionStart reset hook | The suggestion must fire once per session, which the original implemented as a flag in shared state and therefore never reset. Keying the file by session id makes a new session start empty by construction, with no second hook to keep in sync | Add a SessionStart hook that clears the flag | 2026-09-25 |
 | A log entry with an unusable timestamp is skipped and counted, not grouped | It has no place in a chronological history. `local_date` fell back to the timestamp's first ten characters, so a corrupt line became a heading. Skipping silently would hide data loss, so the count is printed | Group them under an "unknown date" bucket | 2026-09-25 |
@@ -108,8 +111,14 @@ review falsified the original profile design; see Key Decisions.
       than a list of seven extensions, and comment stripping covers the common
       syntaxes instead of only `#`. 16 regression tests
       (`tests/test_post_implementation_review.py`, scenario IDs R1-R6).
-- [ ] agy-unavailable fallback: four skills assume `agy` is installed and no path
-      degrades without it.
+- [x] agy-unavailable fallback. Two layers, because they answer different
+      questions: `/initproject` Step 3b probes at setup time, while a person is
+      present, and asks for installation or login as the state requires; the
+      runtime path in `/feature` Phase 1 cannot wait for anybody and degrades to
+      Claude's own tools instead. `agy-probe` distinguishes MISSING /
+      UNAUTHENTICATED / DEGRADED because the remedies differ. The fallback ladder
+      lives once in `.claude/rules/antigravity-delegation.md`; the other files
+      point at it rather than copying it. 16 tests.
 
 Dropped after review:
 - ~~Hooks read a project profile~~ — one hook runs stack tools; a project-owned
@@ -143,6 +152,7 @@ Dropped after review:
 
 | Date | Changes |
 |------|---------|
+| 2026-09-25 | agy fallback: `agy-probe` reports READY/MISSING/UNAUTHENTICATED/DEGRADED; `/initproject` Step 3b asks for install or login at setup time; `/feature` Phase 1 degrades to Claude's own tools and records that it did |
 | 2026-09-25 | post-implementation-review.py: per-project/per-session state with pruning and symlink refusal, exclusion-based source detection, multi-language comment stripping; 16 regression tests written first |
 | 2026-09-25 | checkpoint.py hardened against data loss (section boundary, atomic writes with backup, timestamp and --since handling, git range, per-file history heading, all tools kept); 17 regression tests written before the fixes |
 | 2026-09-25 | Contract review: pass-through of success output, optional scope arguments, interpreter resolution for Windows, shared helpers, tiers reduced to the two this repo honestly has, template self-checks moved into the gate, coverage theatre reverted |
