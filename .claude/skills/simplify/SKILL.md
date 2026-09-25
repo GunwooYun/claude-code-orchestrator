@@ -75,7 +75,11 @@ def main():
 
 ### 5. Verify with Tests
 
+프로젝트의 테스트 명령을 쓴다 — `CLAUDE.md` 의 `공통 명령어` 블록에 있다.
+컨테이너 안에서 돌거나 pytest 가 아닐 수 있다.
+
 ```bash
+# 이 템플릿 기본값
 uv run pytest -v
 ```
 

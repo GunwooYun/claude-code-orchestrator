@@ -91,12 +91,24 @@ with the overview and conventions from Step 2.
 | `.claude/rules/dev-environment.md` | Rewrite for the real toolchain: layout table, package manager, how to run, formatter/linter/type-checker table with versions and exact invocations, test commands, pre-commit checklist in the project's commit convention. Add a security-posture section if the domain is sensitive. |
 | `.claude/hooks/lint-on-save.py` | Replace the `uv run ruff` / `ty` calls with the project's tools (format → import sort → check-only linter; frontend linter only when `node_modules` exists). Read the file path from **stdin JSON** (`tool_input.file_path`). Resolve tools via `shutil.which` with a `~/.local/bin` fallback. Skip generated dirs (`migrations/`, `node_modules/`). Never block. Or remove its registration from `settings.json` if the user chose to disable it. |
 | `.claude/rules/testing.md` | Replace `uv run pytest` with the real test command (e.g. `docker compose … exec backend pytest`, `npm test`). |
+| `.claude/skills/tdd/SKILL.md`, `.claude/skills/simplify/SKILL.md` | These carry `uv run pytest` in code blocks and were previously missed by this step, so they kept telling the model to run pytest after setup. Leave the placeholders (`{TEST_ONE}`, `{TEST_ALL}`, …) and make sure `CLAUDE.md` → `공통 명령어` holds the real commands; only edit the skills if a placeholder is still wrong for this stack. For a stack with no unit tests (e.g. Yocto recipes), say so in `tdd/SKILL.md` and name what replaces Red-Green-Refactor. |
 | `.claude/settings.json` | Add `Bash(<tool>:*)` allow entries for the project's tools (`isort`, `flake8`, `docker compose`, `cargo`, `go`, …). |
 | Rules that do not apply | Suggest removal (e.g. `testing.md` for a repo without tests) — do not delete without confirmation. |
 
 Verify with `python3 -m py_compile .claude/hooks/*.py` and by piping a sample
 payload (`{"tool_name":"Edit","tool_input":{"file_path":"<a scratch file>"}}`)
 into the lint hook.
+
+Then prove nothing still names the template's default toolchain:
+
+```bash
+grep -rn 'uv run\|ruff\|\bty\b\|pytest' .claude/rules .claude/skills CLAUDE.md \
+  | grep -v initproject/references
+```
+
+Every remaining hit must be either this project's real toolchain or an
+explicitly-labelled template default. A hit the user's stack does not use is
+the bug this step exists to prevent.
 
 ## Step 6 — Seed agy context and design doc
 
