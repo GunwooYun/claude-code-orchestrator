@@ -1,0 +1,14 @@
+#!/bin/sh
+# Contract: .claude/scripts/README.md — task tier. Budget <= 5 minutes.
+# Run after every implementation task. This is the gate.
+#
+# THIS REPOSITORY'S IMPLEMENTATION (uv + poe). It must be able to FAIL: never
+# put an auto-fixing command in here, or the gate stops being a gate.
+set -eu
+
+if command -v uv >/dev/null 2>&1 && [ -f pyproject.toml ]; then
+    exec uv run poe all
+fi
+
+echo "verify-task: uv or pyproject.toml missing — cannot run this project's gate" >&2
+exit 1

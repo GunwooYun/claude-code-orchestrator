@@ -156,7 +156,8 @@
       "Bash(else)",
       "Bash(fi)",
       "Bash(done)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(.claude/scripts/*)"
     ],
     "deny": [
       "Read(./.env)",

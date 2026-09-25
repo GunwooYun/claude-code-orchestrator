@@ -98,6 +98,10 @@ agy models   # 사용 가능한 모델 슬러그 확인
 │   │   ├── deep-reasoning.md    # 심층 추론 서브에이전트 (Claude Fable)
 │   │   └── general-purpose.md   # 범용 서브에이전트 (agy 호출)
 │   │
+│   ├── scripts/                 # 검증 계약 (프로젝트가 소유, /initproject가 작성)
+│   │   ├── README.md            # 계약 전문 — 네 이름과 종료 코드
+│   │   └── verify-{save,task,unit,full}
+│   │
 │   ├── skills/                  # 재사용 가능한 워크플로우
 │   │   ├── initproject/         # 첫 세션 설정 (프로젝트당 1회)
 │   │   ├── feature/             # 작업 단위 킥오프 (티켓마다)
@@ -237,6 +241,40 @@ Red → Green → Refactor 사이클을 강제한다.
 ### `/initproject` — 첫 세션 설정 (프로젝트당 1회)
 
 템플릿을 복사한 직후 실행한다. 스택을 감지하고 → 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 물은 뒤 → `CLAUDE.md` 기술 스택/`## Current Project`를 채우고 → 스택이 uv/ruff와 다르면 `rules/dev-environment.md`·`hooks/lint-on-save.py`·`rules/testing.md`·`settings.json` 권한을 프로젝트 도구로 맞추고 → `.agents/rules/AGENTS.md`에 프로젝트 단락, `docs/DESIGN.md`에 아키텍처 시드를 쓰고 → 스모크 테스트 후 보고한다. 설치·커밋 정책 변경은 반드시 먼저 묻는다.
+
+## 검증 계약 — 어떤 스택에도 붙는 방법
+
+오케스트레이터는 프로젝트의 언어·도구·실행 위치를 **알지 못한다.** 대신
+`.claude/scripts/` 의 네 실행 파일을 호출하고 종료 코드를 읽는다.
+
+```
+verify-save <path>   초        파일 저장 시 (훅)
+verify-task          ≤5분      태스크마다 (게이트)
+verify-unit          10~60분   작업 단위당 한 번
+verify-full          무제한    CI 또는 사람만
+```
+
+`0` 은 통과(출력 없음), `0 이외` 는 실패(이유 출력). **파일이 없으면 그 티어가
+설정되지 않았다는 뜻**이고, 호출자는 그 사실을 그대로 알린다 — 통과로 치지 않는다.
+
+언어·컨테이너·원격 장비·경로 변환·환경 준비는 **전부 스크립트 안에** 있다.
+그래서 사람이 손으로 재현할 수 있다.
+
+```bash
+.claude/scripts/verify-save path/to/file   # 저장 시점과 똑같이
+.claude/scripts/verify-task; echo $?       # 게이트를 그대로
+```
+
+`/initproject` 가 프로젝트당 한 번 작성한다. 스택별 레시피는 없다 — 티어마다
+네 가지만 묻는다: **실패할 수 있는 명령은 무엇인가 / 어디서 도는가 / 얼마나
+걸리는가 / 어떻게 빨간불이 나는가.** 정직하게 답할 수 없는 티어는 스크립트를
+만들지 않는다.
+
+이 저장소의 `verify-*` 는 **이 저장소 자신의 구현**(Python + uv)이며 다른
+프로젝트의 참고 답안이 아니다. `tests/test_verify_scripts.py` 는 언어를 가정하지
+않고 계약만 검사하므로 그대로 복사해 쓸 수 있다.
+
+→ 계약 전문: `.claude/scripts/README.md`
 
 ## 실전 활용 가이드 — 120% 뽑아내기
 

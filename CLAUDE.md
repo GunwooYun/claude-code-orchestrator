@@ -129,7 +129,8 @@ Bash("agy -p '한 문장으로 답변' --model gemini-3.7-flash-low")
   고치고 무엇을 왜 바꿨는지 남긴다.
 - 티어는 **소요 시간으로** 정한다 (`save` 초 / `task` ≤5분 / `unit` 10~60분 /
   `full` 무제한·CI 전용). 모르면 느린 쪽.
-- 검증 명령은 발명하지 않는다 — 아래 `공통 명령어` 에서 읽는다.
+- 검증 명령은 발명하지 않는다 — 티어 단위는 `.claude/scripts/verify-<tier>`
+  (계약: `.claude/scripts/README.md`), 더 좁은 범위는 아래 `공통 명령어`.
 
 → 참고: `.claude/rules/testing.md`
 

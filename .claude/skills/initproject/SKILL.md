@@ -1,6 +1,6 @@
 ---
 name: initproject
-description: First-session setup after copying the orchestrator template into a project. Detects the stack, confirms the per-agent model matrix with the user, adapts CLAUDE.md / rules / lint hook / permissions when the stack differs from the template default (Python + uv/ruff/ty/pytest), and seeds the agy context (.agents/rules/AGENTS.md) and DESIGN.md. Run once per project.
+description: First-session setup after copying the orchestrator template into a project. Detects the stack, confirms the per-agent model matrix with the user, writes the four verification scripts in .claude/scripts/ that form this project's contract with the orchestrator, adapts CLAUDE.md / rules / permissions where the template's own toolchain shows through, and seeds the agy context (.agents/rules/AGENTS.md) and DESIGN.md. Run once per project.
 disable-model-invocation: true
 ---
 
@@ -84,15 +84,85 @@ commands, the commit convention and default branch, then
 `→ 참고: .claude/rules/dev-environment.md`. Add/refresh `## Current Project`
 with the overview and conventions from Step 2.
 
-## Step 5 — Adapt rules and hooks (skip entirely if the stack is Python + uv/ruff/ty/pytest)
+## Step 5 — Write the verification scripts (the project contract)
+
+This is where stack detection ends up. Everything the orchestrator will ever know
+about this project's toolchain is captured here, in four executables, and nothing
+downstream needs to know the stack again.
+
+Read `.claude/scripts/README.md` first — it is the contract. Then read
+`references/known-pitfalls.md`: it holds **measured** findings (not general
+knowledge) and may change a tool choice. If it says nothing about this stack, use
+your own knowledge; if you are unsure and agy is available, one T3 query.
+
+### The procedure is stack-agnostic
+
+Do NOT look for a matching recipe — there is none, on purpose. Work the four
+tiers in order and answer the same four questions for each:
+
+1. **What command tells us this tier is healthy?** It must be able to FAIL.
+   Never put an auto-fixing command in a gate.
+2. **Where does it run?** Locally, inside a container, on a target device, in a
+   cross-build environment. Whatever wrapper that needs goes INSIDE the script.
+3. **How long does it take?** That decides the tier, not the command's name.
+   A command that takes minutes cannot be the `save` tier.
+4. **How does it go red?** If you cannot say, you do not yet know what this tier
+   verifies.
+
+| Script | Budget | Argument | Ask the user |
+|---|---|---|---|
+| `verify-save` | seconds | one host file path | Which file types are worth checking on save, and with what? |
+| `verify-task` | ≤5 min | none | What is the fast gate after each task? |
+| `verify-unit` | 10–60 min | none | What runs once per unit of work? |
+| `verify-full` | unbounded | none | What only CI or a person should ever run? |
+
+**A tier with no honest answer gets no script.** An absent script means "not
+configured", which callers report plainly. A script that always exits 0 is worse
+than no script: it reports success that was never checked.
+
+### Rules for what you write
+
+- `#!/bin/sh` unless the project prefers otherwise. Executable (`chmod +x`).
+- Exit 0 = pass (print nothing), non-zero = fail (print why).
+- `verify-save` exits 0 silently for a path it does not handle, for a missing
+  file, and for no argument at all. Decide handled types with a `case` on the
+  path inside the script — do not add a config file.
+- Path translation is the script's job. `verify-save` receives a **host** path;
+  if the tool runs elsewhere, convert it there.
+- No destructive actions: a formatter may rewrite the file, but nothing commits,
+  pushes, deploys, or creates resources.
+- `verify-full` may chain `verify-unit`; `verify-save` must never chain a slower
+  tier, or saving a file starts a build.
+- If a tool may be absent, the script decides whether that is a failure and says
+  so — do not let the caller guess.
+
+### Verify what you wrote
+
+Run each script by hand and check the contract, not the output:
+
+```bash
+.claude/scripts/verify-save <a file the project checks>   # expect non-zero on bad input
+.claude/scripts/verify-save README.md; echo $?            # expect 0 and NO output
+.claude/scripts/verify-save; echo $?                      # expect 0
+.claude/scripts/verify-task; echo $?                      # expect 0 on a clean tree
+```
+
+Then prove the gate can fail — introduce one violation, confirm `verify-task`
+goes non-zero, and revert it. **A gate that has never failed is not known to be
+a gate.** Record in the final report which tiers exist and which were skipped.
+
+If the project keeps its own test suite for this, `tests/test_verify_scripts.py`
+in this template checks the contract without assuming any language; copy it.
+
+## Step 6 — Adapt the remaining prose (skip what already fits)
 
 | File | What to do |
 |---|---|
 | `.claude/rules/dev-environment.md` | Rewrite for the real toolchain: layout table, package manager, how to run, formatter/linter/type-checker table with versions and exact invocations, test commands, pre-commit checklist in the project's commit convention. Add a security-posture section if the domain is sensitive. |
-| `.claude/hooks/lint-on-save.py` | Replace the `uv run ruff` / `ty` calls with the project's tools (format → import sort → check-only linter; frontend linter only when `node_modules` exists). Read the file path from **stdin JSON** (`tool_input.file_path`). Resolve tools via `shutil.which` with a `~/.local/bin` fallback. Skip generated dirs (`migrations/`, `node_modules/`). Never block. Or remove its registration from `settings.json` if the user chose to disable it. |
-| `.claude/rules/testing.md` | Replace `uv run pytest` with the real test command (e.g. `docker compose … exec backend pytest`, `npm test`). |
+| `.claude/hooks/lint-on-save.py` | **Usually nothing.** It names no tool — it runs `.claude/scripts/verify-save` (Step 5) and reports what that returns. Edit it only to change hook behaviour itself, not the toolchain. Remove its registration from `settings.json` if the user chose no save-tier check. |
+| `.claude/rules/testing.md` | Principles are stack-agnostic; leave them. Only the short `## 명령` section names this template's own tools — point it at the project's. Tier commands live in `.claude/scripts/`, not here. |
 | `.claude/skills/tdd/SKILL.md`, `.claude/skills/simplify/SKILL.md` | These carry `uv run pytest` in code blocks and were previously missed by this step, so they kept telling the model to run pytest after setup. Leave the placeholders (`{TEST_ONE}`, `{TEST_ALL}`, …) and make sure `CLAUDE.md` → `공통 명령어` holds the real commands; only edit the skills if a placeholder is still wrong for this stack. For a stack with no unit tests (e.g. Yocto recipes), say so in `tdd/SKILL.md` and name what replaces Red-Green-Refactor. |
-| `.claude/settings.json` | Add `Bash(<tool>:*)` allow entries for the project's tools (`isort`, `flake8`, `docker compose`, `cargo`, `go`, …). |
+| `.claude/settings.json` | `Bash(.claude/scripts/*)` is already allowed. Add `Bash(<tool>:*)` only for tools the model runs directly outside the scripts. |
 | Rules that do not apply | Suggest removal (e.g. `testing.md` for a repo without tests) — do not delete without confirmation. |
 
 Verify with `python3 -m py_compile .claude/hooks/*.py` and by piping a sample
@@ -110,7 +180,7 @@ Every remaining hit must be either this project's real toolchain or an
 explicitly-labelled template default. A hit the user's stack does not use is
 the bug this step exists to prevent.
 
-## Step 6 — Seed agy context and design doc
+## Step 7 — Seed agy context and design doc
 
 1. `.agents/rules/AGENTS.md`: insert `## This Project: <name>` right after the
    title — domain, main directories/apps, companion systems, and any "never
@@ -120,14 +190,18 @@ the bug this step exists to prevent.
    made in this session (e.g. lint settings) with today's date, and open
    questions you could not resolve (test invocation, CI, etc.) as TODO items.
 
-## Step 7 — Smoke test and report
+## Step 8 — Smoke test and report
 
 - Skills list shows `/deep-reasoning`, `/antigravity-system`, `/feature`.
 - `grep -n '^model:' .claude/agents/*.md` matches the matrix agreed in Step 3,
   and no prose names a model that is not pinned.
+- Each verification script written in Step 5 runs by hand and honours the
+  contract (0 = pass and silent, non-zero = fail with a reason); the gate has
+  been seen to fail once on an injected violation.
 - `agy -p "Reply with exactly: OK" --model gemini-3.7-flash-low` returns OK
   (if agy is installed; otherwise note it).
-- Report in Korean: detected stack, the final model matrix, what was changed per file, what was
+- Report in Korean: detected stack, the final model matrix, which verification
+  tiers exist and which were skipped and why, what was changed per file, what was
   skipped and why, what the user still has to decide (also written to
   `DESIGN.md` TODO), and a reminder to check `git diff` after the first edit
   if a formatter was enabled.

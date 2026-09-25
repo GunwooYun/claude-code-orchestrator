@@ -44,6 +44,9 @@
 | This repository is not a package (`[tool.uv] package = false`) | A hatchling build-system for a non-existent `src/` made every `uv run` fail, which took down `poe lint`/`test`/`all` with it | Add `tool.hatch.build.targets.wheel` and keep the build backend | 2026-09-25 |
 | This repository type-checks with `ty`; the checker is chosen per project by `/initproject` | Pure-Python repo with no Django, and the rules and lint hook already assumed `ty`. Measured: on Django models `ty` reports 3 false positives on 3 correct lines because it has no plugin for the field descriptors, while `mypy` + `django-stubs` is clean — so the choice cannot be a template-wide default | Template-wide mypy; template-wide ty | 2026-09-25 |
 | `poe lint` no longer auto-fixes; the gate is read-only and `poe fix` mutates | A gate that rewrites files can never fail on a lint or format issue, so `poe all` gave false assurance | Leave `--fix` in the gate | 2026-09-25 |
+| Script names match tier names exactly (`verify-save`/`task`/`unit`/`full`) | The reviewer proposed `lint-file`/`check`/`test-unit`/`test-full`, which would have left the scripts and the tier vocabulary in `rules/testing.md`, `CLAUDE.md`, `/feature` and `/plan` using different words for the same thing — the drift this project keeps having to repair. A test now asserts every tier name appears in `rules/testing.md` | The reviewer's names | 2026-09-25 |
+| `verify-full` in THIS repo checks the template's self-consistency, not a longer test run | A template repository's slowest meaningful check is whether it still describes itself truthfully. It found 3 real defects on its first run (two dangling references from a research doc, and a regex bug of its own that truncated `.jsonl` to `.json`) | A longer test run; no full tier at all | 2026-09-25 |
+| Tests do not execute `verify-task`/`unit`/`full` | Those run this test suite (they are the gate), so calling them from a test recurses without end. That `verify-task` passes is already proven by `poe all` being green when the tests run; what is left is shell-syntax and no-chaining checks | An env-var guard breaking the recursion at depth 1, at the cost of running the suite twice per gate | 2026-09-25 |
 | The per-project contract is the **filesystem** (four scripts), not a profile schema | An adversarial review falsified the premise. Measured: exactly ONE hook runs stack tools, and the real generality bug was `/initproject` Step 5 omitting `tdd`/`simplify` (6 hardcoded `uv run pytest` lines surviving setup). A profile would also have been a 4th copy of the test command — after `pyproject.toml`, `rules/testing.md` and `CLAUDE.md` — creating exactly the drift Step 3 exists to prevent. `runs_in: container` alone would force the hook to become a path-mapping execution adapter | A `project-profile.toml` schema; reading existing files (`pyproject.toml` is Python-only, Yocto has neither) | 2026-09-25 |
 | Verification plan comes FIRST, before any tooling | It is prose, it was already the highest-leverage step, and applying it to a real Yocto and a real Django repo is what reveals which commands need names. Designing a schema before observing its consumers was the core mistake | Schema first, then hooks, then the plan | 2026-09-25 |
 | Verification tiers are defined by DURATION, not by the words unit/e2e | "e2e" means an HTTP request to a compose stack in one project and a QEMU `testimage` run in another; the word cannot drive a decision, the budget can | Model unit/integration/e2e as first-class | 2026-09-25 |
@@ -63,24 +66,20 @@ review falsified the original profile design; see Key Decisions.
       `verify:` task; Phase 6 judges tests against the plan's scenario IDs.
       `rules/testing.md` rewritten stack-agnostic; `CLAUDE.md` carries the
       principle; `/plan` steps must cite tier + command + failure condition.
-- [ ] **Four scripts as the contract.** `.claude/scripts/{lint-file,check,test-unit,test-full}`,
-      shipped calling this repo's own `uv run ruff/ty/pytest`. Exit code is the
-      schema. Container path mapping, env and sudo live inside the script, where
-      the project owner can run it by hand.
-- [ ] **`lint-on-save.py` calls `lint-file` if present, else prints one line.**
-      Roughly 20 lines shorter than today. Add `Bash(.claude/scripts/*)` to
-      settings.json allow, and `.claude/scripts/` to `TEST_BUILD_COMMANDS` in
-      `post-test-analysis.py`.
-- [ ] **`/initproject` writes the four scripts per stack.** Yocto: `lint-file` =
-      `oelint-adv` on `.bb`/`.bbappend`, `check` = `bitbake -p`, `test-full` =
-      image + `testimage`. Docker: wrap each in `docker compose exec -T`.
-- [ ] **One `initproject/references/known-pitfalls.md`** — measured facts with a
-      date and how they were measured (first entry: `ty` reports 3 false
-      positives on 3 correct Django model lines, no field-descriptor plugin;
-      mypy + django-stubs clean, 2026-09-25). NOT per-stack recipe files: those
-      duplicate the model's own knowledge and rot, and a stale recipe the model
-      trusts over its own knowledge is worse than no recipe. Unknown stack → one
-      agy T3 query at setup.
+- [x] **Four scripts as the contract.** `.claude/scripts/verify-{save,task,unit,full}`
+      plus `README.md` holding the contract. Named after the tiers in
+      `rules/testing.md` so the two cannot drift. Exit code is the interface;
+      execution location, path translation and tool discovery live inside the
+      script, where a person can run it by hand.
+- [x] **`lint-on-save.py` delegates to `verify-save` and names no tool.** A test
+      asserts it mentions no toolchain. `Bash(.claude/scripts/*)` allowed;
+      `.claude/scripts/verify-` added to `TEST_BUILD_COMMANDS`.
+- [x] **`/initproject` Step 5 writes the scripts.** The procedure is
+      stack-agnostic by construction: four questions per tier (what command can
+      fail / where does it run / how long / how does it go red), no recipe to
+      match against, and a tier with no honest answer gets no script.
+- [x] **`initproject/references/known-pitfalls.md`** — measured facts with dates
+      only, no per-stack recipes.
 - [ ] `checkpoint.py` hardening: the section regex ends only at `^## ` so an
       intervening H1 is destroyed; a malformed timestamp raises an uncaught
       `ValueError`; `--since` is unvalidated and parsed as UTC while grouping is
@@ -123,6 +122,7 @@ Dropped after review:
 
 | Date | Changes |
 |------|---------|
+| 2026-09-25 | Verification contract as four executables (`.claude/scripts/verify-*`); `lint-on-save` delegates and names no tool; `/initproject` Step 5 writes them; `known-pitfalls.md` for measured facts |
 | 2026-09-25 | Verification-first: `/feature` Phase 2b verification plan, paired verify tasks, adequacy review; stack-agnostic `rules/testing.md`; duration-based tiers |
 | 2026-09-25 | Pinned deep-reasoning to Fable; renamed the two entry skills; added the writing-style rule; repaired the quality gate (`uv run`, `lint-on-save`, `post-test-analysis`) and added hook contract tests; recorded the stack-agnostic direction |
 | | Initial |

@@ -32,7 +32,32 @@
 테스트가 빨간불을 낼 수 있음을 확인한 뒤 되돌린다. 이것을 하지 않으면 통과하는
 방향으로 틀린 테스트가 남는다.
 
-## 원칙 3 — 티어는 소요 시간으로 정한다
+## 원칙 3 — 명령은 프로젝트가 소유한다
+
+검증 명령을 규칙·스킬·훅에 적지 않는다. **`.claude/scripts/` 의 네 진입점이
+프로젝트와 오케스트레이터 사이의 계약이고, 종료 코드가 인터페이스다.**
+
+```
+.claude/scripts/verify-save <path>    save 티어
+.claude/scripts/verify-task           task 티어
+.claude/scripts/verify-unit           unit 티어
+.claude/scripts/verify-full           full 티어
+```
+
+`0` 은 통과(통과 시 출력 없음), `0 이외` 는 실패(이유를 출력). 파일이 없으면
+"그 티어는 이 프로젝트에 설정되지 않았다"는 뜻이다.
+
+언어·도구·실행 위치(로컬/컨테이너/원격 장비)·경로 변환은 **전부 스크립트 안에**
+있다. 그래서 사람이 손으로 재현하고 디버깅할 수 있다.
+
+```sh
+.claude/scripts/verify-save path/to/file   # 저장 시점과 똑같이
+.claude/scripts/verify-task; echo $?       # 게이트를 그대로
+```
+
+`/initproject` 가 프로젝트당 한 번 작성한다. 계약 전문: `.claude/scripts/README.md`.
+
+## 원칙 4 — 티어는 소요 시간으로 정한다
 
 이름이 아니라 시간이 티어를 결정한다. `unit` / `e2e` 라는 말은 스택마다 뜻이
 달라서 그 자체로는 쓸 수 없다.
@@ -57,7 +82,7 @@ Yocto recipe      bitbake -p 파싱, oelint-adv   이미지 빌드 + testimage/p
 **티어를 모르면 느린 쪽으로 적는다.** 잘못 빠른 티어에 넣으면 저장할 때마다
 빌드가 돌아 훅이 꺼지게 된다.
 
-## 원칙 4 — 테스트를 통과시키려고 테스트를 고치지 않는다
+## 원칙 5 — 테스트를 통과시키려고 테스트를 고치지 않는다
 
 실패한 테스트는 정보다. 다음은 금지한다.
 
@@ -127,19 +152,17 @@ def test_with_mocked_api(mock_api) -> None:
 
 ## 명령
 
-프로젝트의 실제 명령은 `CLAUDE.md` 의 `공통 명령어` 를 본다. 이 템플릿 기본값:
+티어 단위로는 `.claude/scripts/verify-*` 를 쓴다(원칙 3). 개별 테스트를 좁혀
+돌리는 것처럼 스크립트보다 세밀한 작업은 `CLAUDE.md` 의 `공통 명령어` 를 본다.
+
+이 저장소 자신의 구현은 Python + uv 지만, **그것은 이 저장소의 사정이고 계약이
+아니다.** 아래는 참고용이다.
 
 ```bash
 uv run pytest -v                                  # 전체
-uv run pytest tests/test_user.py -v               # 파일
 uv run pytest tests/test_user.py::test_create -v  # 개별
-uv run pytest --cov=src --cov-report=term-missing # 커버리지
 uv run pytest -x                                  # 첫 실패에서 중단
 ```
-
-컨테이너 안에서 도는 프로젝트라면 앞에 실행 래퍼가 붙는다
-(`docker compose exec -T backend ...`). 단위 테스트라는 개념이 없는 스택이라면
-그 자리를 무엇이 대신하는지 `CLAUDE.md` 에 적혀 있어야 한다.
 
 ## 체크리스트
 

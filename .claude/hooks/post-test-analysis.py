@@ -38,6 +38,9 @@ TEST_BUILD_COMMANDS = (
     "make build",
     "bitbake",
     "oelint-adv",
+    # The project's own verification scripts (.claude/scripts/README.md).
+    # Listed last because this prefix matches whatever the project put inside.
+    ".claude/scripts/verify-",
 )
 
 # Counted summaries. These are the most reliable signal a runner gives us.

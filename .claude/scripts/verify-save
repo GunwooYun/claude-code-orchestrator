@@ -1,0 +1,58 @@
+#!/bin/sh
+# Contract: .claude/scripts/README.md — save tier. Seconds.
+#
+# THIS REPOSITORY'S IMPLEMENTATION (Python + uv + ruff + ty). Another project's
+# will call entirely different tools; only the name, the argument and the exit
+# code are the contract.
+#
+# Usage: verify-save <host path to one file>
+# Exit:  0 = nothing to report (including "not a file I check"), non-zero = issues
+#
+# Silent on success: the contract says a passing run prints nothing, so the
+# caller can stay quiet instead of announcing every saved file.
+set -u
+
+path="${1:-}"
+[ -n "$path" ] || exit 0
+[ -f "$path" ] || exit 0
+
+# Which files this project checks. A project that checks other kinds edits this
+# case; no separate config file exists to keep in sync.
+case "$path" in
+    *.py) ;;
+    *) exit 0 ;;
+esac
+
+# Generated or vendored trees: formatting them is a diff nobody asked for.
+case "$path" in
+    */.git/*|*/.venv/*|*/__pycache__/*|*/node_modules/*|*/migrations/*|*/build/*|*/dist/*)
+        exit 0 ;;
+esac
+
+# Prefer the pinned project environment; fall back to whatever is on PATH.
+if command -v uv >/dev/null 2>&1 && [ -f pyproject.toml ]; then
+    run="uv run"
+else
+    run=""
+fi
+
+status=0
+
+# Run one tool, printing its output only when it fails.
+report() {
+    label=$1
+    shift
+    if ! out=$("$@" 2>&1); then
+        printf '%s:\n%s\n' "$label" "$out" >&2
+        status=1
+    fi
+}
+
+# shellcheck disable=SC2086
+report "ruff format" $run ruff format "$path"
+# shellcheck disable=SC2086
+report "ruff check" $run ruff check --fix "$path"
+# shellcheck disable=SC2086
+report "ty check" $run ty check "$path"
+
+exit $status

@@ -1,0 +1,26 @@
+#!/bin/sh
+# Contract: .claude/scripts/README.md — unit tier. Budget 10-60 minutes.
+# Run once per unit of work, and after any task tagged risk:high.
+#
+# THIS REPOSITORY'S IMPLEMENTATION. This repo's whole suite runs in seconds, so
+# the unit tier adds coverage on top of the gate rather than a longer run. In a
+# project with slow integration tests this is where they belong.
+set -eu
+
+if ! command -v uv >/dev/null 2>&1 || [ ! -f pyproject.toml ]; then
+    echo "verify-unit: uv or pyproject.toml missing" >&2
+    exit 1
+fi
+
+uv run poe all
+
+# Coverage is reported, not enforced: .claude/rules/testing.md states 80% as a
+# target, and a target that fails the build is a threshold. Raise it to a
+# threshold (--cov-fail-under=80) once this repo actually meets it.
+if uv run python -c "import pytest_cov" >/dev/null 2>&1; then
+    echo
+    echo "== coverage (reported, not enforced) =="
+    uv run pytest --cov=.claude --cov-report=term-missing -q
+else
+    echo "verify-unit: pytest-cov not installed — coverage skipped" >&2
+fi
