@@ -58,3 +58,7 @@ logs/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Backups written by .claude/skills/checkpointing/checkpoint.py before it
+# rewrites a context file.
+*.bak

@@ -44,6 +44,8 @@
 | This repository is not a package (`[tool.uv] package = false`) | A hatchling build-system for a non-existent `src/` made every `uv run` fail, which took down `poe lint`/`test`/`all` with it | Add `tool.hatch.build.targets.wheel` and keep the build backend | 2026-09-25 |
 | This repository type-checks with `ty`; the checker is chosen per project by `/initproject` | Pure-Python repo with no Django, and the rules and lint hook already assumed `ty`. Measured: on Django models `ty` reports 3 false positives on 3 correct lines because it has no plugin for the field descriptors, while `mypy` + `django-stubs` is clean — so the choice cannot be a template-wide default | Template-wide mypy; template-wide ty | 2026-09-25 |
 | `poe lint` no longer auto-fixes; the gate is read-only and `poe fix` mutates | A gate that rewrites files can never fail on a lint or format issue, so `poe all` gave false assurance | Leave `--fix` in the gate | 2026-09-25 |
+| A log entry with an unusable timestamp is skipped and counted, not grouped | It has no place in a chronological history. `local_date` fell back to the timestamp's first ten characters, so a corrupt line became a heading. Skipping silently would hide data loss, so the count is printed | Group them under an "unknown date" bucket | 2026-09-25 |
+| Each context file declares the heading its history lives under | `CLAUDE.md` uses `## Session History` and `AGENTS.md` uses `## Consultation History`. Assuming one header made the script append a second, parallel section to AGENTS.md on every run | Rename AGENTS.md's section to match | 2026-09-25 |
 | Output on exit 0 is informational and is passed through, not discarded | The first version dropped all output when the script succeeded. Tools that warn but succeed are common (eslint warnings, clippy, deprecation notices); swallowing that output makes the model report "clean". The contract had also stated the rule three different ways in three files | Keep "silent on pass" strictly, and have scripts never print on success | 2026-09-25 |
 | Every tier accepts optional trailing arguments | With a no-argument-only contract a monorepo could not express scope: `verify-task` would have to check everything (breaking the 5-minute budget) or guess from `git diff`. Callers still pass none | Arguments only on verify-save | 2026-09-25 |
 | The caller resolves `verify-<tier>` or `verify-<tier>.{py,sh,ps1,cmd,bat}` | Requiring an extensionless executable with a shebang excluded Windows checkouts outright, where neither the execute bit nor the shebang exists. A file with a known extension runs through its interpreter | Unix-only, stated as a limitation | 2026-09-25 |
@@ -86,10 +88,18 @@ review falsified the original profile design; see Key Decisions.
       match against, and a tier with no honest answer gets no script.
 - [x] **`initproject/references/known-pitfalls.md`** — measured facts with dates
       only, no per-stack recipes.
-- [ ] `checkpoint.py` hardening: the section regex ends only at `^## ` so an
-      intervening H1 is destroyed; a malformed timestamp raises an uncaught
-      `ValueError`; `--since` is unvalidated and parsed as UTC while grouping is
-      local; context files are rewritten non-atomically.
+- [x] `checkpoint.py` hardening — seven defects, each with a regression test
+      written first (`tests/test_checkpoint_hardening.py`, scenario IDs C1-C7):
+      the section regex ended only at `^## ` so an intervening H1 was destroyed;
+      one malformed timestamp aborted the whole run; `--since` was unvalidated
+      and compared in UTC while grouping is local; context files were rewritten
+      non-atomically with no backup; `HEAD~10` was hard-coded; `AGENTS.md` uses
+      `## Consultation History` so a second parallel section was appended; and
+      entries from any tool other than agy were discarded. Two further bugs were
+      found by running the fixed script for real: an unparseable timestamp still
+      produced a garbage `### broken-tim` heading when `--since` was absent, and
+      the atomic-write tests passed while its caller was reverted to a plain
+      write, so a test now asserts the backup exists.
 - [ ] `post-implementation-review.py` keys its state on a single hard-coded
       `/tmp` path shared by every project and session, so it self-disables
       permanently once fired. Key it per project and session.
@@ -128,6 +138,7 @@ Dropped after review:
 
 | Date | Changes |
 |------|---------|
+| 2026-09-25 | checkpoint.py hardened against data loss (section boundary, atomic writes with backup, timestamp and --since handling, git range, per-file history heading, all tools kept); 17 regression tests written before the fixes |
 | 2026-09-25 | Contract review: pass-through of success output, optional scope arguments, interpreter resolution for Windows, shared helpers, tiers reduced to the two this repo honestly has, template self-checks moved into the gate, coverage theatre reverted |
 | 2026-09-25 | Verification contract as four executables (`.claude/scripts/verify-*`); `lint-on-save` delegates and names no tool; `/initproject` Step 5 writes them; `known-pitfalls.md` for measured facts |
 | 2026-09-25 | Verification-first: `/feature` Phase 2b verification plan, paired verify tasks, adequacy review; stack-agnostic `rules/testing.md`; duration-based tiers |
