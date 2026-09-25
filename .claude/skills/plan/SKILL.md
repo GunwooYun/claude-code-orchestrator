@@ -33,9 +33,9 @@ Investigate the codebase:
 
 Break into small steps:
 
-1. Each step is independently testable
+1. Each step is independently **verifiable by a command that can fail**
 2. Consider dependency order
-3. High-risk steps first
+3. High-risk steps first — tag them `risk:high` so the `unit` tier runs after them
 
 ### 4. Output Format
 
@@ -55,13 +55,26 @@ Break into small steps:
 #### Step 1: {Title}
 - [ ] {Specific task}
 - [ ] {Specific task}
-**Verification**: {Completion criteria for this step}
+**Verification**: `{tier}` — `{the project's real command}` — proves `{scenario ID}`
+**Fails when**: {how this command goes red if the step is wrong}
 
 #### Step 2: {Title}
 ...
 
 ### Risks & Considerations
 - {Potential issues and mitigations}
+
+### Verification
+
+| Step | 티어 | 명령 | 시나리오 ID | 실패 조건 |
+|------|------|------|-------------|-----------|
+| 1 | task | {프로젝트의 실제 명령} | V1 | {어떻게 빨간불이 나는가} |
+
+명령은 발명하지 않는다 — `CLAUDE.md` 의 `공통 명령어` 에서 읽는다. 티어 정의와
+원칙은 `.claude/rules/testing.md` 를 따른다. `/feature` Phase 2b 로 시작한
+작업이면 그 검증 계획의 시나리오 ID 를 그대로 쓴다.
+
+**"실패 조건"을 채우지 못하는 단계는 아직 계획되지 않은 단계다.**
 
 ### Open Questions
 - {Items to clarify before implementation}

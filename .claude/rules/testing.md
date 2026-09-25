@@ -1,19 +1,79 @@
 # Testing Rules
 
-Guidelines for writing tests.
+**검증은 구현보다 중요하다.** 이 파일은 스택과 무관한 원칙만 담는다. 실제 명령은
+`CLAUDE.md` 의 `공통 명령어` 블록에 있고, `/initproject` 가 프로젝트당 한 번
+채운다. 아래 예시는 이 템플릿의 Python 기본값이며, 프로젝트가 다르면 그 명령을
+쓴다.
 
-## Core Principles
+## 원칙 1 — 검증을 코드보다 먼저 정한다
 
-- **TDD recommended**: Write tests first
-- **Coverage target**: 80% or higher
-- **Execution speed**: Unit tests should be fast (< 100ms per test)
+`/feature` Phase 2b 에서 검증 계획을 쓴다. 코드가 존재하기 전에 다음을 확정한다.
 
-## Test Structure
+- **시나리오**: 무엇을 검증하는가 (행동 단위로, 파일 단위가 아니라)
+- **명령**: 어떻게 검증하는가 (프로젝트의 실제 명령)
+- **티어**: 언제 도는가
+- **음성 시험**: 실패해야 할 때 실패하는지 어떻게 확인하는가
+- **검증하지 않는 것 / 검증할 수 없는 것**: 빈칸으로 두지 않고 적는다
 
-### AAA Pattern
+"테스트를 할까?"를 "정해둔 것을 돌려라"로 바꾸는 것이 목적이다.
+
+## 원칙 2 — 통과만 확인한 것은 검증이 아니다
+
+**양성 시험만 하고 "테스트했다"고 쓰지 않는다.** 실패해야 할 때 실패하는지를
+확인하지 않은 테스트는 아무것도 증명하지 않는다.
+
+```
+[검증이 아님]  성공 로그가 나왔다
+[검증이 아님]  명령이 exit 0 을 반환했다 (무엇도 단정하지 않았다면)
+[검증]        실패해야 할 입력에서 실제로 실패하는 것을 확인했다
+```
+
+새 테스트를 쓰면 **한 번은 깨뜨려 본다** — 단정을 뒤집거나 구현을 되돌려서, 그
+테스트가 빨간불을 낼 수 있음을 확인한 뒤 되돌린다. 이것을 하지 않으면 통과하는
+방향으로 틀린 테스트가 남는다.
+
+## 원칙 3 — 티어는 소요 시간으로 정한다
+
+이름이 아니라 시간이 티어를 결정한다. `unit` / `e2e` 라는 말은 스택마다 뜻이
+달라서 그 자체로는 쓸 수 없다.
+
+| 티어 | 예산 | 언제 | 누가 |
+|------|------|------|------|
+| `save` | 초 | 파일 저장 | 훅 (조언만, 차단 못 함) |
+| `task` | ≤5분 | 태스크 하나가 끝날 때마다 | 메인, 포그라운드 |
+| `unit` | 10~60분 | 작업 단위당 한 번, `risk:high` 태스크 뒤에 추가 | general-purpose 서브에이전트 백그라운드, 10줄 이내 반환 |
+| `full` | 무제한 | CI 또는 사람이 명시적으로 | **어떤 훅도 자동 실행하지 않는다** |
+
+스택에 따라 같은 티어의 내용이 완전히 달라진다.
+
+```
+             task                          full
+Python 라이브러리  변경 파일 단위 테스트          전체 테스트 + 커버리지
+Django(컨테이너)   컨테이너 안 해당 앱 테스트,     전체 테스트 + 스택에 HTTP 요청
+                  마이그레이션 누락 검사
+Yocto recipe      bitbake -p 파싱, oelint-adv   이미지 빌드 + testimage/ptest
+```
+
+**티어를 모르면 느린 쪽으로 적는다.** 잘못 빠른 티어에 넣으면 저장할 때마다
+빌드가 돌아 훅이 꺼지게 된다.
+
+## 원칙 4 — 테스트를 통과시키려고 테스트를 고치지 않는다
+
+실패한 테스트는 정보다. 다음은 금지한다.
+
+- 단정을 약하게 바꿔 통과시키기
+- 테스트를 skip / xfail / 주석 처리해서 초록으로 만들기
+- 실패를 "환경 문제"로 단정하고 넘어가기 — 재현을 먼저 확인한다
+
+시나리오 자체가 틀렸다고 판단되면 **검증 계획을 고치고, 무엇을 왜 바꿨는지
+남긴다.** 조용히 고치지 않는다.
+
+## 테스트 작성
+
+### AAA 패턴
 
 ```python
-def test_user_creation():
+def test_user_creation() -> None:
     # Arrange
     user_data = {"name": "Alice", "email": "alice@example.com"}
 
@@ -22,86 +82,71 @@ def test_user_creation():
 
     # Assert
     assert user.name == "Alice"
-    assert user.email == "alice@example.com"
 ```
 
-### Naming Convention
+### 이름
+
+`test_{대상}_{조건}_{기대결과}` — 이름만 읽고 무엇이 깨졌는지 알 수 있게.
 
 ```python
-# test_{target}_{condition}_{expected_result}
-def test_create_user_with_valid_data_returns_user():
-    ...
-
-def test_create_user_with_invalid_email_raises_error():
-    ...
+def test_create_user_with_valid_data_returns_user() -> None: ...
+def test_create_user_with_invalid_email_raises_error() -> None: ...
 ```
 
-## Test Case Coverage
+### 케이스 범위
 
-For each feature, consider:
+1. **정상 경로**
+2. **경계값** — 최소, 최대, 빈 값
+3. **오류 경로** — 잘못된 입력에서 **실제로 실패하는지**
+4. **엣지** — None, 빈 문자열, 특수문자
 
-1. **Happy path**: Basic functionality
-2. **Boundary values**: Min, max, empty
-3. **Error cases**: Invalid input, error conditions
-4. **Edge cases**: None, empty string, special characters
+### 목(mock)
 
-## Mocking
-
-Mock external dependencies:
+외부 의존성만 목으로 대체한다. **검증 대상 자체를 목으로 만들면 그 테스트는
+아무것도 검증하지 않는다** — 리뷰에서 가장 흔히 걸리는 실패 유형이다.
 
 ```python
-from unittest.mock import Mock, patch
+from unittest.mock import patch
+
 
 @patch("module.external_api_call")
-def test_with_mocked_api(mock_api):
+def test_with_mocked_api(mock_api) -> None:
     mock_api.return_value = {"status": "ok"}
-    result = function_under_test()
-    assert result == expected
+    assert function_under_test() == expected
 ```
 
-## Fixtures
+### 픽스처
 
-Common setup goes in `conftest.py`:
+공통 준비는 `conftest.py` 에. 테스트는 서로 독립이어야 하고 실행 순서에
+의존하면 안 된다.
 
-```python
-# tests/conftest.py
-import pytest
+## 커버리지
 
-@pytest.fixture
-def sample_user():
-    return User(name="Test", email="test@example.com")
+목표 80% 이상. 단, **커버리지는 실행된 줄을 세는 것이지 검증된 동작을 세는 것이
+아니다.** 커버리지가 높고 단정이 없는 테스트는 커버리지 0과 같다.
 
-@pytest.fixture
-def db_session():
-    session = create_session()
-    yield session
-    session.rollback()
-```
+## 명령
 
-## Commands
+프로젝트의 실제 명령은 `CLAUDE.md` 의 `공통 명령어` 를 본다. 이 템플릿 기본값:
 
 ```bash
-# All tests
-uv run pytest -v
-
-# Specific file
-uv run pytest tests/test_user.py -v
-
-# Specific test
-uv run pytest tests/test_user.py::test_create_user -v
-
-# With coverage
-uv run pytest --cov=src --cov-report=term-missing
-
-# Stop on first failure
-uv run pytest -x
+uv run pytest -v                                  # 전체
+uv run pytest tests/test_user.py -v               # 파일
+uv run pytest tests/test_user.py::test_create -v  # 개별
+uv run pytest --cov=src --cov-report=term-missing # 커버리지
+uv run pytest -x                                  # 첫 실패에서 중단
 ```
 
-## Checklist
+컨테이너 안에서 도는 프로젝트라면 앞에 실행 래퍼가 붙는다
+(`docker compose exec -T backend ...`). 단위 테스트라는 개념이 없는 스택이라면
+그 자리를 무엇이 대신하는지 `CLAUDE.md` 에 적혀 있어야 한다.
 
-- [ ] Happy path is tested
-- [ ] Error cases are tested
-- [ ] Boundary values are tested
-- [ ] Tests are independent (no order dependency)
-- [ ] External dependencies are mocked
-- [ ] Tests run fast
+## 체크리스트
+
+- [ ] 검증 계획의 시나리오 ID 마다 대응하는 테스트가 있는가
+- [ ] 각 테스트가 **실패해야 할 때 실패하는 것을 확인**했는가
+- [ ] 정상 경로 / 오류 경로 / 경계값을 다뤘는가
+- [ ] 검증 대상을 목으로 대체하지 않았는가
+- [ ] 테스트가 서로 독립인가 (순서 의존 없음)
+- [ ] 티어가 소요 시간에 맞는가
+- [ ] 검증하지 못한 것을 적어 남겼는가

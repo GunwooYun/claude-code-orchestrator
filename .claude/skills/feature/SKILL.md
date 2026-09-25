@@ -2,10 +2,12 @@
 name: feature
 description: |
   Kick off ONE unit of work (a ticket, a feature, a structural change) with
-  multi-agent collaboration: agy research -> requirements -> deep-reasoning
-  design review -> task list -> implementation -> review. Run it again for every
-  new unit of work, including follow-up tickets on a feature it already built.
-  Skip it for changes with no design decision (bug fixes, wording, config values).
+  multi-agent collaboration: agy research -> requirements -> a verification plan
+  written BEFORE any code -> deep-reasoning design and verification review ->
+  paired implementation/verify tasks -> implementation loop -> review. Run it
+  again for every new unit of work, including follow-up tickets on a feature it
+  already built. Skip it for changes with no design decision (bug fixes,
+  wording, config values).
 metadata:
   short-description: Per-work-unit kickoff with multi-agent collaboration
 ---
@@ -28,16 +30,22 @@ Phase 1: Research (agy via Subagent)
     ↓
 Phase 2: Requirements & Planning (Claude)
     ↓
-Phase 3: Design Review (deep-reasoning Subagent)
+Phase 2b: VERIFICATION PLAN (Claude)          ← 코드보다 먼저. 생략 불가
     ↓
-Phase 4: Task Creation (Claude)
+Phase 3: Design + Verification Review (deep-reasoning Subagent)
+    ↓
+Phase 4: Task Creation (Claude)               ← 구현 태스크마다 verify 태스크 짝
     ↓
 Phase 5: CLAUDE.md Update (Claude)
     ↓
-[Implementation...]
+Implementation Loop:  태스크 → verify:task → 다음 태스크
+                      마지막에 verify:unit
     ↓
 Phase 6: Multi-Session Review (New Session + deep-reasoning)
 ```
+
+**검증이 구현보다 먼저 정해진다.** Phase 2b 를 건너뛰면 Phase 4 의 태스크 짝을
+만들 수 없고, Phase 6 이 대조할 기준이 없어진다.
 
 ---
 
@@ -79,9 +87,58 @@ Ask in Korean:
 1. **목적**: 무엇을 달성하고 싶습니까?
 2. **스코프**: 포함하거나 제외하는 것은?
 3. **기술적 요건**: 특정 라이브러리, 제약은?
-4. **성공기준**: 완료의 판단기준은?
+4. **성공기준**: 완료의 판단기준은? — **어떻게 검증하면 그것이 충족됐다고
+   말할 수 있습니까?** 이 답이 아래 검증 계획의 입력이 된다.
 
 **Draft implementation plan based on agy research + user answers.**
+
+### Phase 2b: 검증 계획 (MANDATORY — 코드보다 먼저 쓴다)
+
+**이 프로젝트에서 검증은 구현보다 중요하다.** 그래서 "테스트를 할까?"를
+"정해둔 것을 돌려라"로 바꿔 놓는다. 구현 계획과 같은 문서에, 코드가 존재하기
+전에 아래를 쓴다.
+
+명령은 발명하지 않는다. `CLAUDE.md` 의 `공통 명령어` 블록에서 읽고, 없으면
+사용자에게 묻는다. `/initproject` 가 그 블록을 이 프로젝트의 실제 명령으로
+채워 두었다.
+
+```markdown
+## 검증 계획
+
+### 시나리오
+| ID | 무엇을 검증하는가 | 어떻게 (명령) | 티어 | 실패해야 할 때 실패하는가 |
+|----|------------------|---------------|------|---------------------------|
+| V1 | {행동 하나} | {프로젝트의 실제 명령} | task | {음성 시험 방법} |
+| V2 | ... | ... | unit | ... |
+
+### 이 작업에서 검증하지 않는 것
+- {범위 밖인 것과 그 이유}
+
+### 검증할 수 없는 것
+- {수단이 없는 것, 왜 없는지, 사람이 무엇을 하면 되는지}
+```
+
+**규칙:**
+
+- **시나리오는 행동 단위로 쓴다.** "models.py 를 테스트한다"가 아니라
+  "만료된 토큰으로 요청하면 401 이 반환된다".
+- **음성 시험 칸을 비우지 않는다.** 통과만 확인한 테스트는 검증이 아니다
+  (`.claude/rules/writing-style.md` 의 정직성 규칙과 같은 원칙). 어떻게 하면
+  이 테스트가 실패하는지 적지 못하면 그 시나리오는 아직 설계되지 않았다.
+- **검증할 수 없는 것을 빈칸으로 두지 않는다.** 적어서 남긴다.
+- **티어**는 아래 표를 따른다. 티어를 모르면 느린 쪽으로 적는다.
+
+| 티어 | 예산 | 언제 도는가 | 누가 |
+|------|------|-------------|------|
+| `save` | 초 | 파일 저장 시 | 훅 (조언) |
+| `task` | ≤5분 | 태스크 하나가 끝날 때마다 | 메인, 포그라운드 |
+| `unit` | 10~60분 | 작업 단위당 한 번, `risk:high` 태스크 뒤에 추가 | general-purpose 서브에이전트, 백그라운드, 10줄 이내 반환 |
+| `full` | 무제한 | CI 또는 사람이 명시적으로 | **어떤 훅도 자동 실행하지 않는다** |
+
+스택에 따라 티어의 내용이 완전히 달라진다. Django 라면 `task` 가 컨테이너 안
+pytest 일 수 있고, Yocto recipe 라면 `task` 가 `bitbake -p` 파싱 검사, `full` 이
+이미지 빌드와 `testimage` 다. **티어는 소요 시간으로 정하고, 이름으로 정하지
+않는다.**
 
 ---
 
@@ -98,17 +155,31 @@ Task tool parameters:
 
     Draft plan: {plan from Phase 2}
 
+    Verification plan: {verification plan from Phase 2b}
+
     Analyze:
     1. Approach assessment
     2. Risk analysis
     3. Implementation order
     4. Improvements
+    5. Verification adequacy — this matters most here:
+       - Which behaviours in the plan NO scenario covers
+       - Scenarios in the wrong tier (too slow for a per-task gate, or too
+         shallow for what they claim to prove)
+       - Scenarios whose "fails when it should" column is empty or wrong —
+         a test that cannot fail proves nothing
+       - Which tasks should be tagged risk:high (run the unit tier after them)
 
     Return CONCISE summary:
     - Top 3-5 recommendations
     - Key risks
     - Suggested order
+    - Untested behaviours and the scenarios to add
 ```
+
+리뷰가 "커버되지 않은 동작"을 지적하면 **Phase 4 로 넘어가기 전에 검증 계획을
+고친다.** 지적을 태스크로 미루지 않는다 — 그러면 코드가 먼저 생기고 계획이
+사후 정당화가 된다.
 
 ---
 
@@ -116,15 +187,38 @@ Task tool parameters:
 
 **서브에이전트 요약을 통합하고 작업 목록을 작성한다.**
 
-Use TodoWrite to create tasks:
+**모든 구현 태스크는 검증 태스크와 짝을 이룬다.** 실행 루프가 실제로 보는 것은
+todo 목록이므로, 여기에 없으면 검증은 일어나지 않는다.
 
 ```python
+# 구현 태스크
 {
     "content": "Implement {specific feature}",
     "activeForm": "Implementing {specific feature}",
     "status": "pending"
 }
+# 그 즉시 뒤따르는 검증 태스크 — 시나리오 ID 와 명령을 그대로 적는다
+{
+    "content": "verify:task V1,V2 — {프로젝트의 실제 명령}",
+    "activeForm": "Verifying V1,V2",
+    "status": "pending"
+}
 ```
+
+**규칙:**
+
+- 짝 없는 구현 태스크를 만들지 않는다. 검증할 게 없다고 판단되면 그 이유를
+  검증 계획의 "검증하지 않는 것"에 적는다.
+- **마지막 태스크는 항상 `verify:unit` 이다** — 작업 단위 전체에 대한 검증.
+  느리면 general-purpose 서브에이전트에 백그라운드로 넘기고 10줄 이내 요약만
+  받는다. 그동안 메인은 다른 todo 를 진행한다.
+- `verify:full` 은 todo 에 넣지 않는다. CI 또는 사람의 몫이다. 대신
+  "무엇을 CI 에서 돌려야 하는지"를 완료 보고에 남긴다.
+- 검증 태스크가 실패하면 **다음 구현 태스크로 넘어가지 않는다.**
+  `.claude/rules/deep-reasoning-delegation.md` 에 따라 원인이 명확하지 않으면
+  deep-reasoning 에 넘긴다.
+- **테스트를 통과시키기 위해 테스트를 고치지 않는다.** 시나리오가 틀렸다고
+  판단되면 검증 계획을 고치고, 무엇을 왜 바꿨는지 남긴다.
 
 ---
 
@@ -178,18 +272,34 @@ Task tool parameters:
 
     Run `git diff main...HEAD` to see all changes.
 
+    Verification plan agreed before implementation:
+    {verification plan from Phase 2b, scenario IDs included}
+
     Check:
     1. Code quality and patterns
     2. Potential bugs
     3. Missing edge cases
     4. Security concerns
+    5. Verification adequacy — judge the tests, not just their presence:
+       - Every scenario ID in the plan: is there a test for it, and does that
+         test actually assert what the scenario claims?
+       - Does any test pass for the wrong reason (asserts on output that would
+         also appear on failure, mocks the thing under test, no negative case)?
+       - Behaviour in the diff that no scenario covers
+       - Scenarios quietly dropped or weakened during implementation
 
     Return findings and recommendations.
 ```
 
+**여기서 "테스트가 있다"와 "테스트가 검증한다"를 구분한다.** 전자는 기계가 볼 수
+있고, 후자는 사람이나 리뷰어만 판단할 수 있다. 이 프로젝트에서 자동으로 강제할
+수 없는 유일한 항목이므로, 이 단계를 생략하면 검증 체계에 구멍이 남는다.
+
 ### Why Multi-Session Review?
 
 - **Fresh perspective**: New session has no bias from implementation
+- **Neutral judgement on its own tests**: the session that wrote a test is the
+  worst judge of whether it proves anything
 - **Different context**: Can focus purely on review, not implementation details
 - **Isolated context**: Deep analysis without context pollution
 
@@ -208,8 +318,13 @@ Present final plan to user (in Korean):
 ### 설계 정책 (deep-reasoning 검토)
 {Approach with refinements}
 
+### 검증 계획
+{시나리오 표 — ID / 무엇을 / 명령 / 티어 / 음성 시험}
+{검증하지 않는 것}
+{검증할 수 없는 것 — 있으면 반드시 노출한다}
+
 ### 작업 목록 ({N}개)
-{Task list}
+{Task list — 구현 태스크와 verify 태스크가 짝지어진 상태로}
 
 ### 위험과 주의사항
 {From deep-reasoning analysis}
