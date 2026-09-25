@@ -61,7 +61,7 @@ def should_suggest_agy(query: str, url: str = "") -> tuple[bool, str]:
     return False, ""
 
 
-def main():
+def main() -> None:
     try:
         data = json.load(sys.stdin)
         tool_name = data.get("tool_name", "")
@@ -89,7 +89,7 @@ def main():
                         "to consult agy and save results to .claude/docs/research/. "
                         "(Direct call OK for quick questions: `agy -p '...' --model gemini-3.7-flash-low`). "
                         "If you are a subagent, do the research yourself or report back to the orchestrator."
-                    )
+                    ),
                 }
             }
             print(json.dumps(output))

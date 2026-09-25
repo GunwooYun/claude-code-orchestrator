@@ -14,7 +14,7 @@ import json
 import re
 import shlex
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 LOG_DIR = Path(__file__).parent.parent / "logs"
@@ -23,14 +23,33 @@ LOG_FILE = LOG_DIR / "cli-tools.jsonl"
 PROMPT_FLAGS = {"-p", "--print", "--prompt"}
 # agy flags that consume the following token as their value.
 VALUE_FLAGS = {
-    "--model", "--output-format", "--print-timeout", "--add-dir", "--agent",
-    "--json-schema", "--input-format", "--effort", "--mode", "--project",
-    "--conversation", "--log-file",
+    "--model",
+    "--output-format",
+    "--print-timeout",
+    "--add-dir",
+    "--agent",
+    "--json-schema",
+    "--input-format",
+    "--effort",
+    "--mode",
+    "--project",
+    "--conversation",
+    "--log-file",
 }
 # Tokens that may legitimately precede the agy binary in the same command segment.
 # Known false negatives (accepted): `bash -c 'agy …'`, `uv run agy …`,
 # `timeout -k 5 60 agy …` — the binary is not the segment head there.
-WRAPPER_COMMANDS = {"sudo", "nohup", "command", "exec", "env", "time", "do", "then", "else"}
+WRAPPER_COMMANDS = {
+    "sudo",
+    "nohup",
+    "command",
+    "exec",
+    "env",
+    "time",
+    "do",
+    "then",
+    "else",
+}
 ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 # Markers agy prints on STDERR when a tool was auto-denied in headless mode.
 # Matched against stderr only — stdout may legitimately discuss these strings.
@@ -93,12 +112,14 @@ def extract_agy_prompt(args: list[str]) -> str | None:
     is the first non-flag token after the print flag that is not the value of
     a value-taking flag (e.g. `agy -p --model X "q"` → "q").
     """
-    if not any(t in PROMPT_FLAGS or t.split("=", 1)[0] in PROMPT_FLAGS for t in args[1:]):
+    if not any(
+        t in PROMPT_FLAGS or t.split("=", 1)[0] in PROMPT_FLAGS for t in args[1:]
+    ):
         return None
     for token in args[1:]:
         for flag in PROMPT_FLAGS:
-            if token.startswith(flag + "=") and token[len(flag) + 1:].strip():
-                return token[len(flag) + 1:].strip()
+            if token.startswith(flag + "=") and token[len(flag) + 1 :].strip():
+                return token[len(flag) + 1 :].strip()
     skip_next = False
     for token in args[1:]:
         if skip_next:
@@ -121,7 +142,7 @@ def extract_model(args: list[str]) -> str | None:
         if token == "--model" and i + 1 < len(args):
             return args[i + 1]
         if token.startswith("--model="):
-            return token[len("--model="):]
+            return token[len("--model=") :]
     return None
 
 
@@ -179,7 +200,7 @@ def build_entry(command: str, tool_response: dict) -> dict | None:
     stderr = tool_response.get("stderr", "") or ""
     return {
         # Local time with offset so checkpoint day-grouping matches the user's calendar.
-        "timestamp": datetime.now(timezone.utc).astimezone().isoformat(),
+        "timestamp": datetime.now(UTC).astimezone().isoformat(),
         "tool": "antigravity",
         "model": extract_model(args) or "default",
         "prompt": truncate_text(prompt),
@@ -219,7 +240,13 @@ def main() -> None:
     except Exception as exc:  # never break the calling tool because of logging
         print(f"log-cli-tools hook error: {exc}", file=sys.stderr)
         return
-    print(json.dumps({"systemMessage": "[LOG] Antigravity call logged to .claude/logs/cli-tools.jsonl"}))
+    print(
+        json.dumps(
+            {
+                "systemMessage": "[LOG] Antigravity call logged to .claude/logs/cli-tools.jsonl"
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

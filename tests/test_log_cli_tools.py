@@ -25,7 +25,9 @@ class DetectAgyInvocationTests(unittest.TestCase):
         self.assert_prompt("agy --prompt 'B'", "B")
 
     def test_flag_before_prompt(self):
-        self.assert_prompt('agy --model gemini-3.1-pro-high -p "Research x"', "Research x")
+        self.assert_prompt(
+            'agy --model gemini-3.1-pro-high -p "Research x"', "Research x"
+        )
 
     def test_flags_after_prompt(self):
         self.assert_prompt(
@@ -42,7 +44,9 @@ class DetectAgyInvocationTests(unittest.TestCase):
     def test_pipeline_and_chaining(self):
         self.assert_prompt('cat f | agy -p "Summarize"', "Summarize")
         self.assert_prompt('cd /tmp && agy -p "Analyze"', "Analyze")
-        self.assert_prompt('export PATH=/x:$PATH; agy -p "After export"', "After export")
+        self.assert_prompt(
+            'export PATH=/x:$PATH; agy -p "After export"', "After export"
+        )
 
     def test_wrappers_and_env(self):
         self.assert_prompt('timeout 60 agy -p "Wrapped"', "Wrapped")
@@ -76,7 +80,15 @@ class PositionalPromptTests(unittest.TestCase):
         self.assertEqual(hook.extract_agy_prompt(args), "q")
 
     def test_value_flags_are_skipped(self):
-        args = ["agy", "-p", "--output-format", "json", "--print-timeout", "10m", "real prompt"]
+        args = [
+            "agy",
+            "-p",
+            "--output-format",
+            "json",
+            "--print-timeout",
+            "10m",
+            "real prompt",
+        ]
         self.assertEqual(hook.extract_agy_prompt(args), "real prompt")
 
     def test_print_flag_without_prompt(self):
@@ -86,18 +98,26 @@ class PositionalPromptTests(unittest.TestCase):
         self.assertIsNone(hook.extract_agy_prompt(["agy", "models"]))
 
     def test_loop_body_is_detected(self):
-        self.assertEqual(hook.extract_agy_prompt(hook.find_agy_args('for f in a b; do agy -p "Sum $f"; done')),
-                         "Sum $f")
+        self.assertEqual(
+            hook.extract_agy_prompt(
+                hook.find_agy_args('for f in a b; do agy -p "Sum $f"; done')
+            ),
+            "Sum $f",
+        )
 
 
 class ExtractModelTests(unittest.TestCase):
     def test_model_space_form(self):
-        self.assertEqual(hook.extract_model(["agy", "--model", "gemini-3.1-pro-high", "-p", "x"]),
-                         "gemini-3.1-pro-high")
+        self.assertEqual(
+            hook.extract_model(["agy", "--model", "gemini-3.1-pro-high", "-p", "x"]),
+            "gemini-3.1-pro-high",
+        )
 
     def test_model_equals_form(self):
-        self.assertEqual(hook.extract_model(["agy", "-p", "x", "--model=gemini-3.7-flash-low"]),
-                         "gemini-3.7-flash-low")
+        self.assertEqual(
+            hook.extract_model(["agy", "-p", "x", "--model=gemini-3.7-flash-low"]),
+            "gemini-3.7-flash-low",
+        )
 
     def test_model_missing(self):
         self.assertIsNone(hook.extract_model(["agy", "-p", "x"]))
@@ -109,13 +129,19 @@ class DetermineSuccessTests(unittest.TestCase):
         self.assertFalse(hook.determine_success("", ""))
 
     def test_json_success(self):
-        self.assertTrue(hook.determine_success('{"status":"SUCCESS","response":"OK"}', ""))
+        self.assertTrue(
+            hook.determine_success('{"status":"SUCCESS","response":"OK"}', "")
+        )
 
     def test_json_success_with_empty_response_is_failure(self):
-        self.assertFalse(hook.determine_success('{"status":"SUCCESS","response":""}', ""))
+        self.assertFalse(
+            hook.determine_success('{"status":"SUCCESS","response":""}', "")
+        )
 
     def test_json_error_status(self):
-        self.assertFalse(hook.determine_success('{"status":"ERROR","response":"x"}', ""))
+        self.assertFalse(
+            hook.determine_success('{"status":"ERROR","response":"x"}', "")
+        )
 
     def test_soft_deny_marker_on_stderr(self):
         stderr = 'no output produced — a tool required the "read_file" permission ... auto-denied.'
@@ -138,22 +164,36 @@ class ProcessHookInputTests(unittest.TestCase):
         self.assertIsNone(hook.process_hook_input("agy -p x"))
 
     def test_null_tool_input_is_ignored(self):
-        self.assertIsNone(hook.process_hook_input({"tool_name": "Bash", "tool_input": None}))
+        self.assertIsNone(
+            hook.process_hook_input({"tool_name": "Bash", "tool_input": None})
+        )
 
     def test_non_bash_tool_is_ignored(self):
-        self.assertIsNone(hook.process_hook_input({"tool_name": "Read", "tool_input": {"command": 'agy -p "x"'}}))
+        self.assertIsNone(
+            hook.process_hook_input(
+                {"tool_name": "Read", "tool_input": {"command": 'agy -p "x"'}}
+            )
+        )
 
     def test_string_tool_response_is_accepted(self):
-        entry = hook.process_hook_input({"tool_name": "Bash", "tool_input": {"command": 'agy -p "x"'},
-                                         "tool_response": "plain text answer"})
+        entry = hook.process_hook_input(
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": 'agy -p "x"'},
+                "tool_response": "plain text answer",
+            }
+        )
         self.assertIsNotNone(entry)
         self.assertTrue(entry["success"])
 
     def test_log_entry_writes_one_json_line(self):
-        import tempfile, json as _json
+        import json as _json
+        import tempfile
+
         with tempfile.TemporaryDirectory() as tmp:
             original_dir, original_file = hook.LOG_DIR, hook.LOG_FILE
-            hook.LOG_DIR = Path(tmp); hook.LOG_FILE = Path(tmp) / "cli-tools.jsonl"
+            hook.LOG_DIR = Path(tmp)
+            hook.LOG_FILE = Path(tmp) / "cli-tools.jsonl"
             try:
                 hook.log_entry({"tool": "antigravity", "prompt": "한글"})
                 lines = hook.LOG_FILE.read_text(encoding="utf-8").splitlines()

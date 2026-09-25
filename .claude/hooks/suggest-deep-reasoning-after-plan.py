@@ -25,7 +25,9 @@ PLAN_INDICATORS = [
 ]
 
 
-def should_suggest_review(tool_input: dict, tool_output: str | None = None) -> tuple[bool, str]:
+def should_suggest_review(
+    tool_input: dict, tool_output: str | None = None
+) -> tuple[bool, str]:
     """Determine if deep-reasoning review should be suggested after task completion."""
     subagent_type = tool_input.get("subagent_type", "").lower()
     description = tool_input.get("description", "").lower()
@@ -44,7 +46,7 @@ def should_suggest_review(tool_input: dict, tool_output: str | None = None) -> t
     return False, ""
 
 
-def main():
+def main() -> None:
     try:
         data = json.load(sys.stdin)
         tool_name = data.get("tool_name", "")
@@ -68,7 +70,7 @@ def main():
                         "Consider having the deep-reasoning subagent review this plan. "
                         "**Recommended**: Use Task tool with subagent_type='deep-reasoning' "
                         "to preserve main context."
-                    )
+                    ),
                 }
             }
             print(json.dumps(output))

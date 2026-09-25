@@ -46,7 +46,7 @@ def load_state() -> dict:
     return {"files_changed": [], "total_lines": 0, "review_suggested": False}
 
 
-def save_state(state: dict):
+def save_state(state: dict) -> None:
     """Save session state."""
     try:
         with open(STATE_FILE, "w") as f:
@@ -59,7 +59,9 @@ def count_lines(content: str) -> int:
     """Count meaningful lines in content."""
     lines = content.split("\n")
     # Count non-empty, non-comment lines
-    meaningful = [l for l in lines if l.strip() and not l.strip().startswith("#")]
+    meaningful = [
+        line for line in lines if line.strip() and not line.strip().startswith("#")
+    ]
     return len(meaningful)
 
 
@@ -80,7 +82,7 @@ def should_suggest_review(state: dict) -> tuple[bool, str]:
     return False, ""
 
 
-def main():
+def main() -> None:
     try:
         data = json.load(sys.stdin)
         tool_name = data.get("tool_name", "")
@@ -98,7 +100,10 @@ def main():
             sys.exit(0)
 
         # Skip non-source files
-        if not any(file_path.endswith(ext) for ext in [".py", ".ts", ".js", ".tsx", ".jsx", ".go", ".rs"]):
+        if not any(
+            file_path.endswith(ext)
+            for ext in [".py", ".ts", ".js", ".tsx", ".jsx", ".go", ".rs"]
+        ):
             sys.exit(0)
 
         # Load and update state
@@ -124,7 +129,7 @@ def main():
                         "**Recommended**: Use Task tool with subagent_type='deep-reasoning' "
                         "with git diff to preserve main context. "
                         "If you are a subagent, report back to the orchestrator instead."
-                    )
+                    ),
                 }
             }
             print(json.dumps(output))

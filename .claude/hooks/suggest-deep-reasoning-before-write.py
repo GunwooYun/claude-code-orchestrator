@@ -7,9 +7,7 @@ for design decisions, complex implementations, or architectural changes.
 """
 
 import json
-import os
 import sys
-from pathlib import Path
 
 # Input validation constants
 MAX_PATH_LENGTH = 4096
@@ -44,7 +42,6 @@ DESIGN_INDICATORS = [
     "/core/",
     "config",
     "settings",
-
     # Code patterns in content
     "class ",
     "interface ",
@@ -68,10 +65,10 @@ SIMPLE_EDIT_PATTERNS = [
 ]
 
 
-def should_suggest_deep_reasoning(file_path: str, content: str | None = None) -> tuple[bool, str]:
+def should_suggest_deep_reasoning(
+    file_path: str, content: str | None = None
+) -> tuple[bool, str]:
     """Determine if deep-reasoning consultation should be suggested."""
-    path = Path(file_path)
-    filename = path.name.lower()
     filepath_lower = file_path.lower()
 
     # Skip simple edits
@@ -93,7 +90,10 @@ def should_suggest_deep_reasoning(file_path: str, content: str | None = None) ->
         # Check for design patterns in content
         for indicator in DESIGN_INDICATORS:
             if indicator in content:
-                return True, f"Content contains '{indicator}' - likely architectural code"
+                return (
+                    True,
+                    f"Content contains '{indicator}' - likely architectural code",
+                )
 
     # New files in src/ directory
     if "/src/" in file_path or file_path.startswith("src/"):
@@ -103,7 +103,7 @@ def should_suggest_deep_reasoning(file_path: str, content: str | None = None) ->
     return False, ""
 
 
-def main():
+def main() -> None:
     try:
         data = json.load(sys.stdin)
         tool_input = data.get("tool_input", {})
@@ -127,7 +127,7 @@ def main():
                         "**Recommended**: Use Task tool with subagent_type='deep-reasoning' "
                         "(isolated context; returns a concise recommendation). "
                         "If you are a subagent, report back to the orchestrator instead."
-                    )
+                    ),
                 }
             }
             print(json.dumps(output))
