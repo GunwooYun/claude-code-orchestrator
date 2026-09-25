@@ -44,6 +44,8 @@
 | This repository is not a package (`[tool.uv] package = false`) | A hatchling build-system for a non-existent `src/` made every `uv run` fail, which took down `poe lint`/`test`/`all` with it | Add `tool.hatch.build.targets.wheel` and keep the build backend | 2026-09-25 |
 | This repository type-checks with `ty`; the checker is chosen per project by `/initproject` | Pure-Python repo with no Django, and the rules and lint hook already assumed `ty`. Measured: on Django models `ty` reports 3 false positives on 3 correct lines because it has no plugin for the field descriptors, while `mypy` + `django-stubs` is clean — so the choice cannot be a template-wide default | Template-wide mypy; template-wide ty | 2026-09-25 |
 | `poe lint` no longer auto-fixes; the gate is read-only and `poe fix` mutates | A gate that rewrites files can never fail on a lint or format issue, so `poe all` gave false assurance | Leave `--fix` in the gate | 2026-09-25 |
+| Which files count as implementation is decided by EXCLUSION, not by a list of languages | The hook listed seven extensions, so work in any other language was invisible — the same hard-coding the template is being cured of elsewhere. Missing a language costs a hook that never fires; counting one extra file type costs one early suggestion, so the asymmetry favours excluding documents, config, data, assets and lockfiles and counting the rest | Extend the inclusion list; read the extensions from a config file | 2026-09-25 |
+| Per-session state removes the need for a SessionStart reset hook | The suggestion must fire once per session, which the original implemented as a flag in shared state and therefore never reset. Keying the file by session id makes a new session start empty by construction, with no second hook to keep in sync | Add a SessionStart hook that clears the flag | 2026-09-25 |
 | A log entry with an unusable timestamp is skipped and counted, not grouped | It has no place in a chronological history. `local_date` fell back to the timestamp's first ten characters, so a corrupt line became a heading. Skipping silently would hide data loss, so the count is printed | Group them under an "unknown date" bucket | 2026-09-25 |
 | Each context file declares the heading its history lives under | `CLAUDE.md` uses `## Session History` and `AGENTS.md` uses `## Consultation History`. Assuming one header made the script append a second, parallel section to AGENTS.md on every run | Rename AGENTS.md's section to match | 2026-09-25 |
 | Output on exit 0 is informational and is passed through, not discarded | The first version dropped all output when the script succeeded. Tools that warn but succeed are common (eslint warnings, clippy, deprecation notices); swallowing that output makes the model report "clean". The contract had also stated the rule three different ways in three files | Keep "silent on pass" strictly, and have scripts never print on success | 2026-09-25 |
@@ -100,9 +102,12 @@ review falsified the original profile design; see Key Decisions.
       produced a garbage `### broken-tim` heading when `--since` was absent, and
       the atomic-write tests passed while its caller was reverted to a plain
       write, so a test now asserts the backup exists.
-- [ ] `post-implementation-review.py` keys its state on a single hard-coded
-      `/tmp` path shared by every project and session, so it self-disables
-      permanently once fired. Key it per project and session.
+- [x] `post-implementation-review.py` — state is now per project and per session
+      under `.claude/logs/implementation-state/`, with stale files pruned after
+      7 days and symlinks refused. Which files count is exclusion-based rather
+      than a list of seven extensions, and comment stripping covers the common
+      syntaxes instead of only `#`. 16 regression tests
+      (`tests/test_post_implementation_review.py`, scenario IDs R1-R6).
 - [ ] agy-unavailable fallback: four skills assume `agy` is installed and no path
       degrades without it.
 
@@ -138,6 +143,7 @@ Dropped after review:
 
 | Date | Changes |
 |------|---------|
+| 2026-09-25 | post-implementation-review.py: per-project/per-session state with pruning and symlink refusal, exclusion-based source detection, multi-language comment stripping; 16 regression tests written first |
 | 2026-09-25 | checkpoint.py hardened against data loss (section boundary, atomic writes with backup, timestamp and --since handling, git range, per-file history heading, all tools kept); 17 regression tests written before the fixes |
 | 2026-09-25 | Contract review: pass-through of success output, optional scope arguments, interpreter resolution for Windows, shared helpers, tiers reduced to the two this repo honestly has, template self-checks moved into the gate, coverage theatre reverted |
 | 2026-09-25 | Verification contract as four executables (`.claude/scripts/verify-*`); `lint-on-save` delegates and names no tool; `/initproject` Step 5 writes them; `known-pitfalls.md` for measured facts |
