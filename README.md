@@ -114,7 +114,7 @@ agy models   # 사용 가능한 모델 슬러그 확인
 │   │
 │   ├── hooks/                   # 자동화 훅
 │   │   ├── agent-router.py      # 에이전트 라우팅
-│   │   ├── lint-on-save.py      # 저장 시 자동 린트
+│   │   ├── lint-on-save.py      # 저장 시 verify-save 호출 (도구 이름 모름)
 │   │   └── ...
 │   │
 │   ├── rules/                   # 개발 규칙
@@ -240,7 +240,7 @@ Red → Green → Refactor 사이클을 강제한다.
 
 ### `/initproject` — 첫 세션 설정 (프로젝트당 1회)
 
-템플릿을 복사한 직후 실행한다. 스택을 감지하고 → 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 물은 뒤 → `CLAUDE.md` 기술 스택/`## Current Project`를 채우고 → 스택이 uv/ruff와 다르면 `rules/dev-environment.md`·`hooks/lint-on-save.py`·`rules/testing.md`·`settings.json` 권한을 프로젝트 도구로 맞추고 → `.agents/rules/AGENTS.md`에 프로젝트 단락, `docs/DESIGN.md`에 아키텍처 시드를 쓰고 → 스모크 테스트 후 보고한다. 설치·커밋 정책 변경은 반드시 먼저 묻는다.
+템플릿을 복사한 직후 실행한다. 스택을 감지하고 → 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 물은 뒤 → `CLAUDE.md` 기술 스택/`## Current Project`를 채우고 → `.claude/scripts/`의 검증 스크립트 4개를 이 프로젝트의 실제 명령으로 작성하고(계약), 템플릿 자신의 도구가 드러난 산문(`rules/dev-environment.md` 등)을 맞추고 → `.agents/rules/AGENTS.md`에 프로젝트 단락, `docs/DESIGN.md`에 아키텍처 시드를 쓰고 → 스모크 테스트 후 보고한다. 설치·커밋 정책 변경은 반드시 먼저 묻는다.
 
 ## 검증 계약 — 어떤 스택에도 붙는 방법
 
@@ -253,6 +253,11 @@ verify-task          ≤5분      태스크마다 (게이트)
 verify-unit          10~60분   작업 단위당 한 번
 verify-full          무제한    CI 또는 사람만
 ```
+
+네 티어를 다 가질 필요는 없다. **이 저장소는 `save` 와 `task` 만 가진다** — 전체
+테스트가 3초에 끝나므로 더 느린 티어가 정직하게 존재하지 않는다. 있는 척하는
+스크립트(항상 0을 반환하는 것)는 검사하지 않은 성공을 보고하므로 없는 것보다
+나쁘다. 템플릿 자신이 이 규칙을 지킨다.
 
 `0` 은 통과(출력 없음), `0 이외` 는 실패(이유 출력). **파일이 없으면 그 티어가
 설정되지 않았다는 뜻**이고, 호출자는 그 사실을 그대로 알린다 — 통과로 치지 않는다.
@@ -309,7 +314,7 @@ git clone --depth 1 https://github.com/GunwooYun/claude-code-orchestrator.git .s
 |---|---|---|
 | `CLAUDE.md` 기술 스택 섹션 | 세션이 매번 읽는 유일한 스택 정보 | 백엔드/프론트/실행 방식/품질 도구/커밋 규칙으로 교체 |
 | `.claude/rules/dev-environment.md` | 규칙이 uv 명령을 강요함 | pip·Docker·black/isort/flake8·pytest-django 기준으로 재작성, 보안 민감 디렉토리 명시 |
-| `.claude/hooks/lint-on-save.py` | `uv run ruff`를 호출 → 없는 도구면 조용히 무동작 | 프로젝트 도구(black→isort→flake8, eslint)로 교체하고 도구를 로컬에 같은 버전으로 설치(`pipx install black==<핀 버전>`), 또는 `settings.json`에서 훅 등록 제거 |
+| `.claude/scripts/verify-*` | 없으면 해당 티어가 설정되지 않은 것 | `/initproject` Step 5가 작성. 훅과 스킬은 이 이름만 알고 내용은 모른다 |
 | `.claude/rules/testing.md` | `uv run pytest` 표기 | 실제 테스트 명령으로 |
 | `.claude/settings.json` `permissions.allow` | 프로젝트 도구 명령 자동 허용 | `Bash(isort:*)`, `Bash(flake8:*)`, `Bash(docker compose:*)` 추가 |
 
@@ -401,7 +406,7 @@ cd ../<project>-review && claude
 | 파일 | 손볼 이유 |
 |---|---|
 | `CLAUDE.md` 기술 스택 / `rules/dev-environment.md` | 프로젝트 스택에 맞추기 (기본값은 uv/ruff/ty) |
-| `hooks/lint-on-save.py` | 실제 린터·타입체커 명령으로 교체 |
+| `scripts/verify-*` | 이 프로젝트의 실제 검증 명령으로 작성 (훅은 손대지 않는다) |
 | `hooks/agent-router.py` 트리거 목록 | 팀이 자주 쓰는 표현 추가, 과잉 매칭 단어("문서" 등) 조정 |
 | `agents/deep-reasoning.md` `model:` | 세션 모델과 다른 리뷰 모델을 쓰고 싶을 때만 |
 | `settings.json` `permissions.allow` | 프로젝트 도구 명령(`docker`, `npm` 등) 추가 |
@@ -409,7 +414,7 @@ cd ../<project>-review && claude
 
 ### 8. 자주 밟는 함정
 
-- **적용이 끝난 프로젝트에 템플릿을 다시 복사하면 맞춤화가 전부 원본으로 덮어써진다.** 복사는 프로젝트당 **한 번**이다. 이후 템플릿 개선을 가져오려면 파일 단위로 골라 복사한다 — 템플릿 소유(그대로 덮어써도 되는 것): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`(단 `lint-on-save.py` 제외), `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`, `rules/security.md`, `rules/language.md`. **프로젝트 소유(덮어쓰지 말 것)**: `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`, `hooks/lint-on-save.py`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
+- **적용이 끝난 프로젝트에 템플릿을 다시 복사하면 맞춤화가 전부 원본으로 덮어써진다.** 복사는 프로젝트당 **한 번**이다. 이후 템플릿 개선을 가져오려면 파일 단위로 골라 복사한다 — 템플릿 소유(그대로 덮어써도 되는 것): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`(전부 — 훅은 더 이상 스택을 모른다), `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`, `rules/security.md`, `rules/language.md`. **프로젝트 소유(덮어쓰지 말 것)**: `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
 
 - 훅 파일명 변경 후 `settings.json` 미동기화 → PreToolUse 오류로 편집 전면 차단. 같은 커밋에서 함께 바꾼다.
 - `/checkpointing` 기본 모드가 `CLAUDE.md`·`AGENTS.md`를 덮어쓴다. 실행 전 커밋해 둔다.
@@ -429,7 +434,7 @@ cd ../<project>-review && claude
 | **pytest** | 테스트 (`tests/`) |
 | **poethepoet** | 태스크 러너 |
 
-> 알려진 불일치: `pyproject.toml`/`poe typecheck`는 **mypy**를 쓰지만 `CLAUDE.md`, `.claude/rules/dev-environment.md`, `lint-on-save.py` 훅은 **ty**(`uv run ty check`)를 전제한다(upstream부터 존재). 적용하는 프로젝트에서 둘 중 하나로 통일할 것 — ty를 쓰려면 `uv add --dev ty` 후 `typecheck = "ty check src/"`로, mypy를 유지하려면 규칙 문서와 훅의 `ty` 호출을 `mypy`로 바꾼다.
+> 이 저장소는 순수 Python 이라 `ty` 로 통일되어 있다(`pyproject.toml`, `poe typecheck`, `verify-save`). **타입체커는 템플릿이 정하지 않는다** — `/initproject` 가 스택을 보고 고른다. 측정된 주의사항은 `.claude/skills/initproject/references/known-pitfalls.md` 에 있다(요약: 디스크립터로 속성 타입을 바꾸는 프레임워크에서는 `ty` 가 정상 코드를 오탐하므로 플러그인을 지원하는 체커를 쓴다).
 
 ### Commands
 

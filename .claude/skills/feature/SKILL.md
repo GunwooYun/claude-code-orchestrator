@@ -39,7 +39,7 @@ Phase 4: Task Creation (Claude)               ← 구현 태스크마다 verify 
 Phase 5: CLAUDE.md Update (Claude)
     ↓
 Implementation Loop:  태스크 → verify:task → 다음 태스크
-                      마지막에 verify:unit
+                      마지막에 설정된 가장 느린 티어
     ↓
 Phase 6: Multi-Session Review (New Session + deep-reasoning)
 ```
@@ -214,9 +214,11 @@ todo 목록이므로, 여기에 없으면 검증은 일어나지 않는다.
 
 - 짝 없는 구현 태스크를 만들지 않는다. 검증할 게 없다고 판단되면 그 이유를
   검증 계획의 "검증하지 않는 것"에 적는다.
-- **마지막 태스크는 항상 `verify:unit` 이다** — 작업 단위 전체에 대한 검증.
-  느리면 general-purpose 서브에이전트에 백그라운드로 넘기고 10줄 이내 요약만
-  받는다. 그동안 메인은 다른 todo 를 진행한다.
+- **마지막 태스크는 이 프로젝트에 설정된 가장 느린 티어다** — 보통
+  `verify:unit` 이지만, `.claude/scripts/verify-unit` 이 없으면 그 티어는 이
+  프로젝트에 존재하지 않으므로 `verify:task` 가 마지막이 된다. 없는 티어를 todo 에
+  적지 않는다. 느린 티어는 general-purpose 서브에이전트에 백그라운드로 넘기고
+  10줄 이내 요약만 받는다 — 그동안 메인은 다른 todo 를 진행한다.
 - `verify:full` 은 todo 에 넣지 않는다. CI 또는 사람의 몫이다. 대신
   "무엇을 CI 에서 돌려야 하는지"를 완료 보고에 남긴다.
 - 검증 태스크가 실패하면 **다음 구현 태스크로 넘어가지 않는다.**

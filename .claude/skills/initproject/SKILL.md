@@ -38,10 +38,11 @@ default branch, commit convention.
    keep them local-only? If local-only, append them to `.git/info/exclude`.
    If committed, make sure `.gitignore` covers `.claude/logs/`,
    `.claude/checkpoints/`, `.claude/settings.local.json`.
-3. **Lint hook** (only if the stack is not uv/ruff) — install the project's own
-   formatter/linter locally at the pinned versions (e.g.
-   `pipx install black==<ver>`), disable `lint-on-save.py` in `settings.json`,
-   or keep it as report-only.
+3. **Verification** — what command tells this project it is healthy, and how
+   long does it take? Collect enough to write Step 5's scripts: the fast
+   per-file check, the gate, anything slower, and where each runs (locally, in a
+   container, on a device, only in CI). Ask which tools must be installed first.
+   A tier the user cannot name honestly gets no script.
 4. **Code language** for identifiers/comments (English default) and any extra
    conventions.
 

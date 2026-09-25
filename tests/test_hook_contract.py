@@ -17,10 +17,8 @@ Plus a regression test per hook for the specific bug that motivated it.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -204,94 +202,6 @@ class HookContractTests(unittest.TestCase):
             for payload in DEGENERATE_INPUTS:
                 with self.subTest(hook=path.name, payload=payload or "<empty>"):
                     self.assert_contract(path, payload)
-
-
-class LintOnSaveRegressionTests(unittest.TestCase):
-    """
-    The no-op bug: the hook must actually act on its stdin payload.
-
-    It used to be enough to assert the hook printed something. That no longer
-    works: the save-tier contract (.claude/scripts/README.md) says a passing run
-    prints nothing, so silence is now correct behaviour and cannot distinguish
-    "checked and clean" from "did nothing".
-
-    So the guard is direct instead: run the hook against a throwaway project
-    whose verify-save is a stub that records what it received, and assert the
-    stub ran with the right argument. That proves delegation regardless of what
-    any real implementation prints.
-    """
-
-    HOOK = HOOKS_DIR / "lint-on-save.py"
-
-    def run_in_project(self, project: Path, target: Path):
-        return subprocess.run(
-            [sys.executable, str(self.HOOK)],
-            input=json.dumps(
-                {"tool_name": "Edit", "tool_input": {"file_path": str(target)}}
-            ),
-            capture_output=True,
-            text=True,
-            timeout=60,
-            cwd=str(project),
-            env={**os.environ, "CLAUDE_PROJECT_DIR": str(project)},
-        )
-
-    def make_project(self, tmp: str, script_body: str) -> tuple[Path, Path, Path]:
-        project = Path(tmp)
-        scripts = project / ".claude" / "scripts"
-        scripts.mkdir(parents=True)
-        marker = project / "marker.txt"
-        stub = scripts / "verify-save"
-        stub.write_text(script_body.format(marker=marker), encoding="utf-8")
-        stub.chmod(0o755)
-        target = project / "probe.py"
-        target.write_text("x = 1\n", encoding="utf-8")
-        return project, target, marker
-
-    def test_hook_invokes_verify_save_with_the_edited_path(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            project, target, marker = self.make_project(
-                tmp, '#!/bin/sh\nprintf "%s" "$1" > "{marker}"\nexit 0\n'
-            )
-            result = self.run_in_project(project, target)
-            self.assertEqual(0, result.returncode)
-            self.assertTrue(
-                marker.is_file(), "verify-save was never invoked — the hook is a no-op"
-            )
-            self.assertEqual(str(target), marker.read_text(encoding="utf-8"))
-
-    def test_hook_is_silent_when_the_script_succeeds(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            project, target, _ = self.make_project(tmp, "#!/bin/sh\nexit 0\n")
-            result = self.run_in_project(project, target)
-            self.assertEqual("", (result.stdout + result.stderr).strip())
-
-    def test_hook_surfaces_the_script_output_on_failure(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            project, target, _ = self.make_project(
-                tmp, '#!/bin/sh\necho "the reason" >&2\nexit 1\n'
-            )
-            result = self.run_in_project(project, target)
-            self.assertEqual(0, result.returncode, "the hook must never block")
-            self.assertIn("the reason", result.stdout + result.stderr)
-
-    def test_hook_reports_a_failure_with_no_output(self) -> None:
-        """A silent non-zero exit must still be visible, not read as success."""
-        with tempfile.TemporaryDirectory() as tmp:
-            project, target, _ = self.make_project(tmp, "#!/bin/sh\nexit 3\n")
-            result = self.run_in_project(project, target)
-            combined = result.stdout + result.stderr
-            self.assertIn("probe.py", combined)
-            self.assertIn("3", combined)
-
-    def test_hook_does_not_invoke_the_script_for_a_missing_file(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            project, _, marker = self.make_project(
-                tmp, '#!/bin/sh\nprintf "%s" "$1" > "{marker}"\nexit 0\n'
-            )
-            result = self.run_in_project(project, project / "does-not-exist.py")
-            self.assertEqual(0, result.returncode)
-            self.assertFalse(marker.is_file())
 
 
 class PostTestAnalysisRegressionTests(unittest.TestCase):

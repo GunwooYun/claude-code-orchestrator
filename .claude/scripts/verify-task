@@ -4,11 +4,23 @@
 #
 # THIS REPOSITORY'S IMPLEMENTATION (uv + poe). It must be able to FAIL: never
 # put an auto-fixing command in here, or the gate stops being a gate.
+#
+# Optional trailing arguments are accepted and forwarded to the test runner, so
+# a person can narrow the scope by hand (`verify-task tests/test_foo.py`). The
+# hook and the skills call it with no arguments.
 set -eu
 
-if command -v uv >/dev/null 2>&1 && [ -f pyproject.toml ]; then
+if ! command -v uv >/dev/null 2>&1 || [ ! -f pyproject.toml ]; then
+    echo "verify-task: uv or pyproject.toml missing — cannot run this project's gate" >&2
+    exit 1
+fi
+
+if [ "$#" -eq 0 ]; then
     exec uv run poe all
 fi
 
-echo "verify-task: uv or pyproject.toml missing — cannot run this project's gate" >&2
-exit 1
+# Scoped run: the read-only checks still cover the tree, the tests narrow.
+uv run poe lint
+uv run poe format-check
+uv run poe typecheck
+exec uv run pytest "$@"

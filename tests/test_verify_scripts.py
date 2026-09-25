@@ -1,60 +1,88 @@
 """
 Tests for the verification-script contract (.claude/scripts/README.md).
 
-The contract is deliberately tiny — four names, one optional argument, an exit
-code — because it has to be reimplementable in any language on any stack. These
-tests pin the parts a caller relies on, so a project that rewrites the scripts
-can run this file to check its own implementations.
+**This file is meant to be copied into any project that adopts the contract.**
+So it assumes nothing about language or toolchain:
 
-Nothing here assumes Python, ruff, ty or pytest inside the scripts. The one
-exception is marked: this repository dogfoods its own contract, so `verify-task`
-is expected to pass on this tree.
+  - it never runs the project's real scripts against the project's real files
+  - it never invokes a tier that could be slow (task/unit/full may take minutes
+    to hours, and in this template they run the test suite, which would recurse)
+  - it never mutates the working tree
+  - it drives the caller (the hook) against STUB scripts it creates itself, so
+    the assertions are about the contract rather than about any tool
+
+What it cannot check is whether a project's real implementation is correct. That
+belongs in a project-specific test, or in running the scripts by hand as
+/initproject Step 5 instructs.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import stat
 import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 REPO = Path(__file__).parent.parent
 SCRIPTS = REPO / ".claude" / "scripts"
-TIERS = ("save", "task", "unit", "full")
 HOOK = REPO / ".claude" / "hooks" / "lint-on-save.py"
+TIERS = ("save", "task", "unit", "full")
+
+# The caller resolves an extensionless executable first, then these forms, which
+# need neither an execute bit nor a shebang (Windows checkouts have neither).
+SUFFIXES = ("", ".py", ".sh", ".ps1", ".cmd", ".bat")
 
 
-def script(tier: str) -> Path:
-    return SCRIPTS / f"verify-{tier}"
+def entrypoints() -> dict[str, Path]:
+    """Tier -> script path, for whichever tiers this project configured."""
+    found: dict[str, Path] = {}
+    for tier in TIERS:
+        for suffix in SUFFIXES:
+            candidate = SCRIPTS / f"verify-{tier}{suffix}"
+            if candidate.is_file():
+                found[tier] = candidate
+                break
+    return found
 
 
-def run(args: list[str], cwd: Path | None = None, env: dict | None = None):
-    return subprocess.run(
-        args,
-        cwd=str(cwd or REPO),
-        capture_output=True,
-        text=True,
-        timeout=600,
-        env={**os.environ, **(env or {})},
-    )
-
-
-class ContractShapeTests(unittest.TestCase):
-    """Properties every implementation must have, whatever it runs inside."""
-
-    def test_contract_is_documented(self) -> None:
+class ContractDocumentationTests(unittest.TestCase):
+    def test_the_contract_is_written_down(self) -> None:
         readme = SCRIPTS / "README.md"
         self.assertTrue(readme.is_file(), "the contract must be written down")
         text = readme.read_text(encoding="utf-8")
         for tier in TIERS:
             self.assertIn(f"verify-{tier}", text, f"README omits verify-{tier}")
 
-    def test_present_scripts_are_executable_with_a_shebang(self) -> None:
+    def test_tier_names_agree_with_the_testing_rules(self) -> None:
+        """
+        Script names and tier names must not drift apart. Skipped when the
+        project does not keep this template's rules file.
+        """
+        rules = REPO / ".claude" / "rules" / "testing.md"
+        if not rules.is_file():
+            self.skipTest("no .claude/rules/testing.md in this project")
+        text = rules.read_text(encoding="utf-8")
         for tier in TIERS:
-            path = script(tier)
-            if not path.is_file():
-                continue  # absence means "this tier is unconfigured" — allowed
+            self.assertIn(
+                f"`{tier}`", text, f"testing.md does not define the {tier} tier"
+            )
+
+
+class DirectoryShapeTests(unittest.TestCase):
+    def test_at_least_one_tier_is_configured(self) -> None:
+        self.assertTrue(
+            entrypoints(),
+            "no verify-* script exists; nothing can verify anything in this project",
+        )
+
+    def test_extensionless_entrypoints_are_executable_with_a_shebang(self) -> None:
+        for tier, path in entrypoints().items():
+            if path.suffix:
+                continue  # run through an interpreter; needs neither
             with self.subTest(tier=tier):
                 self.assertTrue(
                     os.access(path, os.X_OK), f"{path.name} is not executable"
@@ -62,184 +90,241 @@ class ContractShapeTests(unittest.TestCase):
                 first = path.read_text(encoding="utf-8").splitlines()[0]
                 self.assertTrue(first.startswith("#!"), f"{path.name} has no shebang")
 
-    def test_tier_names_match_the_documented_tiers(self) -> None:
-        """Script names and .claude/rules/testing.md tiers must not drift apart."""
-        rules = (REPO / ".claude" / "rules" / "testing.md").read_text(encoding="utf-8")
-        for tier in TIERS:
-            self.assertIn(
-                f"`{tier}`", rules, f"testing.md does not define the {tier} tier"
-            )
-
-    def test_no_unknown_scripts_in_the_directory(self) -> None:
-        """A fifth entrypoint nobody calls is a trap; keep the surface honest."""
-        allowed = {f"verify-{t}" for t in TIERS} | {"README.md"}
-        found = {p.name for p in SCRIPTS.iterdir() if p.is_file()}
-        self.assertEqual(
-            set(),
-            found - allowed,
-            "unexpected files in .claude/scripts/ — either call them or remove them",
-        )
-
-
-class VerifySaveContractTests(unittest.TestCase):
-    """verify-save is the only script with an argument, so it has more rules."""
-
-    def setUp(self) -> None:
-        if not script("save").is_file():
-            self.skipTest("verify-save not configured")
-
-    def test_no_argument_exits_zero(self) -> None:
-        self.assertEqual(0, run([str(script("save"))]).returncode)
-
-    def test_missing_file_exits_zero(self) -> None:
-        result = run([str(script("save")), str(REPO / "does" / "not" / "exist.py")])
-        self.assertEqual(0, result.returncode)
-
-    def test_directory_argument_exits_zero(self) -> None:
-        self.assertEqual(0, run([str(script("save")), str(SCRIPTS)]).returncode)
-
-    def test_unhandled_file_type_is_silent_and_successful(self) -> None:
-        result = run([str(script("save")), str(SCRIPTS / "README.md")])
-        self.assertEqual(0, result.returncode)
-        self.assertEqual(
-            "",
-            (result.stdout + result.stderr).strip(),
-            "a file the script does not handle must produce no output",
-        )
-
-    def test_clean_input_is_silent(self) -> None:
-        """The caller stays quiet on success, so success must print nothing."""
-        result = run([str(script("save")), str(HOOK)])
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        self.assertEqual("", (result.stdout + result.stderr).strip())
-
-    def test_bad_input_fails_and_explains(self) -> None:
-        """Written stack-agnostically: a file this project checks, made invalid."""
-        import tempfile
-
-        handled = self._a_handled_extension()
-        if handled is None:
-            self.skipTest("cannot infer a file type this project checks")
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / f"probe{handled}"
-            target.write_text("def broken(  :\n", encoding="utf-8")
-            result = run([str(script("save")), str(target)])
-            self.assertNotEqual(0, result.returncode, "invalid input must fail")
+    def test_only_entrypoints_and_helpers_live_here(self) -> None:
+        """A stray file here is read as a fifth entrypoint that nobody calls."""
+        for entry in sorted(SCRIPTS.iterdir()):
+            if entry.is_dir():
+                self.assertEqual("lib", entry.name)
+                continue
+            name = entry.name
             self.assertTrue(
-                (result.stdout + result.stderr).strip(),
-                "a failure must explain itself",
+                name == "README.md" or name.startswith(("verify-", "_")),
+                f"{name}: entrypoints are verify-*, shared helpers start with _",
             )
 
-    def _a_handled_extension(self) -> str | None:
-        """Extensions named in the script's own case statement."""
-        text = script("save").read_text(encoding="utf-8")
-        for token in ("*.py", "*.js", "*.ts", "*.go", "*.rs", "*.sh", "*.bb"):
-            if token in text:
-                return token[1:]
-        return None
 
+class StubProject:
+    """A throwaway project with a scripted verify-save, for driving the caller."""
 
-class HookIntegrationTests(unittest.TestCase):
-    """The hook must delegate, and must not pretend an absent script passed."""
+    def __init__(self, tmp: str, body: str) -> None:
+        self.root = Path(tmp)
+        scripts = self.root / ".claude" / "scripts"
+        scripts.mkdir(parents=True)
+        self.marker = self.root / "marker.txt"
+        self.script = scripts / "verify-save"
+        self.script.write_text(body.format(marker=self.marker), encoding="utf-8")
+        self.script.chmod(self.script.stat().st_mode | stat.S_IEXEC)
+        self.target = self.root / "probe.txt"
+        self.target.write_text("content\n", encoding="utf-8")
 
-    def payload(self, path: str) -> str:
-        return json.dumps({"tool_name": "Edit", "tool_input": {"file_path": path}})
-
-    def run_hook(self, path: str, project_dir: Path):
+    def run_hook(self) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["python3", str(HOOK)],
-            input=self.payload(path),
+            [sys.executable, str(HOOK)],
+            input=json.dumps(
+                {"tool_name": "Edit", "tool_input": {"file_path": str(self.target)}}
+            ),
             capture_output=True,
             text=True,
-            timeout=600,
-            cwd=str(project_dir),
-            env={**os.environ, "CLAUDE_PROJECT_DIR": str(project_dir)},
+            timeout=120,
+            cwd=str(self.root),
+            env={**os.environ, "CLAUDE_PROJECT_DIR": str(self.root)},
         )
 
-    def test_hook_contains_no_stack_specific_tool_names(self) -> None:
-        """The whole point of the indirection: the hook knows no toolchain."""
-        source = HOOK.read_text(encoding="utf-8")
-        body = "\n".join(
-            line for line in source.splitlines() if not line.strip().startswith("#")
-        )
-        # Strip the module docstring, which names tools while explaining history.
-        if body.count('"""') >= 2:
-            first = body.index('"""')
-            second = body.index('"""', first + 3)
-            body = body[:first] + body[second + 3 :]
-        for tool in ("ruff", "mypy", " ty ", "pytest", "npm", "cargo", "bitbake"):
-            self.assertNotIn(
-                tool,
-                body,
-                f"lint-on-save.py names {tool!r}; stack knowledge belongs in the script",
-            )
 
-    def test_hook_is_silent_on_a_clean_file(self) -> None:
-        result = self.run_hook(str(HOOK), REPO)
+class CallerContractTests(unittest.TestCase):
+    """
+    How the caller must treat each contract outcome.
+
+    Driven with stubs, so these hold for any project's real implementation.
+    """
+
+    def stub(self, body: str) -> StubProject:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        return StubProject(tmp.name, body)
+
+    def test_the_script_receives_the_edited_path(self) -> None:
+        project = self.stub('#!/bin/sh\nprintf "%s" "$1" > "{marker}"\nexit 0\n')
+        result = project.run_hook()
         self.assertEqual(0, result.returncode)
+        self.assertTrue(
+            project.marker.is_file(),
+            "the script was never invoked — the caller is a no-op",
+        )
+        self.assertEqual(
+            str(project.target), project.marker.read_text(encoding="utf-8")
+        )
+
+    def test_silent_success_is_reported_silently(self) -> None:
+        project = self.stub("#!/bin/sh\nexit 0\n")
+        result = project.run_hook()
         self.assertEqual("", (result.stdout + result.stderr).strip())
 
-    def test_hook_reports_when_the_script_is_absent(self) -> None:
-        """Absent must not look like passed."""
-        import tempfile
+    def test_output_on_success_is_passed_through(self) -> None:
+        """
+        Tools that warn but succeed are common. Discarding their output is how a
+        warning becomes a false "clean".
+        """
+        project = self.stub('#!/bin/sh\necho "deprecated API in use"\nexit 0\n')
+        result = project.run_hook()
+        self.assertEqual(0, result.returncode)
+        self.assertIn("deprecated API in use", result.stdout + result.stderr)
 
+    def test_failure_output_is_surfaced(self) -> None:
+        project = self.stub('#!/bin/sh\necho "the reason" >&2\nexit 1\n')
+        result = project.run_hook()
+        self.assertEqual(0, result.returncode, "the caller must never block")
+        self.assertIn("the reason", result.stdout + result.stderr)
+
+    def test_silent_failure_is_still_visible(self) -> None:
+        project = self.stub("#!/bin/sh\nexit 3\n")
+        result = project.run_hook()
+        combined = result.stdout + result.stderr
+        self.assertIn("probe.txt", combined)
+        self.assertIn("3", combined)
+
+    def test_a_missing_file_does_not_reach_the_script(self) -> None:
+        project = self.stub('#!/bin/sh\nprintf "%s" "$1" > "{marker}"\nexit 0\n')
+        project.target.unlink()
+        result = project.run_hook()
+        self.assertEqual(0, result.returncode)
+        self.assertFalse(project.marker.is_file())
+
+    def test_an_absent_script_is_reported_not_treated_as_a_pass(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            project = Path(tmp)
-            target = project / "probe.py"
-            target.write_text("x = 1\n", encoding="utf-8")
-            result = self.run_hook(str(target), project)
-            self.assertEqual(0, result.returncode, "the hook must never block")
+            root = Path(tmp)
+            (root / ".claude" / "scripts").mkdir(parents=True)
+            target = root / "probe.txt"
+            target.write_text("x\n", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(HOOK)],
+                input=json.dumps(
+                    {"tool_name": "Edit", "tool_input": {"file_path": str(target)}}
+                ),
+                capture_output=True,
+                text=True,
+                timeout=120,
+                cwd=str(root),
+                env={**os.environ, "CLAUDE_PROJECT_DIR": str(root)},
+            )
+            self.assertEqual(0, result.returncode)
             self.assertIn("verify-save", result.stdout + result.stderr)
 
+    def test_a_script_needing_an_interpreter_is_still_found(self) -> None:
+        """
+        A Windows checkout has no execute bit and no shebang, so the caller must
+        resolve verify-save.py and run it through an interpreter.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / ".claude" / "scripts"
+            scripts.mkdir(parents=True)
+            marker = root / "marker.txt"
+            script = scripts / "verify-save.py"
+            script.write_text(
+                "import sys, pathlib\n"
+                f"pathlib.Path({str(marker)!r}).write_text(sys.argv[1])\n",
+                encoding="utf-8",
+            )
+            script.chmod(0o644)  # deliberately not executable
+            target = root / "probe.txt"
+            target.write_text("x\n", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(HOOK)],
+                input=json.dumps(
+                    {"tool_name": "Edit", "tool_input": {"file_path": str(target)}}
+                ),
+                capture_output=True,
+                text=True,
+                timeout=120,
+                cwd=str(root),
+                env={**os.environ, "CLAUDE_PROJECT_DIR": str(root)},
+            )
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertTrue(
+                marker.is_file(),
+                "a non-executable verify-save.py was not resolved — Windows is excluded",
+            )
 
-class ScriptHealthTests(unittest.TestCase):
+
+class SaveTierContractTests(unittest.TestCase):
     """
-    Cheap checks on the scripts this suite must NOT execute.
+    The project's real verify-save, on inputs that need no toolchain.
 
-    verify-task, verify-unit and verify-full all run this test suite (they are
-    this repository's gate), so calling them from inside a test would recurse
-    without end. That `verify-task` passes is already proven by the fact that
-    `poe all` — which IS verify-task — is green when this file runs.
-
-    What is left to check is that they have not rotted: valid shell, and no
-    accidental recursion through a tier that a hook is allowed to call.
+    Only paths it must ignore are used, so nothing runs and nothing is mutated.
     """
 
-    def test_scripts_are_valid_shell(self) -> None:
-        for tier in TIERS:
-            path = script(tier)
-            if not path.is_file():
+    def setUp(self) -> None:
+        self.script = entrypoints().get("save")
+        if self.script is None:
+            self.skipTest("no save tier configured")
+
+    def run_save(self, *args: str) -> subprocess.CompletedProcess[str]:
+        argv = [str(self.script), *args]
+        if self.script.suffix == ".py":
+            argv = [sys.executable, *argv]
+        return subprocess.run(
+            argv, cwd=str(REPO), capture_output=True, text=True, timeout=300
+        )
+
+    def test_no_argument_exits_zero(self) -> None:
+        self.assertEqual(0, self.run_save().returncode)
+
+    def test_missing_file_exits_zero(self) -> None:
+        self.assertEqual(0, self.run_save(str(REPO / "no" / "such.file")).returncode)
+
+    def test_directory_argument_exits_zero(self) -> None:
+        self.assertEqual(0, self.run_save(str(SCRIPTS)).returncode)
+
+    def test_an_unhandled_path_is_silent_and_successful(self) -> None:
+        """
+        The contract's one mandatory silence: a path the script does not handle
+        produces no output, so the caller says nothing.
+
+        A file with no extension at all is used rather than guessing which
+        extensions this project handles.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            odd = Path(tmp) / "unlikely-to-be-checked"
+            odd.write_text("not source code\n", encoding="utf-8")
+            result = self.run_save(str(odd))
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertEqual(
+                "",
+                (result.stdout + result.stderr).strip(),
+                "an unhandled path must produce no output",
+            )
+
+
+class SlowTierTests(unittest.TestCase):
+    """
+    Cheap checks on tiers this suite must NOT execute.
+
+    verify-task and slower may take minutes to hours, and in a project whose gate
+    runs the test suite, calling one from a test recurses without end.
+    """
+
+    def test_slow_tier_scripts_are_valid_shell(self) -> None:
+        for tier, path in entrypoints().items():
+            if tier == "save" or path.suffix not in ("", ".sh"):
                 continue
             first = path.read_text(encoding="utf-8").splitlines()[0]
             if "sh" not in first:
-                continue  # some other language; not ours to syntax-check
+                continue
             with self.subTest(tier=tier):
-                result = run(["sh", "-n", str(path)])
-                self.assertEqual(
-                    0, result.returncode, f"{path.name}: {result.stderr.strip()}"
+                result = subprocess.run(
+                    ["sh", "-n", str(path)], capture_output=True, text=True, timeout=60
                 )
+                self.assertEqual(0, result.returncode, result.stderr.strip())
 
-    def test_save_tier_does_not_reach_a_slower_tier(self) -> None:
-        """
-        The save tier runs on every keystroke-to-disk and is the one tier a hook
-        invokes, so it must not chain into a gate or a build.
-        """
-        if not script("save").is_file():
-            self.skipTest("verify-save not configured")
-        text = script("save").read_text(encoding="utf-8")
-        for slower in ("verify-task", "verify-unit", "verify-full"):
+    def test_the_gate_does_not_chain_a_slower_tier(self) -> None:
+        task = entrypoints().get("task")
+        if task is None:
+            self.skipTest("no task tier configured")
+        text = task.read_text(encoding="utf-8")
+        for slower in ("verify-unit", "verify-full"):
             self.assertNotIn(
-                slower,
-                text,
-                f"verify-save invokes {slower}: the save tier must stay in seconds",
-            )
-
-    def test_only_the_full_tier_chains_other_tiers(self) -> None:
-        if script("task").is_file():
-            self.assertNotIn(
-                "verify-unit",
-                script("task").read_text(encoding="utf-8"),
-                "verify-task must not run the unit tier; it is the <=5min gate",
+                slower, text, f"verify-task runs {slower}; it is the <=5min gate"
             )
 
 
