@@ -1,6 +1,6 @@
 ---
 name: init
-description: First-session setup after copying the orchestrator template into a project. Detects the stack, adapts CLAUDE.md / rules / lint hook / permissions when the stack differs from the template default (Python + uv/ruff/ty/pytest), and seeds the agy context (.agents/rules/AGENTS.md) and DESIGN.md. Run once per project.
+description: First-session setup after copying the orchestrator template into a project. Detects the stack, confirms the per-agent model matrix with the user, adapts CLAUDE.md / rules / lint hook / permissions when the stack differs from the template default (Python + uv/ruff/ty/pytest), and seeds the agy context (.agents/rules/AGENTS.md) and DESIGN.md. Run once per project.
 disable-model-invocation: true
 ---
 
@@ -45,7 +45,37 @@ default branch, commit convention.
 4. **Code language** for identifiers/comments (English default) and any extra
    conventions.
 
-## Step 3 — CLAUDE.md
+## Step 3 — Confirm the model matrix
+
+Each agent's model is pinned in its definition file, not inherited. Show the
+user the **current** assignment — read it from the files, never from this table —
+and ask whether to keep it or change it.
+
+| Role | Defined in | Default | Why |
+|---|---|---|---|
+| Main orchestrator | the user's session (`/model`) | Opus | Orchestration, user dialogue, final decisions |
+| `deep-reasoning` | `.claude/agents/deep-reasoning.md` → `model:` | `fable` | Deep reasoning on a cheaper tier than the main session; pinned so an Opus main session does not silently make it Opus |
+| `general-purpose` | `.claude/agents/general-purpose.md` → `model:` | `sonnet` | Thin wrapper around agy and file work — the tokens should go to agy, not to this agent |
+| agy research | `--model` per call | see the Model Policy in `.claude/rules/antigravity-delegation.md` | Gemini tiers T1–T4, pinned per call |
+
+Procedure:
+
+1. `grep -n '^model:' .claude/agents/*.md` and report the real values.
+2. Ask the user (one AskUserQuestion): keep this matrix, or reassign? Offer the
+   trade-off — a cheaper `deep-reasoning` saves tokens but weakens design review;
+   raising `general-purpose` above `sonnet` mostly burns tokens on wrapping agy.
+3. Apply any change to the `model:` frontmatter of the agent files. Valid values
+   are the tier aliases (`opus`, `fable`, `sonnet`, `haiku`) or `inherit`.
+4. **If the user picks `inherit` for `deep-reasoning`, say what it means**: that
+   subagent then runs on whatever the main session runs on, which defeats the
+   cost split. Record the choice either way.
+5. Whenever a value changes, update the comment in the agent file and any prose
+   that names a model (`CLAUDE.md`, `README.md`,
+   `.claude/rules/deep-reasoning-delegation.md`,
+   `.claude/skills/deep-reasoning/SKILL.md`) so no document claims a model that
+   is not pinned. This drift is what the step exists to prevent.
+
+## Step 4 — CLAUDE.md
 
 Replace the body of `## 기술 스택(Tech Stack)` with the detected stack: language
 and framework versions, package manager, quality tools with versions, how the
@@ -54,7 +84,7 @@ commands, the commit convention and default branch, then
 `→ 참고: .claude/rules/dev-environment.md`. Add/refresh `## Current Project`
 with the overview and conventions from Step 2.
 
-## Step 4 — Adapt rules and hooks (skip entirely if the stack is Python + uv/ruff/ty/pytest)
+## Step 5 — Adapt rules and hooks (skip entirely if the stack is Python + uv/ruff/ty/pytest)
 
 | File | What to do |
 |---|---|
@@ -68,7 +98,7 @@ Verify with `python3 -m py_compile .claude/hooks/*.py` and by piping a sample
 payload (`{"tool_name":"Edit","tool_input":{"file_path":"<a scratch file>"}}`)
 into the lint hook.
 
-## Step 5 — Seed agy context and design doc
+## Step 6 — Seed agy context and design doc
 
 1. `.agents/rules/AGENTS.md`: insert `## This Project: <name>` right after the
    title — domain, main directories/apps, companion systems, and any "never
@@ -78,12 +108,14 @@ into the lint hook.
    made in this session (e.g. lint settings) with today's date, and open
    questions you could not resolve (test invocation, CI, etc.) as TODO items.
 
-## Step 6 — Smoke test and report
+## Step 7 — Smoke test and report
 
 - Skills list shows `/deep-reasoning`, `/antigravity-system`, `/startproject`.
+- `grep -n '^model:' .claude/agents/*.md` matches the matrix agreed in Step 3,
+  and no prose names a model that is not pinned.
 - `agy -p "Reply with exactly: OK" --model gemini-3.7-flash-low` returns OK
   (if agy is installed; otherwise note it).
-- Report in Korean: detected stack, what was changed per file, what was
+- Report in Korean: detected stack, the final model matrix, what was changed per file, what was
   skipped and why, what the user still has to decide (also written to
   `DESIGN.md` TODO), and a reminder to check `git diff` after the first edit
   if a formatter was enabled.

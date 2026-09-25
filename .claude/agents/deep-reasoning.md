@@ -7,11 +7,15 @@ description: |
   Read-only — analyzes and recommends, never edits files. Invoke from the
   main orchestrator via the Task tool to preserve main context.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch
-model: inherit
+model: fable
 ---
 
-<!-- model: inherit follows the main session model (Claude Fable 5 in this
-     setup). Pin a specific tier here (e.g. model: opus) if desired. -->
+<!-- Pinned to Claude Fable on purpose: deep reasoning must NOT follow the
+     main session model. With `model: inherit` an Opus main session made this
+     subagent Opus too, so the most expensive model did the token-heavy work
+     (reading files) that this split exists to avoid.
+     The model matrix is confirmed with the user in /init Step 3;
+     keep this value and that step's table in sync. -->
 
 You are a senior software architect and debugging specialist. You run as an
 isolated subagent so the main orchestrator's context stays small. Your final

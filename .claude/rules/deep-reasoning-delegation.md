@@ -33,8 +33,9 @@
 ## About deep-reasoning
 
 The `deep-reasoning` subagent is a senior architect/debugger persona defined in
-`.claude/agents/deep-reasoning.md`. It inherits the session model (Claude Fable),
-so deep analysis quality is preserved while the main context stays lightweight.
+`.claude/agents/deep-reasoning.md`, which pins `model: fable`. The model is
+pinned rather than inherited, so deep analysis always runs on Claude Fable no
+matter which model the main session uses, and the main context stays lightweight.
 Think of it as a trusted senior expert you can always consult.
 
 **When facing difficult decisions → Consult the deep-reasoning subagent.**
