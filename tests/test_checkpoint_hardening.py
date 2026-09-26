@@ -296,6 +296,74 @@ class GitRangeTests(unittest.TestCase):
             self.assertIn("one", result.stdout)
 
 
+class FileStatsRangeTests(unittest.TestCase):
+    """
+    C6 again, in the function the first repair missed.
+
+    `get_file_changes` was switched to `resolve_commit_range`; `get_file_stats`
+    was not, and kept `git diff --numstat HEAD~10 HEAD`. On a repository with
+    fewer than eleven commits that command fails, `run_git_command` returns
+    None, and the checkpoint reports no line counts at all — the same
+    "no changes detected" that C6 was supposed to close. DESIGN.md recorded the
+    defect as closed while this call site still carried it.
+    """
+
+    def _young_repo(self, commits: int) -> Path:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        repo = Path(tmp.name)
+        subprocess.run(["git", "init", "-q", "."], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.email", "t@t"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.name", "t"], cwd=repo, check=True)
+        for n in range(commits):
+            (repo / f"f{n}.txt").write_text(f"line {n}\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-qm", f"c{n}"], cwd=repo, check=True)
+        return repo
+
+    def _stats_in(self, repo: Path) -> dict:
+        original = checkpoint.PROJECT_ROOT
+        checkpoint.PROJECT_ROOT = repo
+        try:
+            return checkpoint.get_file_stats()
+        finally:
+            checkpoint.PROJECT_ROOT = original
+
+    def test_line_counts_are_reported_on_a_two_commit_repository(self) -> None:
+        stats = self._stats_in(self._young_repo(2))
+        self.assertNotEqual(
+            {},
+            stats,
+            "get_file_stats still hard-codes a ref deeper than the history",
+        )
+        self.assertIn("f1.txt", stats)
+
+    def test_line_counts_are_reported_on_a_single_commit_repository(self) -> None:
+        stats = self._stats_in(self._young_repo(1))
+        self.assertIn("f0.txt", stats, "the root commit's own changes are invisible")
+
+    def test_the_two_walkers_agree_on_which_files_changed(self) -> None:
+        """
+        A checkpoint lists a file from one function and its line counts from the
+        other. If they cover different ranges, a file appears with no numbers.
+        """
+        repo = self._young_repo(3)
+        original = checkpoint.PROJECT_ROOT
+        checkpoint.PROJECT_ROOT = repo
+        try:
+            changes = checkpoint.get_file_changes()
+            stats = checkpoint.get_file_stats()
+        finally:
+            checkpoint.PROJECT_ROOT = original
+        listed = set(changes["created"]) | set(changes["modified"])
+        self.assertTrue(listed, "no files listed at all")
+        self.assertEqual(
+            set(),
+            listed - set(stats),
+            "a file is listed as changed but has no line counts",
+        )
+
+
 class ContextTargetTests(unittest.TestCase):
     """The AGENTS.md file ends with a differently-named history section."""
 

@@ -264,11 +264,20 @@ def get_file_changes(since: str | None = None) -> dict[str, list[str]]:
 
 
 def get_file_stats(since: str | None = None) -> dict[str, tuple[int, int]]:
-    """Get line additions/deletions per file."""
+    """
+    Get line additions/deletions per file.
+
+    Walks the same range as `get_file_changes`, with the same walker: a file
+    listed as changed there must have line counts here, and `git log` covers the
+    root commit (`--root`) where `git diff` has no parent to compare against.
+    """
     if since:
         args = ["log", "--since", since, "--numstat", "--pretty=format:"]
     else:
-        args = ["diff", "--numstat", "HEAD~10", "HEAD"]
+        rev_range = resolve_commit_range()
+        if rev_range is None:
+            return {}
+        args = ["log", "--numstat", "--pretty=format:", *rev_range]
 
     output = run_git_command(args)
     if not output:

@@ -125,6 +125,18 @@ review falsified the original profile design; see Key Decisions.
       produced a garbage `### broken-tim` heading when `--since` was absent, and
       the atomic-write tests passed while its caller was reverted to a plain
       write, so a test now asserts the backup exists.
+
+      **Correction (2026-09-26):** the `HEAD~10` entry above was recorded as
+      closed while it was not. Only `get_file_changes` had been switched to
+      `resolve_commit_range`; `get_file_stats` kept
+      `git diff --numstat HEAD~10 HEAD` and therefore returned nothing on any
+      repository with fewer than eleven commits — the same silent
+      "no changes detected" the fix was for. Found by `/lens-review`, reproduced
+      on a two-commit repository, and fixed by walking the same range with the
+      same walker (`git log --numstat`, which also covers the root commit where
+      `git diff` has no parent). `tests/test_checkpoint_hardening.py`
+      `FileStatsRangeTests` now asserts that every file listed as changed has
+      line counts, so the two call sites cannot drift apart again.
 - [x] `post-implementation-review.py` — state is now per project and per session
       under `.claude/logs/implementation-state/`, with stale files pruned after
       7 days and symlinks refused. Which files count is exclusion-based rather
