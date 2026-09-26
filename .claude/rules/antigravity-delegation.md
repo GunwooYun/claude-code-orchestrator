@@ -140,7 +140,8 @@ Think of agy as your research assistant who can quickly gather and synthesize in
 - **deep-reasoning 에게 "걸러진 입력을 받았다"고 알린다.** 그리고 더 필요하면
   직접 읽으라고 말한다. 전수라고 착각하면 없는 것을 없다고 결론낸다.
 - **작은 입력에는 퍼널을 쓰지 않는다.** 왕복 비용이 절약분보다 크다. 기준:
-  입력이 **파일 5개 또는 500줄 미만이면 퍼널 없이** deep-reasoning 에 바로 준다.
+  입력이 **파일 5개 또는 500줄 미만이면 퍼널 없이** deep-reasoning 에 바로 준다
+  (이 숫자는 `CLAUDE.md` 「큰 변경」의 기준에서 정의되고, 여기서는 인용한다).
 - **agy 를 쓸 수 없으면 퍼널을 생략하고 deep-reasoning 이 직접 읽는다.** 이것이
   기존 동작이므로 degrade 는 매끄럽다. 다만 토큰이 늘어난다는 사실은 알린다
   (위 "agy 가 없을 때" 참조).

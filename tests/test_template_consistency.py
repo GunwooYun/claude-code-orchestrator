@@ -155,6 +155,80 @@ class ReferenceTests(unittest.TestCase):
         self.assertEqual([], dangling, "instructions point at files that do not exist")
 
 
+class LargeChangeThresholdTests(unittest.TestCase):
+    """
+    One boundary, one number.
+
+    Three decisions consult "is this change large?": whether to put an agy
+    pre-filter in front of deep-reasoning, whether /lens-review is worth three
+    subagents, and which review route /feature Phase 6 takes. Each site restated
+    the number, and they drifted: 500 lines in the routing rules, 300 in
+    /lens-review and in /feature Phase 6 — the two appeared fifteen lines apart
+    in the same file. Nothing failed, which is why it survived.
+
+    The definition lives in CLAUDE.md. A site may restate the number where that
+    helps the model read it (a skill description is matched without its body
+    loaded), and this test makes restating it safe by failing the moment two
+    sites disagree.
+    """
+
+    # "파일 5개", "5+ files", "5 files" — the file half of the same threshold.
+    FILE_TOKENS = ("파일 5개", "5+ files", "5 files")
+    LINE_COUNT = re.compile(r"(\d{2,4})\s*\+?\s*(?:줄|changed lines|lines)")
+    LOOKAHEAD = 80
+
+    def _threshold_mentions(self) -> dict[str, set[str]]:
+        found: dict[str, set[str]] = {}
+        for path in sorted(REPO.rglob("*.md")):
+            if any(
+                part in (".git", "research", "node_modules", "checkpoints")
+                for part in path.parts
+            ):
+                continue
+            flat = " ".join(path.read_text(encoding="utf-8").split())
+            numbers: set[str] = set()
+            for token in self.FILE_TOKENS:
+                start = 0
+                while True:
+                    at = flat.find(token, start)
+                    if at == -1:
+                        break
+                    window = flat[at : at + len(token) + self.LOOKAHEAD]
+                    numbers.update(self.LINE_COUNT.findall(window))
+                    start = at + 1
+            if numbers:
+                found[str(path.relative_to(REPO))] = numbers
+        return found
+
+    def test_the_threshold_is_stated_somewhere(self) -> None:
+        """Guards the test itself: a regex that matches nothing proves nothing."""
+        mentions = self._threshold_mentions()
+        self.assertGreaterEqual(
+            len(mentions), 4, f"the scan found almost nothing: {mentions}"
+        )
+
+    def test_every_site_uses_the_same_line_count(self) -> None:
+        mentions = self._threshold_mentions()
+        distinct = set().union(*mentions.values())
+        self.assertEqual(
+            1,
+            len(distinct),
+            "the large-change threshold disagrees between files: "
+            + "; ".join(f"{f} -> {sorted(n)}" for f, n in sorted(mentions.items())),
+        )
+
+    def test_claude_md_defines_it_and_lists_who_uses_it(self) -> None:
+        body = " ".join((REPO / "CLAUDE.md").read_text(encoding="utf-8").split())
+        self.assertIn("「큰 변경」의 기준", body, "there is no single definition site")
+        for consumer in ("프리필터", "/lens-review", "/feature"):
+            self.assertIn(consumer, body, f"the definition does not name {consumer}")
+
+    def test_the_definition_covers_the_size_independent_case(self) -> None:
+        """A one-line change to an auth check is large regardless of the count."""
+        body = " ".join((REPO / "CLAUDE.md").read_text(encoding="utf-8").split())
+        self.assertIn("보안 경계", body)
+
+
 class ScriptContractTests(unittest.TestCase):
     """The template's own scripts must satisfy the contract they document."""
 

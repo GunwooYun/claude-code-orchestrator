@@ -335,7 +335,8 @@ rewritten by `/checkpointing`; anything placed after it is lost). Replace an exi
 
 ### Option B: deep-reasoning Review (via Subagent)
 
-변경이 크면(파일 5개 · 300줄 이상, 또는 보안 경계·공개 인터페이스) Option B 대신
+변경이 크면(파일 5개 또는 500줄 이상, 또는 보안 경계·공개 인터페이스 —
+기준: `CLAUDE.md` 「큰 변경」의 기준) Option B 대신
 **`/lens-review`** 를 쓴다 — 직교하는 관점 3개를 병렬로 돌리고, **관점 간 충돌**을
 드러낸다. 작은 변경에는 아래 단일 호출이 더 싸고 결과도 같다.
 

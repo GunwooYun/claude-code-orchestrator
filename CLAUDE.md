@@ -85,7 +85,7 @@ Bash("agy -p '한 문장으로 답변' --model gemini-3.7-flash-low")
 
 **위쪽 두 칸을 비워두면 그 일이 전부 Claude 로 흐른다** — 토큰 편중의 구조적 원인이다.
 
-큰 입력(파일 5개·500줄 이상)에서 deep-reasoning 앞에 agy 프리필터를 둔다. 단
+**큰 입력**(아래 기준)에서 deep-reasoning 앞에 agy 프리필터를 둔다. 단
 **agy 는 `file:line` 과 사실만 반환하고 판정은 하지 않는다** — 요약을 반환하면
 deep-reasoning 이 코드가 아니라 요약을 추론한다.
 
@@ -93,6 +93,22 @@ deep-reasoning 이 코드가 아니라 요약을 추론한다.
 판정한다.
 
 → 참고: `.claude/rules/antigravity-delegation.md`
+
+### 「큰 변경」의 기준 (한 곳에서 정의한다)
+
+**파일 5개 또는 500줄.** 이것을 넘으면 크다. 크기와 무관하게 **보안 경계·공개
+인터페이스 변경은 항상 크다.**
+
+| 쓰는 곳 | 기준을 넘으면 | 넘지 않으면 |
+|---|---|---|
+| agy 프리필터 (2단계 퍼널) | agy 가 `file:line` 으로 좁히고 deep-reasoning 이 판정 | 프리필터 없이 deep-reasoning 에 바로 준다 — 왕복 비용이 절약분보다 크다 |
+| `/lens-review` | 직교하는 렌즈 3개를 병렬로 | deep-reasoning 한 번 — 3배 비용에 얻는 것이 그만큼 늘지 않는다 |
+| `/feature` Phase 6 | 위와 같다 | 위와 같다 |
+
+**숫자는 여기서만 정한다.** 다른 파일이 숫자를 다시 적을 수는 있지만(스킬
+description 은 본문 없이 읽힌다), 어긋나는 순간
+`tests/test_template_consistency.py` 가 실패한다 — 실제로 프리필터 500 / 리뷰 300
+으로 어긋나 있었고, 같은 `/feature` 안에서 15줄 거리였다.
 
 ---
 
