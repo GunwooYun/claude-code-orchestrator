@@ -443,18 +443,67 @@ def write_text_atomic(
         raise
 
 
-def history_section_pattern(header: str) -> re.Pattern[str]:
-    """
-    Match the history section that starts with `header`, up to the next heading.
+FENCE_LINE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+HEADING_LINE = re.compile(r"^#{1,2} ")
 
-    The section ends at the next H1 **or** H2. Ending only at `^## ` meant an
-    intervening `# Heading` was treated as part of the section and destroyed on
-    rewrite — real data loss, since the overwrite is by design.
+
+def _fence_closes(line: str, marker: str) -> bool:
+    """True when `line` closes a fence opened with `marker`."""
+    match = FENCE_LINE.match(line)
+    if match is None:
+        return False
+    closer = match.group(1)
+    return closer[0] == marker[0] and len(closer) >= len(marker)
+
+
+def find_history_section(content: str, header: str) -> tuple[int, int] | None:
     """
-    return re.compile(
-        rf"^{re.escape(header)}[ \t]*\n(?:(?!^#{{1,2}} ).*\n?)*",
-        flags=re.MULTILINE,
-    )
+    Locate the history section as (start, end) character offsets, or None.
+
+    Scanned line by line rather than matched with a regex, because fenced code
+    blocks have to be skipped in BOTH directions:
+
+    - a `## Session History` line inside a ```markdown fence is documentation,
+      not the section. The checkpointing skill shows the section it writes in
+      exactly such a fence, and matching it there replaced everything up to the
+      next heading — including the fence's closing backticks, leaving the rest of
+      the document inside an unterminated code block.
+    - a `## ...` line inside a fence must not END the section either, or the tail
+      of a fenced example survives as if it were prose.
+
+    A header on the last line with no trailing newline also counts; requiring the
+    newline meant the section was not found and a second one was appended below
+    it on every run.
+    """
+    offset = 0
+    start: int | None = None
+    fence: str | None = None
+
+    for line in content.splitlines(keepends=True):
+        bare = line.rstrip("\r\n")
+        if fence is not None:
+            if _fence_closes(bare, fence):
+                fence = None
+            offset += len(line)
+            continue
+
+        opening = FENCE_LINE.match(bare)
+        if opening is not None:
+            fence = opening.group(1)
+            offset += len(line)
+            continue
+
+        if start is None:
+            if bare.rstrip(" \t") == header:
+                start = offset
+        elif HEADING_LINE.match(bare):
+            return (start, offset)
+
+        offset += len(line)
+
+    if start is None:
+        return None
+    return (start, len(content))
 
 
 def replace_session_history(
@@ -467,10 +516,11 @@ def replace_session_history(
     everything after it survives.
     """
     new_section = session_history.rstrip() + "\n"
-    match = history_section_pattern(header).search(content)
-    if match:
-        before = content[: match.start()].rstrip("\n")
-        after = content[match.end() :].lstrip("\n")
+    span = find_history_section(content, header)
+    if span:
+        start, end = span
+        before = content[:start].rstrip("\n")
+        after = content[end:].lstrip("\n")
         result = before + "\n\n" + new_section
         if after:
             result += "\n" + after

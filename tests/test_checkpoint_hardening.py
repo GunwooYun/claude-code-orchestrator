@@ -76,6 +76,64 @@ class SectionBoundaryTests(unittest.TestCase):
         self.assertIn("is overwritten", result)
         self.assertIn("## End", result)
 
+    def test_a_header_inside_a_code_fence_is_not_a_section_start(self) -> None:
+        """
+        The skill's own documentation shows the section it writes inside a
+        ```markdown fence. Matching that line started the section there, and
+        everything up to the next heading -- including the fence's closing
+        backticks -- was replaced, leaving the rest of the document inside an
+        unterminated code block.
+        """
+        doc = (
+            "# Doc\n\n## How it works\n\n"
+            "```markdown\n## Session History\n\n### 2026-01-01\n\n- example\n```\n\n"
+            "## Session History\n\nold entry\n\n## Real Section\n\nkeep me\n"
+        )
+        result = checkpoint.replace_session_history(doc, self.HISTORY)
+        self.assertIn("- example", result, "the fenced example was destroyed")
+        self.assertEqual(2, result.count("```"), "the fence is no longer balanced")
+        self.assertIn("## Real Section", result)
+        self.assertIn("keep me", result)
+        self.assertNotIn("old entry", result)
+
+    def test_a_tilde_fence_is_honoured_too(self) -> None:
+        doc = (
+            "# Doc\n\n~~~\n## Session History\n\n- example\n~~~\n\n## End\n\nkeep me\n"
+        )
+        result = checkpoint.replace_session_history(doc, self.HISTORY)
+        self.assertIn("- example", result)
+        self.assertIn("keep me", result)
+
+    def test_a_heading_inside_a_fence_does_not_end_the_section(self) -> None:
+        """The mirror image: a fenced `## ...` must not truncate the replacement."""
+        doc = (
+            "## Session History\n\nold\n\n```\n## Not A Heading\n```\n\n"
+            "## Real\n\nkeep me\n"
+        )
+        result = checkpoint.replace_session_history(doc, self.HISTORY)
+        self.assertNotIn("## Not A Heading", result, "fenced text survived as content")
+        self.assertIn("## Real", result)
+        self.assertIn("keep me", result)
+
+    def test_a_header_on_the_last_line_without_a_newline_is_matched(self) -> None:
+        """
+        The pattern required a newline after the header, so a file ending exactly
+        at the heading did not match and a second section was appended.
+        """
+        doc = "# Doc\n\n## Session History"
+        result = checkpoint.replace_session_history(doc, self.HISTORY)
+        self.assertEqual(
+            1,
+            result.count("## Session History"),
+            "a second history section was appended below the first",
+        )
+
+    def test_a_file_with_no_trailing_newline_is_still_replaced_in_place(self) -> None:
+        doc = "# Doc\n\n## Session History\n\nold entry"
+        result = checkpoint.replace_session_history(doc, self.HISTORY)
+        self.assertEqual(1, result.count("## Session History"))
+        self.assertNotIn("old entry", result)
+
     def test_applying_twice_is_stable(self) -> None:
         doc = "# Top\n\n## Session History\n\nold\n\n# H1\n\nbody\n"
         once = checkpoint.replace_session_history(doc, self.HISTORY)
@@ -361,6 +419,83 @@ class FileStatsRangeTests(unittest.TestCase):
             set(),
             listed - set(stats),
             "a file is listed as changed but has no line counts",
+        )
+
+
+class DocumentedFormatTests(unittest.TestCase):
+    """
+    The skill's documentation must show what the script actually writes.
+
+    It showed `**agy조사:**` and `✓` in the Session History block while the
+    script writes `**agy:**` and `[OK]` / `[FAILED]` (labels were moved to
+    English per .claude/rules/language.md), and it said both context files get
+    `## Session History` while AGENTS.md gets `## Consultation History`. A reader
+    following the document looks for a section that is not there, and an editor
+    "fixing" the script to match the document reintroduces the bug.
+
+    Asserted against generated output rather than against a copy of the format,
+    so the document cannot drift from the code in either direction.
+    """
+
+    SKILL = REPO / ".claude" / "skills" / "checkpointing" / "SKILL.md"
+
+    def rendered(self) -> str:
+        by_date = {
+            "2026-01-26": {
+                "antigravity": [
+                    {"prompt": "MCP vs CLI comparison", "success": True},
+                    {"prompt": "a call that failed", "success": False},
+                ]
+            }
+        }
+        return checkpoint.generate_session_history(by_date)
+
+    def test_the_tool_label_matches(self) -> None:
+        self.assertIn("**agy:**", self.rendered())
+        self.assertIn("**agy:**", self.SKILL.read_text(encoding="utf-8"))
+
+    def test_the_status_markers_match(self) -> None:
+        rendered = self.rendered()
+        self.assertIn("- [OK] ", rendered)
+        self.assertIn("- [FAILED] ", rendered)
+        doc = self.SKILL.read_text(encoding="utf-8")
+        self.assertIn("[OK]", doc)
+        self.assertIn("[FAILED]", doc, "the failure marker is undocumented")
+
+    def test_the_stale_korean_label_is_gone(self) -> None:
+        self.assertNotIn("agy조사:", self.SKILL.read_text(encoding="utf-8"))
+
+    def test_both_context_headings_are_documented(self) -> None:
+        doc = self.SKILL.read_text(encoding="utf-8")
+        for target in checkpoint.CONTEXT_FILES.values():
+            header = target["header"]
+            assert isinstance(header, str)
+            self.assertIn(header, doc, f"the document does not mention {header}")
+
+    def test_the_document_says_which_file_gets_which_heading(self) -> None:
+        doc = " ".join(self.SKILL.read_text(encoding="utf-8").split())
+        self.assertIn("AGENTS.md", doc)
+
+        def offsets(needle: str) -> list[int]:
+            found, start = [], 0
+            while (at := doc.find(needle, start)) != -1:
+                found.append(at)
+                start = at + 1
+            return found
+
+        # Any mention of the heading near any mention of the file will do; the
+        # first of each are far apart because the ASCII diagram splits the
+        # heading across box-drawing characters.
+        pairs = [
+            abs(a - b)
+            for a in offsets("## Consultation History")
+            for b in offsets("AGENTS.md")
+        ]
+        self.assertTrue(pairs, "one of the two is not mentioned at all")
+        self.assertLess(
+            min(pairs),
+            200,
+            "the second heading is mentioned but not tied to the file it belongs to",
         )
 
 

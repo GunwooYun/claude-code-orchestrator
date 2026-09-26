@@ -26,7 +26,7 @@ CLI 상담 이력을 각 에이전트의 구성 파일에 추가한다.
 │                      ↓                                      │
 │  ┌──────────────┐ ┌───────────────────────────┐             │
 │  │  CLAUDE.md   │ │ .agents/rules/AGENTS.md   │             │
-│  │ ## Session   │ │ ## Session                │             │
+│  │ ## Session   │ │ ## Consultation           │             │
 │  │ History      │ │ History                   │             │
 │  └──────────────┘ └───────────────────────────┘             │
 └─────────────────────────────────────────────────────────────┘
@@ -114,7 +114,10 @@ python checkpoint.py --full --analyze
 
 1. `.claude/logs/cli-tools.jsonl` 구문 분석
 2. agy 상담 내용을 날짜별로 정리
-3. 각 에이전트 구성 파일에 `## Session History` 추가
+3. **각 파일의 자기 헤딩 아래에** 추가한다 — `CLAUDE.md` 는
+   `## Session History`, `.agents/rules/AGENTS.md` 는 `## Consultation History`.
+   두 파일이 같은 헤딩을 쓴다고 가정하면 AGENTS.md 에 두 번째 섹션이 계속
+   덧붙는다 (실제로 그랬다).
 
 ### Full Checkpoint 모드
 
@@ -124,7 +127,7 @@ python checkpoint.py --full --analyze
    - `git diff --numstat`로 행 수 변경
 
 2. **CLI 상담 로그 분석**
-   - agy조사 내용 및 상태
+   - agy 상담 내용 및 성공/실패
 
 3. **체크포인트 파일 생성**
    - `.claude/checkpoints/YYYY-MM-DD-HHMMSS.md`
@@ -165,14 +168,25 @@ python checkpoint.py --full --analyze
 
 ## Session History 형식
 
+`CLAUDE.md` 에 쓰이는 형태. 라벨과 상태 표기는 영어다
+(`.claude/rules/language.md` — 이 섹션은 agy 도 읽는다).
+
 ```markdown
 ## Session History
 
 ### 2026-01-26
 
-**agy조사:**
-- ✓ MCP vs CLI 비교 조사...
+**agy:**
+- [OK] MCP vs CLI comparison...
+- [FAILED] a call that returned nothing
 ```
+
+`.agents/rules/AGENTS.md` 에는 같은 내용이 `## Consultation History` 아래에
+쓰인다. 헤딩만 다르고 본문 형식은 같다.
+
+**위 두 예시는 코드 펜스 안에 있고, 그것이 의도된 것이다.** `checkpoint.py` 는
+펜스 안의 헤딩을 섹션 시작으로 보지 않는다 — 보던 때에는 이 문서의 예시를
+섹션으로 잡아 닫는 백틱까지 지웠다.
 
 ## 실행 타이밍
 
@@ -188,7 +202,8 @@ python checkpoint.py --full --analyze
 ## 주의사항
 
 - 로그가 비어 있으면 아무 것도 추가되지 않는다.
-- 기존 '## Session History'섹션은 덮어 쓴다.
+- 기존 히스토리 섹션(파일마다 위 헤딩)은 **덮어 쓴다.** 그 뒤에 오는 H1/H2
+  섹션은 보존되고, 코드 펜스 안의 헤딩은 경계로 취급하지 않는다.
 - 로그 파일 자체는 변경되지 않는다 (읽기 전용)
 - Full Checkpoint는 `.claude/checkpoints/`에 축적된다.
 - Git 초기화되지 않은 프로젝트에서도 CLI 로그 부분이 작동한다.

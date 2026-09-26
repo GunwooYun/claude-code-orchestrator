@@ -71,6 +71,7 @@
 | Which files count as implementation is decided by EXCLUSION, not by a list of languages | The hook listed seven extensions, so work in any other language was invisible — the same hard-coding the template is being cured of elsewhere. Missing a language costs a hook that never fires; counting one extra file type costs one early suggestion, so the asymmetry favours excluding documents, config, data, assets and lockfiles and counting the rest | Extend the inclusion list; read the extensions from a config file | 2026-09-25 |
 | Per-session state removes the need for a SessionStart reset hook | The suggestion must fire once per session, which the original implemented as a flag in shared state and therefore never reset. Keying the file by session id makes a new session start empty by construction, with no second hook to keep in sync | Add a SessionStart hook that clears the flag | 2026-09-25 |
 | A log entry with an unusable timestamp is skipped and counted, not grouped | It has no place in a chronological history. `local_date` fell back to the timestamp's first ten characters, so a corrupt line became a heading. Skipping silently would hide data loss, so the count is printed | Group them under an "unknown date" bucket | 2026-09-25 |
+| The history section is located by a line scan that skips fenced code blocks, not by a regex | The checkpointing skill documents the section it writes inside a ```markdown fence. The regex matched that line, so the section started inside the example and everything up to the next heading — the fence's closing backticks included — was replaced, leaving the rest of the document inside an unterminated code block. The mirror case matters too: a `## ...` line inside a fence must not end the section. The scan also matches a header on the last line with no trailing newline, which the regex required and therefore appended a second section below on every run | Keep the regex and add a fence-stripping pre-pass; document the limitation | 2026-09-26 |
 | Each context file declares the heading its history lives under | `CLAUDE.md` uses `## Session History` and `AGENTS.md` uses `## Consultation History`. Assuming one header made the script append a second, parallel section to AGENTS.md on every run | Rename AGENTS.md's section to match | 2026-09-25 |
 | Output on exit 0 is informational and is passed through, not discarded | The first version dropped all output when the script succeeded. Tools that warn but succeed are common (eslint warnings, clippy, deprecation notices); swallowing that output makes the model report "clean". The contract had also stated the rule three different ways in three files | Keep "silent on pass" strictly, and have scripts never print on success | 2026-09-25 |
 | Every tier accepts optional trailing arguments | With a no-argument-only contract a monorepo could not express scope: `verify-task` would have to check everything (breaking the 5-minute budget) or guess from `git diff`. Callers still pass none | Arguments only on verify-save | 2026-09-25 |
@@ -138,6 +139,14 @@ review falsified the original profile design; see Key Decisions.
       `git diff` has no parent). `tests/test_checkpoint_hardening.py`
       `FileStatsRangeTests` now asserts that every file listed as changed has
       line counts, so the two call sites cannot drift apart again.
+- [x] `checkpointing/SKILL.md` brought back in line with `checkpoint.py`: it
+      showed `**agy조사:**` and `✓` while the script writes `**agy:**` and
+      `[OK]`/`[FAILED]` (labels moved to English per `rules/language.md`), and it
+      said both context files use `## Session History` while `AGENTS.md` uses
+      `## Consultation History`. `DocumentedFormatTests` asserts the document
+      against *generated* output rather than against a copy of the format, so the
+      two cannot drift apart in either direction.
+
 - [x] `post-implementation-review.py` — state is now per project and per session
       under `.claude/logs/implementation-state/`, with stale files pruned after
       7 days and symlinks refused. Which files count is exclusion-based rather
