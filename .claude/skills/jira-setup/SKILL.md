@@ -79,8 +79,14 @@ Jira 코멘트와 상태 전이는 **팀이 보는 외부 동작**이다. 기본
 
 ## Step 5 — `CLAUDE.md` 에 기록한다
 
-**이 스킬 파일이 아니라 `CLAUDE.md` 의 `## Current Project` 에 쓴다.** 프로젝트별
+**이 스킬 파일이 아니라 `CLAUDE.md` 의 `## Project Setup` 에 쓴다.** 프로젝트별
 값을 템플릿에 박으면 다음 프로젝트에서 틀린다.
+
+**`## Current Project` 가 아니다.** 그 섹션은 `/feature` 가 작업 단위마다
+교체하므로, 여기 기록한 사이트·전이·쓰기 정책이 다음 `/feature` 에서 사라진다.
+`## Project Setup` 은 프로젝트 영구 상태이고, `## Session History` **앞**에 둔다
+(수명 정의: `CLAUDE.md` 「`CLAUDE.md` 섹션의 수명」). 이미 `### Jira` 가 있으면
+그 하위 섹션만 갱신하고 `## Project Setup` 블록 전체를 다시 쓰지 않는다.
 
 ```markdown
 ### Jira

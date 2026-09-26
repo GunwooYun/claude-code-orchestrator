@@ -123,7 +123,12 @@ class NoProjectSpecificsTests(unittest.TestCase):
         self.assertIn("묻는다", text, "the skill must ask when the location is unset")
 
     def test_it_records_the_answer_in_the_project_file_not_in_itself(self) -> None:
-        self.assertIn("Current Project", skill_text())
+        """
+        Under `## Project Setup`, not `## Current Project`: the latter is
+        replaced per work unit by /feature, which would silently delete the
+        recorded space key. See tests/test_claude_md_sections.py.
+        """
+        self.assertIn("Project Setup", skill_text())
 
     def test_no_hard_coded_mcp_tool_names(self) -> None:
         """

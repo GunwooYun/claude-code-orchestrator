@@ -257,12 +257,12 @@ Confluence 페이지, Jira 티켓 본문, 저장소 준거 문서, 구현 계획
 발행 정책은 비대칭이다. **새 페이지는 발행하고 링크와 함께 보고**하지만,
 **기존 페이지는 반드시 먼저 확인받는다**(다른 사람이 읽고 있을 수 있다).
 스페이스·부모 페이지가 정해지지 않았으면 **묻고**, 답을 `CLAUDE.md` 의
-`## Current Project` 에 기록해서 다음부터 묻지 않는다 — 템플릿에 박지 않는다.
+`## Project Setup` 에 기록해서 다음부터 묻지 않는다 — 템플릿에 박지 않는다.
 
 ### `/jira-setup`, `/ticket` — Jira 연동
 
 `/jira-setup` 은 **프로젝트당 한 번** 실행해서 연결 상태를 판별하고 사이트·프로젝트
-키·프로젝트 style·전이 이름·쓰기 정책을 `CLAUDE.md` 의 `## Current Project` 에
+키·프로젝트 style·전이 이름·쓰기 정책을 `CLAUDE.md` 의 `## Project Setup` 에
 기록한다. 수동 전용이다 — 기록을 실수로 덮으면 안 된다.
 
 `/ticket` 은 **자동 발동**한다. `ABC-123` 이나 Jira 링크를 주면서 작업을 요청하면
@@ -317,7 +317,7 @@ Confluence 페이지, Jira 티켓 본문, 저장소 준거 문서, 구현 계획
 
 ### `/initproject` — 첫 세션 설정 (프로젝트당 1회)
 
-템플릿을 복사한 직후 실행한다. 스택을 감지하고 → 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 물은 뒤 → `CLAUDE.md` 기술 스택/`## Current Project`를 채우고 → `.claude/scripts/`의 검증 스크립트 4개를 이 프로젝트의 실제 명령으로 작성하고(계약), 템플릿 자신의 도구가 드러난 산문(`rules/dev-environment.md` 등)을 맞추고 → `.agents/rules/AGENTS.md`에 프로젝트 단락, `docs/DESIGN.md`에 아키텍처 시드를 쓰고 → 스모크 테스트 후 보고한다. 설치·커밋 정책 변경은 반드시 먼저 묻는다.
+템플릿을 복사한 직후 실행한다. 스택을 감지하고 → 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 물은 뒤 → `CLAUDE.md` 기술 스택/`## Project Setup`을 채우고 → `.claude/scripts/`의 검증 스크립트 4개를 이 프로젝트의 실제 명령으로 작성하고(계약), 템플릿 자신의 도구가 드러난 산문(`rules/dev-environment.md` 등)을 맞추고 → `.agents/rules/AGENTS.md`에 프로젝트 단락, `docs/DESIGN.md`에 아키텍처 시드를 쓰고 → 스모크 테스트 후 보고한다. 설치·커밋 정책 변경은 반드시 먼저 묻는다.
 
 ## 검증 계약 — 어떤 스택에도 붙는 방법
 
@@ -446,6 +446,8 @@ claude
 ```
 
 `/feature`가 CLAUDE.md에 추가하는 `## Current Project` 블록은 다음 세션의 출발점이다. 기능이 끝나면 지우거나 요약해 둔다.
+
+**섹션마다 수명이 다르다.** `## Project Setup`(프로젝트 영구 — 스택 개요·Jira·Confluence 설정)은 여러 스킬이 **덧붙이고** 아무도 교체하지 않는다. `## Current Project`(작업 단위)는 `/feature`가 **교체한다**. `## Session History`(세션)는 `/checkpointing`이 **덮어쓰고 항상 마지막**이다. 수명이 다른 상태를 한 헤딩에 두면 교체 규칙이 남의 상태를 지운다 — 전체 표는 `CLAUDE.md` 「`CLAUDE.md` 섹션의 수명」.
 
 ### 4. 컨텍스트를 지키는 규칙
 

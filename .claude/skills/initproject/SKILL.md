@@ -12,9 +12,13 @@ in order; skip a step when it does not apply and say so in the final report.
 
 ## Ground rules
 
-- `CLAUDE.md`: touch only `## 기술 스택(Tech Stack)` and `## Current Project`
-  (create it if missing, place it after `## 언어 프로토콜` and **before** any
-  `## Session History`). Never edit the other sections, never add a second H1.
+- `CLAUDE.md`: touch only `## 기술 스택(Tech Stack)` and `## Project Setup`
+  (create it if missing, place it after `## 언어 프로토콜`, then
+  `## Current Project`, then **before** any `## Session History`). Never edit the
+  other sections, never add a second H1. The section lifetimes are defined in
+  `CLAUDE.md` → 「`CLAUDE.md` 섹션의 수명」: `## Project Setup` holds what lasts as
+  long as the project, `## Current Project` is replaced per work unit by
+  `/feature`, so **do not put project-permanent state in the latter**.
 - `.agents/rules/AGENTS.md` is Antigravity CLI's context: add a project
   paragraph, keep its read-only rules intact, never create a root `AGENTS.md`.
 - Ask before installing anything or changing what gets committed.
@@ -114,8 +118,10 @@ Replace the body of `## 기술 스택(Tech Stack)` with the detected stack: lang
 and framework versions, package manager, quality tools with versions, how the
 project runs (container vs local), a `공통 명령어` block with the **real**
 commands, the commit convention and default branch, then
-`→ 참고: .claude/rules/dev-environment.md`. Add/refresh `## Current Project`
-with the overview and conventions from Step 2.
+`→ 참고: .claude/rules/dev-environment.md`. Add/refresh `## Project Setup`
+with the overview and conventions from Step 2 — that section outlives every
+single work unit, and `/feature` replaces `## Current Project`, not this one.
+Leave `## Current Project` for `/feature` to write.
 
 ## Step 5 — Write the verification scripts (the project contract)
 

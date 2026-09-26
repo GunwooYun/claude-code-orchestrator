@@ -17,7 +17,7 @@ metadata:
 
 **Jira 티켓 하나를 작업의 시작점으로 삼는다.**
 
-전제: `/jira-setup` 이 `CLAUDE.md` `## Current Project` → `### Jira` 에 사이트·
+전제: `/jira-setup` 이 `CLAUDE.md` `## Project Setup` → `### Jira` 에 사이트·
 프로젝트·전이 이름·쓰기 정책을 기록해 뒀다. **없으면 여기서 멈추고 `/jira-setup` 을
 먼저 실행하라고 알린다** — 추측한 프로젝트 키로 조회하면 남의 티켓을 건드린다.
 

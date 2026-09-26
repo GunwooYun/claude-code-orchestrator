@@ -159,7 +159,12 @@ class NoProjectSpecificsTests(unittest.TestCase):
                 self.assertNotIn("mcp__", text(path))
 
     def test_setup_records_into_the_project_file(self) -> None:
-        self.assertIn("Current Project", text(SETUP))
+        """
+        Under `## Project Setup`, whose lifetime is the project. Recording it
+        under `## Current Project` lost it at the next /feature run — see
+        tests/test_claude_md_sections.py.
+        """
+        self.assertIn("Project Setup", text(SETUP))
 
     def test_setup_forbids_recording_credentials(self) -> None:
         self.assertIn("자격증명", text(SETUP))

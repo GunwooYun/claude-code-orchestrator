@@ -188,12 +188,30 @@ deep-reasoning 이 코드가 아니라 요약을 추론한다.
 | `.claude/logs/cli-tools.jsonl` | agy 입출력 로그            |
 | `.agents/rules/AGENTS.md`      | agy용 프로젝트 컨텍스트     |
 
+### `CLAUDE.md` 섹션의 수명 (CRITICAL)
+
+스킬들이 `CLAUDE.md` 에 상태를 기록한다. **수명이 다른 상태를 한 헤딩에 두면
+교체 규칙이 남의 상태를 지운다.** 그래서 수명이 헤딩을 결정한다.
+
+| 섹션 | 수명 | 쓰는 쪽 | 갱신 방식 |
+|---|---|---|---|
+| `## Project Setup` | **프로젝트 영구** | `/initproject`(개요·규약), `/jira-setup`(`### Jira`), `/doc-write`(`### Confluence`) | **덧붙인다** — 자기 하위 섹션만 갱신하고 블록 전체를 교체하지 않는다 |
+| `## Current Project` | **작업 단위** (티켓/기능 하나) | `/feature` Phase 5 | **교체한다** — 다음 작업이 이전 작업의 블록을 대체한다 |
+| `## Session History` | **세션** | `/checkpointing` | **덮어쓴다** — 매번 재생성된다 |
+
+**순서는 `## Project Setup` → `## Current Project` → `## Session History` 이고,
+Session History 는 항상 마지막이다.** `/checkpointing` 이 그 섹션을 다음 헤딩까지
+재생성하므로, 뒤에 놓인 것은 소실된다.
+
+읽는 쪽(`/ticket` 의 Jira 설정, `/doc-write` 의 스페이스)은 `## Project Setup`
+에서 찾는다. 거기에 없으면 **묻거나 멈춘다** — 추측하지 않는다.
+
 ---
 
 ## 운영 주의사항 (Operational Notes)
 
 - **서브에이전트는 서브에이전트를 못 띄운다.** general-purpose 안에서 설계 판단이 필요해지면 결과만 보고하고, 메인이 `Task(subagent_type="deep-reasoning")`를 호출한다.
-- **`/checkpointing`(기본 모드)은 `CLAUDE.md`와 `.agents/rules/AGENTS.md`의 Session History 섹션을 덮어쓴다.** 실행 전에 커밋해 두고, 리뷰 전용 세션에서는 실행하지 않는다. `## Current Project` 블록은 Session History 섹션 **앞**에 둔다.
+- **`/checkpointing`(기본 모드)은 `CLAUDE.md`와 `.agents/rules/AGENTS.md`의 Session History 섹션을 덮어쓴다.** 실행 전에 커밋해 두고, 리뷰 전용 세션에서는 실행하지 않는다. `## Project Setup` 과 `## Current Project` 블록은 Session History 섹션 **앞**에 둔다 (위 「`CLAUDE.md` 섹션의 수명」).
 - **리뷰는 별도 세션에서.** 구현한 세션은 자기 코드에 편향되므로 `git worktree add --detach ../<project>-review main`으로 격리한 새 `claude` 세션에서 "리포트 파일만 작성, 다른 파일 수정 금지"로 리뷰를 받고, 원 세션에서 반영한다. 세션 안에서의 가벼운 리뷰는 deep-reasoning 서브에이전트로 충분하다.
 - **훅 파일명을 바꾸면 `.claude/settings.json` 등록 경로를 같은 커밋에서 함께 바꾼다.** 어긋나면 PreToolUse 훅 오류로 모든 Edit이 막힌다.
 - **agy 헤드리스 호출의 빈 응답은 실패다** (soft-deny, exit 0). stderr를 버리지 말고 `--output-format json`의 `.status`/`response`로 판단한다. 파일을 읽는 호출은 템플릿 패턴의 플래그와 "파일 수정 금지" 문구를 그대로 쓴다.

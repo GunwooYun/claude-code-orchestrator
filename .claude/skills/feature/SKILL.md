@@ -315,6 +315,12 @@ rewritten by `/checkpointing`; anything placed after it is lost). Replace an exi
 
 **This ensures context persists across sessions.**
 
+**`## Project Setup` 블록은 건드리지 않는다.** 그 섹션은 `/initproject`·
+`/jira-setup`·`/doc-write` 가 쓰는 **프로젝트 영구** 상태(스택 개요·규약, Jira
+사이트·전이 이름·쓰기 정책, Confluence 스페이스)이고, 여기서 교체하는 것은
+**작업 단위** 상태인 `## Current Project` 하나다. 두 섹션의 수명은 `CLAUDE.md` 의
+「`CLAUDE.md` 섹션의 수명」에 정의돼 있다 — 섞으면 `/ticket` 이 정책을 못 찾는다.
+
 ---
 
 ## Phase 6: Multi-Session Review (Post-Implementation)
