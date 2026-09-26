@@ -20,7 +20,7 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
 | `.claude/scripts/verify-save`, `verify-task` | **동작 확인.** 저장 게이트는 **읽기 전용**이다 — 파일을 고치지 않고 보고만 한다 |
 | 규칙·스킬 문서의 일관성 | **테스트로 고정.** 모델 등급↔슬러그 일치, 섹션 포인터 해소, 임계값 단일 정의, 항상-로드 예산 |
 | `checkpoint.py` | **동작 확인** (펜스·rename·범위·원자적 쓰기 회귀 테스트) |
-| **스킬 16개의 실제 실행** | **한 번도 안 해봤다.** `/initproject`·`/feature` 를 포함해 전부다. 테스트는 스킬의 *문서*가 일관되는지만 본다 |
+| 스킬 실행 | `/lens-review` 와 `/deep-reasoning` 은 **실제로 돌았고 진짜 결함을 찾았다**(이 저장소의 `DESIGN.md` 에 "Found by `/lens-review`" 로 남아 있다). **나머지 14개는 한 번도 안 돌렸다** — `/initproject`·`/feature` 포함. 테스트는 스킬의 *문서*가 일관되는지만 본다 |
 | agy 연동 | **미확인.** 이 저장소를 만든 컨테이너에 agy 가 없었다. 모델 정책·soft-deny 실동작은 문서상 설계다 |
 | Jira·Confluence | 커넥터로 **측정한 사실**에 기반하지만(프로젝트 141개, cloudId 중복 등), 스킬 실행은 미확인 |
 | Windows | **미확인.** `verify-*` 해석기 목록은 배려하지만 훅 등록(`python3`)은 아니다 |
