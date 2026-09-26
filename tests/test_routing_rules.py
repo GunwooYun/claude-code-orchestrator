@@ -1,6 +1,16 @@
 """
 Invariants for the cost-based routing rules.
 
+These are DRIFT TRIPWIRES, not behavioural coverage. Every assertion below is
+a substring match against prose. It fails when a pinned phrase disappears and
+passes for any text that still contains it, so it catches a rename, a deletion
+and a rewrite that drops a rule — and nothing else. Measured on this
+repository: appending a sentence that REVERSES the asserted rule leaves the
+suite green, while a meaning-preserving reword of the same rule turns it red.
+A green run therefore means "the wording these tests pin is still present". It
+does not mean a skill or rule behaves as documented; only running it in a
+session shows that.
+
 The template used to route by TOPIC only — "research goes to agy" — which left
 token-heavy work that nobody calls research flowing to Claude. These pin the
 properties that make the cost axis safe, because each one, if lost, turns the

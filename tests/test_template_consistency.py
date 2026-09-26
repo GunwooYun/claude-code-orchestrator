@@ -11,6 +11,15 @@ They exist because this repository's most common defect class is drift: a hook
 renamed without updating what points at it, a skill directory whose frontmatter
 disagrees, a document promising a file that was never written.
 
+Some of these read real state (settings.json against the hooks on disk, script
+permissions) and hold on their own. The ones that assert on prose — the
+reference check and the threshold scan — are DRIFT TRIPWIRES, not behavioural
+coverage: a substring match fails when a phrase disappears and passes for any
+text that still contains it, so it cannot tell whether what the prose promises
+is true. `LargeChangeThresholdTests` guards the scan itself for that reason, and
+`PhraseTestHonestyTests` requires every markdown-asserting module to say the
+same thing in its own docstring.
+
 These are specific to THIS repository (a Claude Code template). A project
 adopting the template does not need them; `tests/test_verify_scripts.py` is the
 part meant to be copied.
@@ -18,6 +27,7 @@ part meant to be copied.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import unittest
@@ -227,6 +237,59 @@ class LargeChangeThresholdTests(unittest.TestCase):
         """A one-line change to an auth check is large regardless of the count."""
         body = " ".join((REPO / "CLAUDE.md").read_text(encoding="utf-8").split())
         self.assertIn("보안 경계", body)
+
+
+class PhraseTestHonestyTests(unittest.TestCase):
+    """
+    A phrase test that claims more than it proves is worse than no test.
+
+    /lens-review measured that roughly 90 of this suite's assertions are
+    substring matches against markdown, and that 14 separate mutations of the
+    template leave the suite green. That is a real limit of the approach, not a
+    bug to fix by adding more phrases — so every module that asserts on markdown
+    has to say so where the next reader will see it.
+    """
+
+    def _markdown_asserting_modules(self) -> list[Path]:
+        modules = []
+        for path in sorted((REPO / "tests").glob("test_*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in tree.body:
+                if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    continue
+                if any(
+                    isinstance(sub, ast.Constant)
+                    and isinstance(sub.value, str)
+                    and sub.value.endswith(".md")
+                    for sub in ast.walk(node)
+                ):
+                    modules.append(path)
+                    break
+        return modules
+
+    def test_the_scan_finds_the_modules_it_is_meant_to(self) -> None:
+        """Guards the guard: a selector that matches nothing passes vacuously."""
+        found = {p.name for p in self._markdown_asserting_modules()}
+        self.assertIn("test_routing_rules.py", found)
+        self.assertGreaterEqual(len(found), 5, f"the selector found only {found}")
+
+    def test_each_one_states_that_it_is_a_tripwire(self) -> None:
+        for path in self._markdown_asserting_modules():
+            with self.subTest(module=path.name):
+                doc = ast.get_docstring(ast.parse(path.read_text(encoding="utf-8")))
+                self.assertIsNotNone(doc, "no module docstring at all")
+                assert doc is not None
+                lowered = doc.lower()
+                self.assertIn(
+                    "drift tripwire",
+                    lowered,
+                    "a module of substring assertions on prose must say so",
+                )
+                self.assertIn(
+                    "behavioural",
+                    lowered,
+                    "it must also say what it is NOT — behavioural coverage",
+                )
 
 
 class ScriptContractTests(unittest.TestCase):

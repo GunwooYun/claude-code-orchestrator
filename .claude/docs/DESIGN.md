@@ -175,6 +175,16 @@ Dropped after review:
   force continuation, so it would be the only non-Python hook here, and the
   8-block cap makes it unreliable.
 
+- [x] Phrase tests declare what they are. `/lens-review` measured that roughly
+      90 of this suite's assertions are substring matches against markdown and
+      that 14 template mutations leave the suite green — appending a sentence
+      that reverses an asserted rule stays green, while a meaning-preserving
+      reword goes red. Each markdown-asserting module now says in its docstring
+      that it is a drift tripwire and not behavioural coverage, and
+      `PhraseTestHonestyTests` requires that of any module added later. The limit
+      itself is not fixed by this — feeding hooks and skills real triggering
+      input is a separate piece of work.
+
 ## Open Questions
 
 <!-- Unresolved issues, things to investigate -->
