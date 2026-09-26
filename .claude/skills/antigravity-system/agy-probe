@@ -33,32 +33,51 @@ if ! command -v agy >/dev/null 2>&1; then
     exit 1
 fi
 
+# Capture stderr in an unpredictable file. A path built from the PID is
+# guessable, and the redirection follows a symlink planted there, so anything
+# this process can write becomes writable through it.
+errfile=$(mktemp "${TMPDIR:-/tmp}/agy-probe.XXXXXX" 2>/dev/null) || {
+    say "DEGRADED"
+    say "could not create a temporary file for agy's stderr."
+    exit 1
+}
+trap 'rm -f "$errfile"' EXIT HUP INT TERM
+
 # One cheap call on the cheapest tier. Ask for an exact token so an empty or
 # hedged answer is detectable — a soft-denied call exits 0 with no content, which
 # is the trap documented in .claude/rules/antigravity-delegation.md.
 output=$(agy -p "Reply with exactly: PROBE_OK" \
     --model gemini-3.7-flash-low \
-    --print-timeout 60s 2>/tmp/.agy-probe-err.$$ )
+    --print-timeout 60s 2>"$errfile" )
 status=$?
-stderr=$(cat "/tmp/.agy-probe-err.$$" 2>/dev/null)
-rm -f "/tmp/.agy-probe-err.$$"
+stderr=$(cat "$errfile" 2>/dev/null)
 
-# Authentication problems are reported differently across versions, so match on
-# the words rather than on an exit code.
-case "$output$stderr" in
-    *[Uu]nauthenticated*|*"not logged in"*|*"log in"*|*"login"*|*"credential"*|\
-    *"API key"*|*"authenticate"*|*"auth error"*|*401*|*403*)
-        say "UNAUTHENTICATED"
-        say "agy is installed but has no valid session. Run: agy  then log in."
-        exit 1
-        ;;
-esac
-
+# A usable answer settles it. This check comes FIRST: the patterns below are
+# matched against diagnostics too, and agy writes warnings, quota notices and
+# retry lines to stderr on calls that worked. Matching those first reported
+# UNAUTHENTICATED for a healthy session, sending every caller down the fallback
+# path with a remedy the user could not act on.
 case "$output" in
     *PROBE_OK*)
         say "READY"
         [ -n "$stderr" ] && say "note: agy wrote to stderr: $stderr"
         exit 0
+        ;;
+esac
+
+# The call did not work. The patterns below only choose WHICH unusable state to
+# report — UNAUTHENTICATED (log in) rather than DEGRADED (wait) — so a loose
+# match costs a less precise remedy, not a false success. Authentication errors
+# are worded differently across versions, so match words rather than exit codes.
+# Status codes are matched with their surrounding text: a bare *401* also matched
+# any answer containing those three digits in a row.
+case "$output$stderr" in
+    *[Uu]nauthenticated*|*"not logged in"*|*"log in"*|*"login"*|*"credential"*|\
+    *"API key"*|*"authenticate"*|*"auth error"*|\
+    *"401 "*|*"401:"*|*"403 "*|*"403:"*|*"HTTP 401"*|*"HTTP 403"*)
+        say "UNAUTHENTICATED"
+        say "agy is installed but has no valid session. Run: agy  then log in."
+        exit 1
         ;;
 esac
 

@@ -146,6 +146,100 @@ class StubbedStateTests(unittest.TestCase):
         self.assertEqual([], leftovers, "the probe leaked its stderr temp file")
 
 
+class StateOrderTests(unittest.TestCase):
+    """
+    A usable answer must win over a pattern match in the diagnostics.
+
+    The first version matched the authentication patterns before checking for
+    the expected token, against `$output$stderr` concatenated. So a call that
+    answered correctly while agy wrote anything containing "log in", "credential"
+    or a 403 to stderr — a warning, a quota notice, a deprecation — was reported
+    UNAUTHENTICATED, and every caller took the fallback path with a remedy the
+    user could not act on, because the session was fine.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.bin = Path(self.tmp.name)
+
+    def test_a_good_answer_wins_over_auth_words_on_stderr(self) -> None:
+        stub_agy(
+            self.bin,
+            '#!/bin/sh\necho "PROBE_OK"\n'
+            'echo "warning: cached credential will expire; you may need to log in" >&2\n',
+        )
+        result = run_probe(str(self.bin))
+        self.assertEqual("READY", state(result))
+        self.assertEqual(0, result.returncode)
+
+    def test_a_good_answer_wins_over_a_status_code_on_stderr(self) -> None:
+        stub_agy(
+            self.bin,
+            '#!/bin/sh\necho "PROBE_OK"\necho "retried once after HTTP 403" >&2\n',
+        )
+        self.assertEqual("READY", state(run_probe(str(self.bin))))
+
+    def test_a_bare_number_in_a_good_answer_is_not_an_auth_error(self) -> None:
+        """`*401*` matched any text containing those three digits in a row."""
+        stub_agy(self.bin, '#!/bin/sh\necho "PROBE_OK (took 4013ms)"\n')
+        self.assertEqual("READY", state(run_probe(str(self.bin))))
+
+    def test_auth_words_still_classify_when_there_is_no_answer(self) -> None:
+        stub_agy(self.bin, '#!/bin/sh\necho "credential expired" >&2\nexit 1\n')
+        self.assertEqual("UNAUTHENTICATED", state(run_probe(str(self.bin))))
+
+
+class TempFileTests(unittest.TestCase):
+    """
+    The stderr capture must not use a predictable path.
+
+    `/tmp/.agy-probe-err.$$` is guessable, and a pre-planted symlink there is
+    followed by the redirection, so anything the process can write becomes
+    writable through it. This repository had just hardened another hook against
+    exactly that, which is why it is asserted here rather than left to review.
+    """
+
+    def test_the_script_does_not_build_a_predictable_temp_path(self) -> None:
+        body = PROBE.read_text(encoding="utf-8")
+        self.assertNotIn(
+            "/tmp/.agy-probe-err",
+            body,
+            "the stderr capture uses a guessable path a symlink can hijack",
+        )
+        self.assertIn("mktemp", body)
+
+    def test_a_planted_symlink_at_the_old_path_is_not_written(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            stub_dir = Path(tmp)
+            stub_agy(stub_dir, '#!/bin/sh\necho "PROBE_OK"\necho noise >&2\n')
+            victim = stub_dir / "victim"
+            victim.write_text("untouched\n", encoding="utf-8")
+            planted = []
+            # The old path embedded the shell's PID, which is unknown ahead of
+            # time, so plant the symlink for a range of plausible PIDs.
+            base = os.getpid()
+            for pid in range(base, base + 400):
+                link = Path("/tmp") / f".agy-probe-err.{pid}"
+                if link.exists() or link.is_symlink():
+                    continue
+                try:
+                    link.symlink_to(victim)
+                except OSError:
+                    continue
+                planted.append(link)
+            try:
+                run_probe(str(stub_dir))
+                self.assertEqual(
+                    "untouched\n",
+                    victim.read_text(encoding="utf-8"),
+                    "the probe wrote through a planted symlink",
+                )
+            finally:
+                for link in planted:
+                    link.unlink(missing_ok=True)
+
+
 class DegradationRuleTests(unittest.TestCase):
     """
     The probe is only useful if the rules say what to do with each state.
