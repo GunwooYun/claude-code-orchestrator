@@ -68,6 +68,7 @@
 | The probe checks for a usable answer BEFORE matching error words, and captures stderr with `mktemp` | The first version matched the authentication patterns against `$output$stderr` first, so a call that answered correctly while agy wrote a warning, quota notice or retry line mentioning `log in`, `credential` or `403` to stderr was reported UNAUTHENTICATED — a healthy session sent down the fallback path with a remedy the user could not act on. Ordering it after the token check also demotes the patterns to choosing WHICH unusable state to report, so a loose match costs precision rather than correctness. The stderr file was `/tmp/.agy-probe-err.$$`, a guessable path whose redirection follows a planted symlink; a test plants one over a range of PIDs and asserts the victim file is untouched | Match the error words first; keep the PID-based temp path | 2026-09-26 |
 | The probe lives in the antigravity skill, not `.claude/scripts/` | That directory is the project's verification contract; a probe is not a tier and would read as a fifth entrypoint. A test asserts it is not there | Put it beside the verify-* scripts | 2026-09-25 |
 | Degrading without agy must be declared in the artefact's first line | A research document written with Grep and WebSearch has different breadth from a Gemini sweep. A later reader who cannot tell which they are holding will over-trust it, and `/feature` Phase 3 will review a plan whose evidence base it cannot judge | Degrade silently; skip research entirely | 2026-09-25 |
+| Every hook has a trigger case AND a silence case, and the pair is required structurally | The contract tests assert tolerance (exit 0, valid-or-empty stdout, survives junk) and empty stdout is a legal answer, so a hook that reads its payload and returns satisfies all of them — measured: a no-op `main()` in any of the eight hooks left all 13 contract tests green. That is the exact shape of this template's most expensive defect (`lint-on-save.py` read an env var Claude Code never sets). A trigger case alone passes for a hook that fires on everything and a silence case alone for one that never fires, so both are required, and `CoverageTests` fails when a hook on disk has neither | More contract properties; a coverage percentage | 2026-09-26 |
 | Which files count as implementation is decided by EXCLUSION, not by a list of languages | The hook listed seven extensions, so work in any other language was invisible — the same hard-coding the template is being cured of elsewhere. Missing a language costs a hook that never fires; counting one extra file type costs one early suggestion, so the asymmetry favours excluding documents, config, data, assets and lockfiles and counting the rest | Extend the inclusion list; read the extensions from a config file | 2026-09-25 |
 | Per-session state removes the need for a SessionStart reset hook | The suggestion must fire once per session, which the original implemented as a flag in shared state and therefore never reset. Keying the file by session id makes a new session start empty by construction, with no second hook to keep in sync | Add a SessionStart hook that clears the flag | 2026-09-25 |
 | A log entry with an unusable timestamp is skipped and counted, not grouped | It has no place in a chronological history. `local_date` fell back to the timestamp's first ten characters, so a corrupt line became a heading. Skipping silently would hide data loss, so the count is printed | Group them under an "unknown date" bucket | 2026-09-25 |
@@ -174,6 +175,26 @@ Dropped after review:
 - ~~Stop hook that blocks "done" without a test run~~ — a `command` hook cannot
   force continuation, so it would be the only non-Python hook here, and the
   8-block cap makes it unreliable.
+
+- [x] Hooks are fed real triggering payloads (`tests/test_hook_effects.py`,
+      33 tests). Each of the eight hooks now has a payload it must react to and
+      one it must ignore, with the effect asserted where it is observable:
+      `additionalContext` in stdout JSON, text on stderr, a JSONL line, a state
+      file. Side effects are redirected, not mocked — `CLAUDE_PROJECT_DIR` points
+      at a temporary project, and `log-cli-tools.py` is copied into a temporary
+      tree because its log path is relative to its own `__file__`.
+
+      Verified by mutation rather than by counting: all 8 no-op mutations pass
+      the contract tests and fail these; 5 always-fire mutations, plus
+      `is_source_file -> True`, the removed agy-binary check and the removed
+      `os.path.isfile` check, all fail these. Three silence cases exist because
+      that second run exposed them — the originals returned early (a skip list,
+      an explicit success flag, a command with no bare `-p`) and the always-fire
+      mutants survived. The suite looked complete at 29 tests and was not.
+
+      Still open: nothing here proves Claude Code sends this payload shape, that
+      the `settings.json` matchers route to these files, or that the emitted
+      context changes what the model does. Only a real session shows that.
 
 - [x] Phrase tests declare what they are. `/lens-review` measured that roughly
       90 of this suite's assertions are substring matches against markdown and

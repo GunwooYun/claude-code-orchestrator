@@ -12,6 +12,15 @@ properties the harness relies on:
   3. when stdout carries JSON, `hookSpecificOutput.hookEventName` is present
 
 Plus a regression test per hook for the specific bug that motivated it.
+
+**These tests cannot detect a dead hook.** Empty stdout is a legal answer here —
+it is what a hook with nothing to report prints — so a hook that reads its
+payload and returns immediately satisfies every assertion in this file.
+Measured: inserting `sys.exit(0)` after `json.load(sys.stdin)` in any of the
+eight hooks leaves all 13 of these tests green. `tests/test_hook_effects.py`
+covers that: it asserts an observable effect on a payload that should trigger
+each hook, and silence on one that should not. Add a case there, not here, when
+a hook gains behaviour.
 """
 
 from __future__ import annotations
