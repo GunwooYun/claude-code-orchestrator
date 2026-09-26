@@ -19,8 +19,12 @@ pinning:
       guidance in two files is the drift this repo keeps repairing)
   D2  the trigger boundary must be in the description, because that is the only
       thing the model reads when deciding whether to invoke a skill at all
-  D3  it must not hard-code a Confluence space, parent page or MCP tool name —
-      those are per-project or per-connector and belong nowhere in a template
+  D3  it must not hard-code a Confluence space, parent page, or an `mcp__` tool
+      identifier — those are per-project or per-connector. Bare example names
+      ARE allowed: the skill names two as hints and immediately tells the model
+      to use whatever this session actually exposes. D3 used to say "or MCP tool
+      name", which the assertion never checked; the wording is corrected rather
+      than the skill
   D4  the publish policy must distinguish a new page from an existing one
 """
 

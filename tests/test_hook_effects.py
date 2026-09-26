@@ -180,6 +180,35 @@ class SuggestBeforeWriteTests(unittest.TestCase):
     def test_a_trivial_edit_to_a_plain_file_stays_silent(self) -> None:
         self.assertEqual("", self.edit("/tmp/project/utils.py", "count += 1\n"))
 
+    def test_a_long_prose_file_does_not_trigger_a_design_review(self) -> None:
+        """
+        Behaviour deliberately CHANGED, recorded rather than adjusted silently.
+
+        The size trigger used to fire on any write over 500 characters of any
+        kind. The separate-session review observed it firing on its own markdown
+        report — prose with no design content — and pointed at this repo's own
+        rule in lint-on-save.py: repeating a notice on every save trains people
+        to ignore hook output. Documents, data and config now do not trigger the
+        size rule; a path that looks like design still does, whatever it holds.
+        """
+        self.assertEqual(
+            "",
+            self.edit("/tmp/project/notes/report.md", "prose. " * 400),
+            "a long markdown file asked for a design review",
+        )
+
+    def test_a_long_new_source_file_still_triggers(self) -> None:
+        """The narrowing must not silence the case the hook exists for."""
+        emitted = self.edit(
+            "/tmp/project/service.py", "def handler():\n    pass\n" * 60
+        )
+        self.assertIn("[Design Review Reminder]", emitted)
+
+    def test_a_design_path_triggers_even_for_a_document(self) -> None:
+        """DESIGN.md is prose, and is exactly what this hook wants seen."""
+        emitted = self.edit("/tmp/project/docs/DESIGN.md", "x\n")
+        self.assertIn("[Design Review Reminder]", emitted)
+
 
 class SuggestAntigravityTests(unittest.TestCase):
     HOOK = HOOKS / "suggest-antigravity-research.py"

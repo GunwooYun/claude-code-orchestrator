@@ -91,7 +91,7 @@ agy models   # 사용 가능한 모델 슬러그 확인
 ├── README.md
 ├── pyproject.toml # Python 프로젝트 설정
 ├── uv.lock # 의존성 잠금 파일
-├── tests/ # 훅 단위 테스트 (python3 -m unittest)
+├── tests/ # 테스트 (uv run pytest — 맨몸 `python3 -m unittest` 는 0개를 돌리고 OK 를 낸다)
 │
 ├── .claude/
 │   ├── agents/

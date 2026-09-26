@@ -170,10 +170,23 @@ def run_git_command(args: list[str], cwd: Path | None = None) -> str | None:
 
 
 def get_git_commits(since: str | None = None) -> list[dict]:
-    """Get git commits since the specified date."""
+    """
+    Get git commits since the specified date.
+
+    Walks the SAME range as the two file walkers. Without a range this used
+    `-n 100` over the whole history, so a checkpoint's Summary printed a
+    whole-history commit count beside a `HEAD~10..HEAD` file count, side by side,
+    reading as one span. An earlier repair unified the two file walkers and left
+    this one behind.
+    """
     args = ["log", "--pretty=format:%H|%ai|%s", "-n", "100"]
     if since:
         args.extend(["--since", since])
+    else:
+        rev_range = resolve_commit_range()
+        if rev_range is None:
+            return []
+        args.extend(rev_range)
 
     output = run_git_command(args)
     if not output:
@@ -223,16 +236,38 @@ def resolve_commit_range(
 
 
 def get_file_changes(since: str | None = None) -> dict[str, list[str]]:
-    """Get file changes (created, modified, deleted) since the specified date."""
+    """
+    Get file changes (created, modified, deleted) since the specified date.
+
+    `--no-renames` is deliberate. Git otherwise reports a rename as
+    `R<score>\told\tnew`, which matches none of the A / M / D branches below, so
+    the file disappeared from the checkpoint entirely; `--numstat` reported it as
+    `old => new`, which is not a path any reader can use. Turning rename
+    detection off makes both walkers describe the same event the same way: the
+    old path deleted, the new path added.
+    """
     changes: dict[str, list[str]] = {"created": [], "modified": [], "deleted": []}
 
     if since:
-        args = ["log", "--since", since, "--name-status", "--pretty=format:"]
+        args = [
+            "log",
+            "--since",
+            since,
+            "--name-status",
+            "--no-renames",
+            "--pretty=format:",
+        ]
     else:
         rev_range = resolve_commit_range()
         if rev_range is None:
             return changes
-        args = ["log", "--name-status", "--pretty=format:", *rev_range]
+        args = [
+            "log",
+            "--name-status",
+            "--no-renames",
+            "--pretty=format:",
+            *rev_range,
+        ]
 
     output = run_git_command(args)
     if not output:
@@ -267,17 +302,25 @@ def get_file_stats(since: str | None = None) -> dict[str, tuple[int, int]]:
     """
     Get line additions/deletions per file.
 
-    Walks the same range as `get_file_changes`, with the same walker: a file
-    listed as changed there must have line counts here, and `git log` covers the
-    root commit (`--root`) where `git diff` has no parent to compare against.
+    Walks the same range as `get_file_changes`, with the same walker and the same
+    `--no-renames`: a file listed as changed there must have line counts here,
+    and `git log` covers the root commit (`--root`) where `git diff` has no
+    parent to compare against.
     """
     if since:
-        args = ["log", "--since", since, "--numstat", "--pretty=format:"]
+        args = [
+            "log",
+            "--since",
+            since,
+            "--numstat",
+            "--no-renames",
+            "--pretty=format:",
+        ]
     else:
         rev_range = resolve_commit_range()
         if rev_range is None:
             return {}
-        args = ["log", "--numstat", "--pretty=format:", *rev_range]
+        args = ["log", "--numstat", "--no-renames", "--pretty=format:", *rev_range]
 
     output = run_git_command(args)
     if not output:

@@ -422,6 +422,125 @@ class FileStatsRangeTests(unittest.TestCase):
         )
 
 
+class RenameTests(unittest.TestCase):
+    """
+    A renamed file must not vanish from the checkpoint.
+
+    `git log --name-status` reports a rename as `R<score>\told\tnew`, which
+    matched none of the A / M / D branches, so the file was dropped silently;
+    `--numstat` gave `old => new` as the path, producing a key no reader can use.
+    On a checkpoint whose only change was a rename the script printed
+    "No file changes detected." Found by the separate-session review, which
+    noted this branch itself contains three renames.
+    """
+
+    def _repo_with_a_rename(self) -> Path:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        repo = Path(tmp.name)
+
+        def run(*args: str) -> None:
+            subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+
+        run("init", "-q", ".")
+        run("config", "user.email", "t@t")
+        run("config", "user.name", "t")
+        (repo / "a.txt").write_text("1\n", encoding="utf-8")
+        run("add", ".")
+        run("commit", "-qm", "one")
+        (repo / "a.txt").rename(repo / "b.txt")
+        (repo / "b.txt").write_text("1\n2\n", encoding="utf-8")
+        run("add", "-A")
+        run("commit", "-qm", "rename")
+        return repo
+
+    def _walk(self, repo: Path) -> tuple[dict, dict]:
+        original = checkpoint.PROJECT_ROOT
+        checkpoint.PROJECT_ROOT = repo
+        try:
+            return checkpoint.get_file_changes(), checkpoint.get_file_stats()
+        finally:
+            checkpoint.PROJECT_ROOT = original
+
+    def test_a_renamed_file_is_reported(self) -> None:
+        changes, _ = self._walk(self._repo_with_a_rename())
+        listed = (
+            set(changes["created"]) | set(changes["modified"]) | set(changes["deleted"])
+        )
+        self.assertIn("b.txt", listed, "the new name is missing from the checkpoint")
+        self.assertIn("a.txt", listed, "the old name is missing from the checkpoint")
+
+    def test_no_stats_key_is_a_rename_arrow(self) -> None:
+        _, stats = self._walk(self._repo_with_a_rename())
+        arrows = [path for path in stats if "=>" in path]
+        self.assertEqual(
+            [], arrows, f"unusable rename keys leaked into the line counts: {arrows}"
+        )
+
+    def test_the_two_walkers_still_agree_across_a_rename(self) -> None:
+        changes, stats = self._walk(self._repo_with_a_rename())
+        listed = (
+            set(changes["created"]) | set(changes["modified"]) | set(changes["deleted"])
+        )
+        self.assertEqual(
+            set(),
+            listed - set(stats),
+            "a file is listed as changed but has no line counts",
+        )
+
+
+class CommitRangeAgreementTests(unittest.TestCase):
+    """
+    The summary must not put two different ranges side by side.
+
+    `get_git_commits` walked the whole history (`-n 100`, no range) while the
+    two file walkers used `resolve_commit_range()`. The Summary block printed
+    "Commits: 50" next to "Files changed: 29" — the first from all of history,
+    the second from the last ten commits — reading as if they described the same
+    span. The earlier repair unified the two FILE walkers and left this one.
+    """
+
+    def _repo_with(self, commits: int) -> Path:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        repo = Path(tmp.name)
+
+        def run(*args: str) -> None:
+            subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+
+        run("init", "-q", ".")
+        run("config", "user.email", "t@t")
+        run("config", "user.name", "t")
+        for n in range(commits):
+            (repo / f"f{n}.txt").write_text(f"{n}\n", encoding="utf-8")
+            run("add", ".")
+            run("commit", "-qm", f"c{n}")
+        return repo
+
+    def test_the_commit_walker_uses_the_same_range_as_the_file_walkers(self) -> None:
+        repo = self._repo_with(checkpoint.DEFAULT_HISTORY_DEPTH + 5)
+        original = checkpoint.PROJECT_ROOT
+        checkpoint.PROJECT_ROOT = repo
+        try:
+            commits = checkpoint.get_git_commits()
+            changes = checkpoint.get_file_changes()
+        finally:
+            checkpoint.PROJECT_ROOT = original
+        listed = set(changes["created"]) | set(changes["modified"])
+        self.assertLessEqual(
+            len(commits),
+            checkpoint.DEFAULT_HISTORY_DEPTH,
+            f"the commit walker returned {len(commits)} commits for a range the "
+            f"file walkers limit to {checkpoint.DEFAULT_HISTORY_DEPTH} — the "
+            "summary would show two different spans as one",
+        )
+        self.assertEqual(
+            len(commits),
+            len(listed),
+            "one file was added per commit, so the two counts must match",
+        )
+
+
 class DocumentedFormatTests(unittest.TestCase):
     """
     The skill's documentation must show what the script actually writes.

@@ -244,10 +244,17 @@ class AlwaysLoadedBudgetTests(unittest.TestCase):
     A ratchet on the always-loaded layer, and a check that syntax stays out of it.
 
     `CLAUDE.md` and every `.claude/rules/*.md` without `paths:` frontmatter enter
-    every session before anything is asked. That layer had grown to 57,378 bytes,
-    of which 21,890 was the agy routing rule — a file largely about saving
-    tokens, which made it the largest fixed cost in the repository. It is now
-    48,236.
+    every session before anything is asked. Two dated measurements, both
+    historical facts rather than claims about the present: **57,378 bytes before
+    the routing-rule split** (21,890 of it the agy rule, a file largely about
+    saving tokens, which made it the largest fixed cost here), and **48,236
+    immediately after it, on 2026-09-26**.
+
+    The docstring deliberately does not state a current total. An earlier version
+    did, and it went stale by 367 bytes within two commits while the test stayed
+    green — the separate-session review measured it. The live number is whatever
+    the assertion below computes; the only figure that must be maintained is the
+    cap.
 
     What this test is, precisely: a RATCHET, not a proof. It cannot show that the
     layer is the right size or that anything in it earns its place; it only
@@ -264,7 +271,7 @@ class AlwaysLoadedBudgetTests(unittest.TestCase):
     `.claude/agents/general-purpose.md` rather than here.
     """
 
-    # Measured 2026-09-26 after the routing-rule cut: 48,236 bytes.
+    # A ratchet, not a measurement: raise it deliberately, with a reason.
     BUDGET_BYTES = 53_000
 
     def _always_loaded(self) -> list[Path]:
@@ -329,6 +336,35 @@ class AlwaysLoadedBudgetTests(unittest.TestCase):
             "Do not create or modify any files",
             executor,
             "the read-only sentence that guards the flags is gone",
+        )
+
+    def test_the_executor_carries_the_fallback_ladder_itself(self) -> None:
+        """
+        The other thing an executor cannot look up.
+
+        The agent file used to say "follow the fallback section in the rule" and
+        "do not duplicate this", which is the opposite of what the split
+        concluded: a subagent is not documented to receive `.claude/rules/` at
+        all, and skills do not auto-invoke there. So the states and the
+        alternative paths live in the agent file too, on purpose.
+        """
+        executor = (REPO / ".claude" / "agents" / "general-purpose.md").read_text(
+            encoding="utf-8"
+        )
+        for state in ("MISSING", "UNAUTHENTICATED", "DEGRADED"):
+            self.assertIn(
+                state, executor, f"the executor cannot recognise the {state} state"
+            )
+        for alternative in ("WebSearch", "Grep"):
+            self.assertIn(
+                alternative,
+                executor,
+                f"the executor is not told it can fall back to {alternative}",
+            )
+        self.assertIn(
+            "대체 불가",
+            executor,
+            "the executor is not told that video and audio have no substitute",
         )
 
 

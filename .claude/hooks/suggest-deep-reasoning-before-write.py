@@ -53,6 +53,34 @@ DESIGN_INDICATORS = [
     "TypedDict",
 ]
 
+# Prose, data and config. The SIZE rule below does not apply to these: a long
+# document is not a design decision, and a hook that fires on every substantial
+# write trains people to ignore hook output (the same argument lint-on-save.py
+# makes about repeating its notice). A path that looks like design still
+# triggers, whatever it contains — DESIGN.md is prose and is exactly the case
+# this hook exists for.
+NON_DESIGN_SUFFIXES = frozenset(
+    {
+        ".md",
+        ".markdown",
+        ".rst",
+        ".txt",
+        ".adoc",
+        ".tex",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".csv",
+        ".tsv",
+        ".lock",
+        ".log",
+        ".jsonl",
+    }
+)
+
 # Files that are typically simple edits (skip suggestion)
 SIMPLE_EDIT_PATTERNS = [
     ".gitignore",
@@ -80,6 +108,14 @@ def should_suggest_deep_reasoning(
     for indicator in DESIGN_INDICATORS:
         if indicator.lower() in filepath_lower:
             return True, f"File path contains '{indicator}' - likely a design decision"
+
+    # Content rules apply to source only. Prose and config reach this point when
+    # their PATH did not look like design, and for those the size of the write
+    # says nothing about whether a design decision is being made.
+    suffix = filepath_lower.rsplit(".", 1)
+    extension = f".{suffix[1]}" if len(suffix) == 2 else ""
+    if extension in NON_DESIGN_SUFFIXES:
+        return False, ""
 
     # Check content if available
     if content:
