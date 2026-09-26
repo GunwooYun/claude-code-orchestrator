@@ -202,6 +202,13 @@ pytest 일 수 있고, Yocto recipe 라면 `task` 가 `bitbake -p` 파싱 검사
 
 **Task tool에서 deep-reasoning 서브에이전트를 시작하고 계획을 검토한다.**
 
+**입력이 크면 앞단에 agy 프리필터를 둔다** — 파일 5개 또는 500줄 이상이면 검토한다.
+deep-reasoning 이 넓게 읽는 일을 하지 않게 하는 것이 목적이다. 단 **agy 는 `file:line`
+과 사실만 반환하고 판정은 하지 않으며**, deep-reasoning 에게 "걸러진 입력을 받았다,
+부족하면 직접 읽어라"를 프롬프트에 명시한다. 그 아래 크기에서는 왕복 비용이 절약분보다
+크므로 바로 준다. 기준과 절대 규칙:
+`.claude/rules/antigravity-delegation.md` → "라우팅은 주제가 아니라 비용으로 한다".
+
 ```
 Task tool parameters:
 - subagent_type: "deep-reasoning"
@@ -329,6 +336,9 @@ Task tool parameters:
     Review the implementation for: {feature}
 
     Run `git diff main...HEAD` to see all changes.
+    (If the diff is large — 5+ files or 500+ lines — the orchestrator may have
+    run an agy pre-filter first and listed the locations to look at. That list
+    is FILTERED, not exhaustive: read anything else you need directly.)
 
     Verification plan agreed before implementation:
     {verification plan from Phase 2b, scenario IDs included}

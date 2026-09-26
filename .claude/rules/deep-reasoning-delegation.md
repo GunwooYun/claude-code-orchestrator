@@ -14,6 +14,7 @@
 | 상세한 설계 상담 | deep-reasoning 서브에이전트 |
 | 디버깅 분석 | deep-reasoning 서브에이전트 |
 | 여러 개의 질문이 있는 경우 | deep-reasoning 서브에이전트 |
+| **입력이 큼** (파일 5개 · 500줄 이상) | **agy 프리필터 → deep-reasoning** (아래 참조) |
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -39,6 +40,40 @@ matter which model the main session uses, and the main context stays lightweight
 Think of it as a trusted senior expert you can always consult.
 
 **When facing difficult decisions → Consult the deep-reasoning subagent.**
+
+## 큰 입력에는 앞단에 프리필터를 둔다
+
+라우팅 기준은 주제가 아니라 **토큰량 × 추론 난이도**다. 전체 표는
+`.claude/rules/antigravity-delegation.md` 와 `CLAUDE.md` 에 있고, 이 절은 그중
+"토큰 많음 × 추론 어려움" 칸을 deep-reasoning 쪽에서 본 것이다.
+
+deep-reasoning 은 자기 컨텍스트에서 파일을 직접 읽는다. 그것이 메인 컨텍스트를
+지키는 방식이지만, **입력이 크면 가장 비싼 모델이 가장 토큰 많이 쓰는 일(넓게
+읽기)을 하게 된다.**
+
+```
+작은 입력  ──────────────────────> deep-reasoning (직접 읽는다)
+
+큰 입력   ──> agy: file:line 나열 ──> deep-reasoning (그 지점만 판정)
+```
+
+**기준**: 입력이 **파일 5개 또는 500줄 이상**이면 프리필터를 검토한다. 그 아래에서는
+왕복 비용이 절약분보다 크므로 그냥 직접 준다.
+
+프리필터를 둘 때:
+
+- **agy 는 위치와 사실만 반환한다 — 판정은 아니다.** agy 가 요약해 버리면
+  deep-reasoning 은 코드가 아니라 요약을 추론한다.
+- **"걸러진 입력을 받았다"고 프롬프트에 명시한다.** 그리고 부족하면 직접 읽으라고
+  말한다. 전수라고 착각하면 없는 것을 없다고 결론낸다.
+- **agy 를 쓸 수 없으면 프리필터를 생략한다.** 기존 동작이므로 결과는 같고 토큰만
+  늘어난다.
+
+상세: `.claude/rules/antigravity-delegation.md` 의 "라우팅은 주제가 아니라 비용으로
+한다" → B. 2단계 퍼널.
+
+**판정은 절대 넘기지 않는다.** 설계가 맞는지, 이 코드가 안전한지, A 와 B 중
+무엇인지는 deep-reasoning 의 일이다. agy 는 읽는 범위를 좁히는 데만 쓴다.
 
 ## When to Consult
 
