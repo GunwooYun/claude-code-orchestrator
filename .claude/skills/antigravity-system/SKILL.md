@@ -22,44 +22,16 @@ metadata:
 > 따른다. 리서치를 건너뛰지 말고 대체 경로로 진행하되 **무엇으로 대체했는지를
 > 산출물 첫 줄에 남긴다.** 이 문구를 복제하지 않는다 — 규칙이 단일 출처다.
 
-## Context Management (CRITICAL)
+## 무엇을 agy 로 보내는가 — 여기서 정하지 않는다
 
-**서브에이전트 경유 권장한다**. agy 출력은 커지기 쉽기 때문에.
+이 스킬은 **어떻게 부르는가**를 담는다. **무엇을 보낼지**는 항상 로드되는 규칙이
+정하고, 여기 복제하지 않는다 — 두 곳에 같은 기준이 있으면 갈라진다.
 
-| 상황 | 방법 |
-|------|------|
-| 코드베이스 분석 | 서브에이전트 경유 (권장) |
-| 라이브러리 조사 | 서브에이전트 경유 (권장) |
-| 멀티모달 | 서브에이전트 경유 (권장) |
-| 짧은 질문 (1-2 문 답변) | 직접 호출 OK |
-
-## Antigravity vs deep-reasoning
-
-| Task | Antigravity (agy) | deep-reasoning |
-|------|-------------------|----------------|
-|**리포지토리 전체 이해**|✓| |
-|**라이브러리 조사**|✓| |
-|**멀티모달(PDF/이미지/동영상)**|✓| |
-|**최신 문서 검색**|✓| |
-|**디자인 판단**| |✓|
-|**디버그** | |✓|
-|**코드 구현** | | (main Claude / general-purpose) |
-
-## When to Consult (MUST)
-
-| Situation | Trigger Examples |
-|-----------|------------------|
-| **Research** | "검색" "리서치" / "Research" "Investigate" |
-| **Library docs** | "라이브러리" "문서" / "Library" "Docs" |
-| **Codebase analysis** | "코드베이스 전체" / "Entire codebase" |
-| **Multimodal** | "PDF" "이미지" "동영상" / "PDF" "Image" "Video" |
-
-## When NOT to Consult
-
-- Design decisions (use deep-reasoning subagent)
-- Debugging (use deep-reasoning subagent)
-- Code implementation (main Claude or general-purpose subagent)
-- Simple file operations (do directly)
+- 라우팅(토큰량 × 추론 난이도), 2단계 퍼널, 판정 위임 금지:
+  `.claude/rules/antigravity-delegation.md` → "라우팅은 주제가 아니라 비용으로 한다"
+- agy 를 쓸 수 없을 때의 대체 경로: 같은 파일 → "agy 가 없을 때"
+- 에이전트별 강점 요약과 트리거 문구: `CLAUDE.md` 의 빠른 사용 가이드
+- 출력이 클 때 서브에이전트를 경유하는 기준: `CLAUDE.md` 의 출력 크기 기준
 
 ## How to Consult
 

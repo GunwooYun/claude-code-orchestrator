@@ -1,44 +1,28 @@
 # Antigravity Delegation Rule
 
-**Antigravity CLI (`agy`) is your research specialist with massive context and multimodal capabilities (Gemini models).**
+**Antigravity CLI (`agy`) is the research specialist: massive context, Google
+Search grounding, PDF/image/video (Gemini models).**
 
-## Context Management (CRITICAL)
+## 이 파일은 결정만 담는다
 
-**컨텍스트 소비를 의식해서 agy를 사용한다.**
-agy는 출력이 커지기 쉬우므로, **서브 에이전트 경유를 권장**한다.
+이 파일은 **항상 로드된다**. 그래서 여기에는 **호출하기 전에 정해야 하는 것**만 둔다
+— 무엇을 agy 로 보낼지, agy 를 쓸 수 없을 때 무엇으로 대체할지, 어느 티어로 부를지.
+**명령 문법·플래그·프롬프트 템플릿은 여기에 없다.**
 
-| 상황 | 권장 방법 |
-|------|-----------|
-| 짧은 질문 · 짧은 답변 | 직접 호출 OK |
-| 코드베이스 분석 | 서브 에이전트 경유 (출력 큼) |
-| 라이브러리 조사 | 서브 에이전트 경유 (출력 큼) |
-| 멀티모달 처리 | 서브 에이전트 경유 |
+| 무엇 | 어디 | 누가 읽는가 |
+|---|---|---|
+| 라우팅(무엇을 agy 로), 폴백 사다리, 티어 선택, 판정 위임 금지 | **이 파일** | 메인 오케스트레이터 |
+| 정확한 명령 문법, 헤드리스 플래그, soft-deny 대처 | `.claude/agents/general-purpose.md` | **실행하는 서브에이전트** |
+| Task 프롬프트 템플릿, 용례 | `.claude/skills/antigravity-system/SKILL.md` (+ `references/`) | 프롬프트를 쓰는 오케스트레이터 |
+| 측정된 CLI 사실·검증 날짜 | `.claude/docs/research/antigravity-cli.md` | 사람 |
 
-```
-┌──────────────────────────────────────────────────────────┐
-│  Main Claude Code                                        │
-│  → 짧은 질문이면 직접 호출하면 됨                             │
-│  → 출력이 클 것으로 예상되면 서브 에이전트 경유          │
-│                                                          │
-│  ┌────────────────────────────────────────────────────┐ │
-│  │  Subagent (general-purpose)                         │ │
-│  │  → Calls Antigravity CLI (agy)                      │ │
-│  │  → Saves full output to .claude/docs/research/      │ │
-│  │  → Returns key findings only                        │ │
-│  └────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────┘
-```
-
-## About Antigravity CLI
-
-Antigravity CLI (`agy`) is the successor of Gemini CLI and excels at:
-- **Massive context (Gemini models)** — Analyze entire codebases at once
-- **Google Search grounding** — Access latest information
-- **Multimodal processing** — PDF, image, video analysis
-
-Think of agy as your research assistant who can quickly gather and synthesize information.
-
-**When you need research → Delegate to subagent → Subagent consults agy.**
+**서브에이전트가 이 파일을 받는지는 보장되지 않는다.** Claude Code 문서는
+`CLAUDE.md` 가 서브에이전트에 로드된다고 명시하지만 `.claude/rules/` 에 대해서는
+말하지 않는다(2026-09-26 확인). 이 저장소의 한 서브에이전트는 자기 컨텍스트에 규칙
+파일이 들어와 있다고 보고했지만, 그것은 이 런타임의 관찰이고 버전 간 보장이 아니다.
+**그래서 실행에 필요한 것은 서브에이전트 자기 파일에 둔다** — 위 표의 둘째 줄이
+중복이 아니라 그 이유다. 스킬도 서브에이전트에서 자동 발동하지 않는다(`skills:`
+프론트매터로 명시 로드해야 한다).
 
 ## agy 가 없을 때 (CRITICAL)
 
@@ -89,8 +73,8 @@ Think of agy as your research assistant who can quickly gather and synthesize in
 
 ## 라우팅은 주제가 아니라 비용으로 한다 (CRITICAL)
 
-아래 "When to Consult agy" 는 **주제**로 분류한다 — "리서치면 agy". 그것만으로는
-부족하다. 실제로 비용을 결정하는 축은 **토큰량 × 추론 난이도** 두 개다.
+"리서치면 agy" 는 **주제**로 분류한 것이다. 그것만으로는 부족하다. 실제로 비용을
+결정하는 축은 **토큰량 × 추론 난이도** 두 개다.
 
 ```
                  추론 쉬움                    추론 어려움
@@ -141,7 +125,7 @@ Think of agy as your research assistant who can quickly gather and synthesize in
   직접 읽으라고 말한다. 전수라고 착각하면 없는 것을 없다고 결론낸다.
 - **작은 입력에는 퍼널을 쓰지 않는다.** 왕복 비용이 절약분보다 크다. 기준:
   입력이 **파일 5개 또는 500줄 미만이면 퍼널 없이** deep-reasoning 에 바로 준다
-  (이 숫자는 `CLAUDE.md` 「큰 변경」의 기준에서 정의되고, 여기서는 인용한다).
+  (이 숫자는 `CLAUDE.md` 「큰 변경의 기준」에서 정의되고, 여기서는 인용한다).
 - **agy 를 쓸 수 없으면 퍼널을 생략하고 deep-reasoning 이 직접 읽는다.** 이것이
   기존 동작이므로 degrade 는 매끄럽다. 다만 토큰이 늘어난다는 사실은 알린다
   (위 "agy 가 없을 때" 참조).
@@ -173,253 +157,41 @@ jq -r '[.timestamp[:10], .model] | @tsv' .claude/logs/cli-tools.jsonl | sort | u
   **agy 로 갔어야 하는데 Claude 가 한 일은 로그에 없다.** 그래서 이 지표는
   "재배치가 일어났다"의 약한 증거일 뿐이고, 반증은 못 한다. 그 사실을 알고 본다.
 
-## Antigravity vs deep-reasoning: Choose the Right Tool
-
-| Task | deep-reasoning | Antigravity (agy) |
-|------|----------------|-------------------|
-| Design decisions | ✓ | |
-| Debugging | ✓ | |
-| Code implementation | ✓ | |
-| Trade-off analysis | ✓ | |
-| Large codebase understanding | | ✓ |
-| Pre-implementation research | | ✓ |
-| Latest docs/library research | | ✓ |
-| PDF/image/video analysis | | ✓ |
-
-## When to Consult agy
-
-ALWAYS consult agy BEFORE:
-
-1. **Pre-implementation research** - Best practices, library comparison
-2. **Large codebase analysis** - Repository-wide understanding
-3. **Documentation search** - Latest official docs, breaking changes
-4. **Multimodal tasks** - PDF, image, video content extraction
-
-### Trigger Phrases (User Input)
-
-Consult agy when user says:
-
-| Korean | English |
-|----------|---------|
-| "조사해 줘", "리서치해 줘", "조사해" | "Research" "Investigate" "Look up" |
-| "이 PDF/영상/이미지를 봐줘"  | "Analyze this PDF/video/image" |
-| "코드베이스 전체를 이해해 줘" | "Understand the entire codebase" |
-| "최신 문서를 확인해 줘" | "Check the latest documentation" |
-| "~에 대한 정보를 모아줘" | "Gather information about X" |
-
-## When NOT to Consult
-
-Skip agy for:
-
-- Design decisions (use deep-reasoning subagent instead)
-- Code implementation (main Claude or general-purpose subagent)
-- Debugging (use deep-reasoning subagent instead)
-- Simple file operations (do directly)
-- Running tests/linting (do directly)
-
-## How to Consult (via Subagent)
-
-**IMPORTANT: Use subagent to preserve main context.**
-
-### Recommended: Subagent Pattern
-
-Use Task tool with `subagent_type: "general-purpose"`:
-
-```
-Task tool parameters:
-- subagent_type: "general-purpose"
-- run_in_background: true (for parallel work)
-- prompt: |
-    Research: {topic}
-
-    1. Call Antigravity CLI (the orchestrator fills {slug} per the Model Policy):
-       agy -p "{research question}" --model {slug}
-
-    2. Save full output to: .claude/docs/research/{topic}.md
-
-    3. Return CONCISE summary (5-7 bullet points):
-       - Key findings
-       - Recommended approach
-       - Important caveats
-```
-
-### Subagent Patterns by Task Type
-
-**Research Pattern:**
-```
-prompt: |
-  Research best practices for {topic}.
-
-  agy -p "Research: {topic}. Include recommended approaches,
-  common pitfalls, and library recommendations." --model {slug}   # T3 → gemini-3.1-pro-high
-
-  Save to .claude/docs/research/{topic}.md
-  Return 5-7 key bullet points.
-```
-
-**Codebase Analysis Pattern** (reads repo files → needs the headless flags):
-```
-prompt: |
-  Analyze codebase for {purpose}.
-
-  Run from the repository root (CWD is the workspace):
-  agy -p "Analyze architecture, key modules, data flow,
-  and entry points of this repository.
-  Do not create or modify any files; return everything in your response." \
-    --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
-
-  Save to .claude/docs/research/codebase-analysis.md
-  Return architecture summary and key insights.
-```
-
-**Multimodal Pattern** (reads a file → needs the headless flags):
-```
-prompt: |
-  Extract information from {file}.
-
-  agy -p "Read the file at {absolute_path} and {extraction prompt}.
-  Do not create or modify any files; return everything in your response." \
-    --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
-
-  (stdin file redirection is NOT supported — pass the absolute path
-   in the prompt; agy reads the file with its own tools. Verified for
-   images and PDF; video/audio untested.)
-
-  Save to .claude/docs/research/{output}.md
-  Return key extracted information.
-```
-
-### Step 2: Continue Your Work
-
-While subagent is processing, you can:
-- Work on other files
-- Run tests
-- Spawn the deep-reasoning subagent for design/debugging consultation
-
-### Step 3: Receive Summary
-
-Subagent returns concise summary. Full output available in `.claude/docs/research/` if needed.
-
 ## Model Policy (choose `--model` by task tier)
 
-The global default is set by the user via `/model` in the agy TUI (currently
-`gemini-3.1-pro-high`). Templates pin the model **per call** so quota is spent
-where it matters. Slugs come from `agy models`; the suffix is the effort tier.
+**오케스트레이터가 Task 프롬프트를 쓸 때 티어를 정하고 슬러그를 박는다.**
+`--model` 없는 호출은 사용자의 전역 기본값(현재 가장 비싼 티어)으로 떨어지고
+로그에 `"default"` 로 남는다. 슬러그 목록: `agy models`.
 
-**Who decides**: the **main orchestrator** picks the tier when it writes the
-Task prompt (it knows the user's intent) and puts the concrete slug into the
-command; the general-purpose subagent executes it as given. Templates therefore
-show `--model {slug}` — never a hard-coded slug — unless the tier is fixed by
-the task shape (T4).
+| Tier | Task shape | `--model` |
+|------|-----------|-----------|
+| **T1 Quick lookup** | One fact / yes-no / version check; single web source | `gemini-3.7-flash-low` |
+| **T2 Summarize / extract** | One web page or one small local file; structured fields from a known input | `gemini-3.7-flash-high` (machine-consumed → `gemini-3.1-pro-low`) |
+| **T3 Research report** | Comparison, best practices, multi-source synthesis, migration guides | `gemini-3.1-pro-high` |
+| **T4 Whole-repo / multimodal** | Repo-wide analysis, "explain this module", cross-module tracing, PDF/image/video | `gemini-3.1-pro-high` + `--print-timeout 10m` |
 
-| Tier | Task shape | `--model` | Notes |
-|------|-----------|-----------|-------|
-| **T1 Quick lookup** | One fact / yes-no / version check; answer ≤ 1 paragraph; single web source | `gemini-3.7-flash-low` | Cheapest. Ask for the source URL in the prompt (do not auto-escalate when it is missing) |
-| **T2 Summarize / extract** | Summarize **one web page** or **one small local file**; pull structured fields from a known input | `gemini-3.7-flash-high` | If the output is **machine-consumed** (`--json-schema`, piped into a script) use `gemini-3.1-pro-low` instead — schema enforces shape, not completeness |
-| **T3 Research report** | Library comparison, best practices, multi-source synthesis, migration/breaking-change guides | `gemini-3.1-pro-high` | Save output to `.claude/docs/research/` |
-| **T4 Whole-repo / multimodal** | Repository-wide analysis, "explain this module/directory", cross-module tracing, PDF/image/video | `gemini-3.1-pro-high` + `--print-timeout 10m` | Never downgrade |
+1. **두 티어 사이에서 애매하면 위쪽.** 잘못된 하향은 재실행을 부르고, 그게 아끼려던
+   Pro 호출보다 비싸다.
+2. **T4 는 하향 금지.** 대용량 컨텍스트 정확도가 agy 를 쓰는 이유 그 자체다.
+3. **사용자 지시가 이 표를 이긴다** ("flash 로", "pro 로").
+4. **헤드리스 플래그는 티어가 아니라 입력으로 결정된다.** 프롬프트가 로컬 파일·
+   디렉토리·모듈·"이 레포"를 언급하면 **어느 티어에서든** 헤드리스 플래그와
+   "파일 수정 금지" 문장이 함께 가야 한다. 순수 웹 프롬프트는 필요 없다.
+   **정확한 플래그 문자열은 이 파일에 없다** — `.claude/agents/general-purpose.md`
+   와 `.claude/skills/antigravity-system/SKILL.md` 가 가진다.
+5. **빈 답은 먼저 soft-deny 인지 확인하고, 한 번만 올린다.** 플래그 문제면 같은
+   티어로 재실행한다. 그래도 얕으면 `gemini-3.1-pro-high` 로 **한 번** 올리고,
+   같은 티어에서 반복하지 않는다.
+6. `--effort` 를 쓰지 않는다. 슬러그 접미사(`-low`/`-high`)가 유일한 노브다.
 
-**Headless flags are keyed on the INPUT, not the tier.** Whenever the prompt
-names a local file, directory, module, or "this repo" — at *any* tier — the
-command must carry `--dangerously-skip-permissions --sandbox` **and** the
-sentence "Do not create or modify any files; return everything in your
-response." Pure web prompts never need them.
+절감은 표의 세밀함이 아니라 **호출 분포**(대다수가 T1/T2)에서 나온다. 티어는 4개로
+두고, 실제 분포는 위 "측정할 수 있는 것과 없는 것"의 명령으로 본다.
 
-Decision rules:
+## 언어
 
-1. **Unsure between two tiers → pick the higher one.** A wrong downgrade means a
-   re-run, which costs more than the Pro call it tried to avoid.
-2. **Never downgrade T4.** Large-context accuracy is the whole point of agy.
-3. **User instruction wins** ("use flash", "use pro") over this table.
-4. **Empty answer → check for soft-deny first, then escalate once.** If stderr
-   says `auto-denied` (or JSON `.status`/`response` shows an empty success),
-   it is a *flag* problem: re-run at the **same** tier with the headless flags.
-   Only if a flagged/web call is genuinely hedged or shallow, re-run **once** on
-   `gemini-3.1-pro-high` with the same flags — never loop at the same tier.
-5. Do **not** pass `--effort`; the slug suffix (`-low/-high`) is the only
-   effort knob. Calls without `--model` fall back to the user's global default
-   (currently the most expensive tier) and are logged as `"default"` — pin.
+agy 에게는 **영어로** 묻는다. 서브에이전트는 영어 응답을 받아 요약하고 파일에
+저장하며, 메인이 사용자에게 **한국어로** 보고한다 (`.claude/rules/language.md`).
 
-Rationale: savings come from the call *distribution* (most calls are T1/T2),
-not from table granularity; more rows enlarge the overlap between descriptions
-and make routing itself error-prone. Keep 4 tiers; after a few weeks,
-`jq .model .claude/logs/cli-tools.jsonl` shows the real distribution — refine
-only if the T3 share is high.
-
-## Antigravity CLI Commands Reference
-
-For use within subagents:
-
-```bash
-# T1 quick lookup (web)
-agy -p "{one-fact question}. Include the source URL." --model gemini-3.7-flash-low
-
-# T2 summarize / extract — web page
-agy -p "{summarize or extract}" --model gemini-3.7-flash-high
-# T2 summarize / extract — one local file (input names a file → flags + read-only sentence)
-agy -p "Read the file at {absolute_path} and {summarize}. Do not create or modify any files." \
-  --model gemini-3.7-flash-high --dangerously-skip-permissions --sandbox
-# T2 machine-consumed extraction (schema enforces shape, not completeness → pro-low)
-agy -p "{extract fields}" --model gemini-3.1-pro-low --output-format json --json-schema '{...}'
-
-# T3 research report
-agy -p "{comparison / best-practices question}" --model gemini-3.1-pro-high
-
-# T4 codebase analysis (reads repo files → headless flags required; CWD is the workspace)
-agy -p "{question} Do not create or modify any files." \
-  --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m [--add-dir {path}]
-
-# T4 multimodal (path-in-prompt; no stdin redirection; headless flags required)
-agy -p "Read the file at {absolute_path} and {question} Do not create or modify any files." \
-  --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
-
-# Scripted/CI calls (any tier; gate on .status == "SUCCESS")
-agy -p "{question}" --model {slug} --output-format json --print-timeout 10m
-```
-
-### Headless Caveats (IMPORTANT)
-
-- **soft-deny trap**: In print mode, a tool that cannot get permission is
-  silently skipped and the run still exits 0. If research comes back empty,
-  check stderr for soft-deny notices or use `--output-format json` and gate
-  on `.status == "SUCCESS"`.
-- **File reads are denied in headless mode by default** (verified 2026-08-30:
-  `read_file` on a workspace image was auto-denied → empty response, status
-  SUCCESS). This template therefore appends
-  `--dangerously-skip-permissions --sandbox` to every pattern that must read
-  files (codebase analysis, multimodal). `--sandbox` restricts terminal
-  commands during that call; file reads still work (verified for a workspace
-  PNG, an out-of-workspace PNG, and a PDF). Pure web research prompts do not
-  need the flags.
-- **What the flags expose**: `write_file`, `read_url`, and MCP tools are also
-  auto-approved for that call, and `Bash(agy:*)` in `settings.json` lets
-  subagents run such calls without a Claude-side prompt. The real guard is the
-  prompt: every flagged template must say *"Do not create or modify any files;
-  return everything in your response"* (also enforced by `.agents/rules/AGENTS.md`),
-  and the calls run only inside git-tracked repos.
-- Whole-repo analysis can exceed the 5m default — flagged patterns include
-  `--print-timeout 10m`. Files outside the workspace can also be exposed
-  explicitly with `--add-dir <dir>`.
-- Optional hardening (per machine, not part of the template): allow reads
-  globally with `{"permissions": {"allow": ["read_file(*)"]}}` in
-  `~/.gemini/antigravity-cli/settings.json` and drop the flags.
-- **Default timeout is 5m** — set `--print-timeout` explicitly for long tasks.
-- Pin the model per call with `--model {slug}` following the Model Policy
-  above (list: `agy models`); unknown slugs fail loudly.
-- Do NOT redirect stderr to /dev/null in subagent calls — it carries the
-  soft-deny diagnostics.
-
-**Language protocol:**
-1. Ask agy in **English**
-2. Subagent receives response in **English**
-3. Subagent summarizes and saves full output
-4. Main receives summary, reports to user in **Korean**
-
-## Why Subagent Pattern?
-
-- **Context preservation**: Main orchestrator stays lightweight
-- **Full capture**: Subagent can save entire agy output to file
-- **Concise handoff**: Main only receives key findings
-- **Parallel work**: Background subagents enable concurrent research
-
-**Use agy (via subagent) for research, the deep-reasoning subagent for reasoning, Claude for orchestration.**
+→ 문법·템플릿: `.claude/skills/antigravity-system/SKILL.md`
+→ 실행자용 명령: `.claude/agents/general-purpose.md`
+→ 측정된 CLI 사실: `.claude/docs/research/antigravity-cli.md`

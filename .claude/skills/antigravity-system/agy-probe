@@ -45,7 +45,7 @@ trap 'rm -f "$errfile"' EXIT HUP INT TERM
 
 # One cheap call on the cheapest tier. Ask for an exact token so an empty or
 # hedged answer is detectable — a soft-denied call exits 0 with no content, which
-# is the trap documented in .claude/rules/antigravity-delegation.md.
+# is the trap documented in .claude/docs/research/antigravity-cli.md (§3).
 output=$(agy -p "Reply with exactly: PROBE_OK" \
     --model gemini-3.7-flash-low \
     --print-timeout 60s 2>"$errfile" )

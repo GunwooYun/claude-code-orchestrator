@@ -229,7 +229,7 @@ class LargeChangeThresholdTests(unittest.TestCase):
 
     def test_claude_md_defines_it_and_lists_who_uses_it(self) -> None:
         body = " ".join((REPO / "CLAUDE.md").read_text(encoding="utf-8").split())
-        self.assertIn("「큰 변경」의 기준", body, "there is no single definition site")
+        self.assertIn("큰 변경의 기준", body, "there is no single definition site")
         for consumer in ("프리필터", "/lens-review", "/feature"):
             self.assertIn(consumer, body, f"the definition does not name {consumer}")
 
@@ -237,6 +237,191 @@ class LargeChangeThresholdTests(unittest.TestCase):
         """A one-line change to an auth check is large regardless of the count."""
         body = " ".join((REPO / "CLAUDE.md").read_text(encoding="utf-8").split())
         self.assertIn("보안 경계", body)
+
+
+class AlwaysLoadedBudgetTests(unittest.TestCase):
+    """
+    A ratchet on the always-loaded layer, and a check that syntax stays out of it.
+
+    `CLAUDE.md` and every `.claude/rules/*.md` without `paths:` frontmatter enter
+    every session before anything is asked. That layer had grown to 57,378 bytes,
+    of which 21,890 was the agy routing rule — a file largely about saving
+    tokens, which made it the largest fixed cost in the repository. It is now
+    48,236.
+
+    What this test is, precisely: a RATCHET, not a proof. It cannot show that the
+    layer is the right size or that anything in it earns its place; it only
+    forces a deliberate decision when the number grows past the cap, instead of
+    letting it drift a paragraph at a time. The cap carries ~10% slack so an
+    ordinary edit does not fail the suite.
+
+    Two honest limits: bytes are not tokens, and this layer mixes Korean prose
+    (dense per byte in UTF-8, three bytes a character) with English command
+    blocks, so the byte figure over- or under-states cost depending on which
+    grew. And whether `.claude/rules/*.md` reaches a SUBAGENT is not documented
+    — the Claude Code docs guarantee only `CLAUDE.md` — so the real multiplier on
+    this number is unknown. That is why the executor's command syntax lives in
+    `.claude/agents/general-purpose.md` rather than here.
+    """
+
+    # Measured 2026-09-26 after the routing-rule cut: 48,236 bytes.
+    BUDGET_BYTES = 53_000
+
+    def _always_loaded(self) -> list[Path]:
+        files = [REPO / "CLAUDE.md"]
+        for path in sorted((REPO / ".claude" / "rules").glob("*.md")):
+            head = path.read_text(encoding="utf-8")[:400]
+            if re.match(r"^---\n(?:.*\n)*?paths:", head):
+                continue  # conditionally loaded, not part of the fixed cost
+            files.append(path)
+        return files
+
+    def test_the_layer_stays_within_budget(self) -> None:
+        sizes = {p.name: len(p.read_bytes()) for p in self._always_loaded()}
+        total = sum(sizes.values())
+        self.assertLessEqual(
+            total,
+            self.BUDGET_BYTES,
+            f"the always-loaded layer is {total} bytes, over the {self.BUDGET_BYTES} "
+            f"ratchet. Largest: {sorted(sizes.items(), key=lambda kv: -kv[1])[:3]}. "
+            "Move reference material to a skill or an agent file, or raise the "
+            "cap deliberately and say why.",
+        )
+
+    def test_the_scan_finds_the_layer(self) -> None:
+        """Guards the ratchet: an empty file list would pass any budget."""
+        files = self._always_loaded()
+        self.assertGreaterEqual(len(files), 8, f"only found {files}")
+        self.assertIn("CLAUDE.md", [p.name for p in files])
+
+    def test_no_rule_file_carries_command_syntax(self) -> None:
+        """
+        A negative check on a STRUCTURED token, which is why it bites: the flag
+        string is exact, so pasting a command back into the always-loaded layer
+        fails here rather than being noticed in review. The flags belong with the
+        process that runs them — `.claude/agents/general-purpose.md` — and with
+        the skill that composes prompts.
+        """
+        offenders = [
+            str(p.relative_to(REPO))
+            for p in sorted((REPO / ".claude" / "rules").glob("*.md"))
+            if "--dangerously-skip-permissions" in p.read_text(encoding="utf-8")
+        ]
+        self.assertEqual(
+            [],
+            offenders,
+            f"command syntax is back in the always-loaded rules: {offenders}",
+        )
+
+    def test_the_executor_still_has_the_syntax_it_needs(self) -> None:
+        """
+        The other half of the move. Deleting the flags from the rule is only safe
+        because the subagent that runs the commands carries them itself —
+        subagents are not documented to load `.claude/rules/`, and skills do not
+        auto-invoke inside them.
+        """
+        executor = (REPO / ".claude" / "agents" / "general-purpose.md").read_text(
+            encoding="utf-8"
+        )
+        for token in ("--dangerously-skip-permissions", "--sandbox", "agy -p"):
+            self.assertIn(token, executor, f"the executor lost {token}")
+        self.assertIn(
+            "Do not create or modify any files",
+            executor,
+            "the read-only sentence that guards the flags is gone",
+        )
+
+
+class ModelTierConsistencyTests(unittest.TestCase):
+    """
+    Every copy of the tier table must name the same slug for the same tier.
+
+    The slugs are restated in the routing rule, the antigravity skill, the
+    general-purpose agent definition, a skill reference, CLAUDE.md, README and a
+    hook. A tier paired with the wrong slug is a silent cost or quality bug: a T4
+    repo analysis on a flash model gives a worse answer for less money and
+    nothing errors. This is the same class of drift as the 500/300 threshold, and
+    the same shape of test catches it — equality between independent copies of a
+    STRUCTURED token, not a phrase lookup, so it survives rewording and fails on
+    a real disagreement.
+
+    The routing rule is the canonical table, so this test also fails if that
+    table is removed from the always-loaded rules. That is deliberate: the
+    orchestrator pins the slug when it writes a Task prompt, before any skill has
+    necessarily loaded, and an unpinned call falls back to the user's global
+    default — the most expensive tier.
+    """
+
+    TIER = re.compile(r"\bT([1-4])\b")
+    SLUG = re.compile(r"gemini-[0-9a-z.\-]*-(?:low|high)")
+    CANONICAL = REPO / ".claude" / "rules" / "antigravity-delegation.md"
+
+    def _files(self) -> list[Path]:
+        found = [
+            p
+            for p in REPO.rglob("*.md")
+            if not any(
+                part in (".git", "research", "node_modules", "checkpoints")
+                for part in p.parts
+            )
+        ]
+        found += sorted((REPO / ".claude" / "hooks").glob("*.py"))
+        return sorted(set(found))
+
+    def _pairings(self, path: Path) -> dict[str, set[str]]:
+        """Tier -> slugs, taken from lines that name exactly one tier."""
+        pairs: dict[str, set[str]] = {}
+        for line in path.read_text(encoding="utf-8").splitlines():
+            tiers = set(self.TIER.findall(line))
+            slugs = set(self.SLUG.findall(line))
+            if len(tiers) == 1 and slugs:
+                pairs.setdefault(tiers.pop(), set()).update(slugs)
+        return pairs
+
+    def test_the_canonical_table_is_in_the_always_loaded_rule(self) -> None:
+        canonical = self._pairings(self.CANONICAL)
+        self.assertEqual(
+            {"1", "2", "3", "4"},
+            set(canonical),
+            "the tier table is no longer complete in the always-loaded rule, so "
+            "the orchestrator cannot pin a slug before a skill loads",
+        )
+        for tier, slugs in canonical.items():
+            self.assertTrue(slugs, f"T{tier} names no slug")
+
+    def test_no_copy_contradicts_the_canonical_table(self) -> None:
+        canonical = self._pairings(self.CANONICAL)
+        problems = []
+        for path in self._files():
+            if path == self.CANONICAL:
+                continue
+            for tier, slugs in self._pairings(path).items():
+                extra = slugs - canonical.get(tier, set())
+                if extra:
+                    problems.append(
+                        f"{path.relative_to(REPO)} maps T{tier} to "
+                        f"{sorted(extra)}, which the rule does not"
+                    )
+        self.assertEqual([], problems, "; ".join(problems))
+
+    def test_at_least_three_files_restate_the_table(self) -> None:
+        """Guards the extractor: with none found, the test above is vacuous."""
+        restating = [
+            p for p in self._files() if p != self.CANONICAL and self._pairings(p)
+        ]
+        self.assertGreaterEqual(
+            len(restating), 3, f"only {len(restating)} files paired a tier with a slug"
+        )
+
+    def test_every_slug_used_anywhere_is_a_known_slug(self) -> None:
+        """Catches an invented or mistyped slug, which fails loudly at call time."""
+        known = set().union(*self._pairings(self.CANONICAL).values())
+        unknown = {}
+        for path in self._files():
+            used = set(self.SLUG.findall(path.read_text(encoding="utf-8")))
+            if used - known:
+                unknown[str(path.relative_to(REPO))] = sorted(used - known)
+        self.assertEqual({}, unknown, f"unknown model slugs: {unknown}")
 
 
 class SectionPointerTests(unittest.TestCase):

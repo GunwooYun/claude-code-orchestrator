@@ -66,6 +66,20 @@ RUNNING) rather than exit code, and do not discard stderr.
 Ways to let tools run headlessly: `--dangerously-skip-permissions`, `permissions.allow`
 in settings.json, or `--mode accept-edits` (file edits only).
 
+**File reads are denied by default in headless mode** (verified 2026-08-30:
+`read_file` on a workspace image was auto-denied → empty response, status
+SUCCESS). That is why every template pattern which must read a file carries
+`--dangerously-skip-permissions --sandbox`. `--sandbox` restricts terminal
+commands during that call; file reads still work (verified for a workspace PNG,
+an out-of-workspace PNG, and a PDF). Those flags also auto-approve `write_file`,
+`read_url` and MCP tools for the call, so the guard is the prompt itself — every
+flagged pattern says *"Do not create or modify any files; return everything in
+your response"* (also enforced by `.agents/rules/AGENTS.md`).
+
+Optional per-machine hardening, deliberately NOT part of the template: allow
+reads globally with `{"permissions": {"allow": ["read_file(*)"]}}` in
+`~/.gemini/antigravity-cli/settings.json` and drop the flags from the calls.
+
 Other flags: `--print-timeout` (**default 5m**), `--add-dir` (repeatable; replaces
 `--include-directories`), `--effort low|medium|high` (this template does not use it — the
 slug suffix is the only effort knob; precedence between the two is undocumented), `--sandbox`, `--agent`, `--project`,
