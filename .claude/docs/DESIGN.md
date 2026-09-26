@@ -89,6 +89,9 @@
 | The per-project contract is the **filesystem** (four scripts), not a profile schema | An adversarial review falsified the premise. Measured: exactly ONE hook runs stack tools, and the real generality bug was `/initproject` Step 5 omitting `tdd`/`simplify` (6 hardcoded `uv run pytest` lines surviving setup). A profile would also have been a 4th copy of the test command — after `pyproject.toml`, `rules/testing.md` and `CLAUDE.md` — creating exactly the drift Step 3 exists to prevent. `runs_in: container` alone would force the hook to become a path-mapping execution adapter | A `project-profile.toml` schema; reading existing files (`pyproject.toml` is Python-only, Yocto has neither) | 2026-09-25 |
 | Verification plan comes FIRST, before any tooling | It is prose, it was already the highest-leverage step, and applying it to a real Yocto and a real Django repo is what reveals which commands need names. Designing a schema before observing its consumers was the core mistake | Schema first, then hooks, then the plan | 2026-09-25 |
 | Verification tiers are defined by DURATION, not by the words unit/e2e | "e2e" means an HTTP request to a compose stack in one project and a QEMU `testimage` run in another; the word cannot drive a decision, the budget can | Model unit/integration/e2e as first-class | 2026-09-25 |
+| `/feature`'s document order IS its execution order, and a test compares the two | The workflow diagram promised an "Implementation Loop" step that had no section anywhere in the file — the one step where code is written was the only step with no instructions, and its rules were parked in Phase 4 (Task Creation) for want of a home. `## User Confirmation`, the gate before any code, sat AFTER the post-implementation review section. Both are structural and no substring test could see them, so `tests/test_feature_workflow.py` parses the diagram and the headings and asserts both directions: every diagram step has a section in order, and every `## Phase` section is in the diagram (the direction that would have caught the stray `## User Confirmation`) | Reorder and rely on review; write a phrase test | 2026-09-26 |
+| The confirmation gate is numbered `Phase 4b`, and phases are never renumbered | "Phase N" is a public name: eight files point into `/feature` by phase number (CLAUDE.md, two rules, `/ticket`, `/plan`, `.claude/scripts/README.md`, DESIGN.md) and none of it was tested, so a renumbering would have drifted silently. An unnumbered step between 4 and 5 also reads as an aside a model may skip, while `4 → 4b → 5` reads as a sequence — the file already used that convention for Phase 2b. A test resolves every inbound phase reference | Renumber into 1..8; leave the gate unnumbered | 2026-09-26 |
+| The verification plan is persisted into `## Current Project`, not only into the conversation | Phase 6 Option A asks a NEW session to compare the plan's scenario IDs against the tests, and the plan existed only in the finished conversation — the template had a step whose input it never saved. The `## Current Project` block now carries a compact scenario table, keeping the IDs and the negative-test column, which are what the comparison is made of | Leave it in the plan document; drop the comparison | 2026-09-26 |
 | The verification plan lives in `/feature` output, not in any project-level config | Lifetimes differ: project commands are stable, per-feature scenarios change every ticket. Folding them would churn project config per ticket | Fold the verification manifest into the profile | 2026-09-25 |
 | Full writing style lives in `.claude/docs/`, with a short pointer rule | `.claude/rules/*.md` loads every session; 466 lines of document style would tax sessions that write no documents | Put the whole style in `.claude/rules/` | 2026-09-25 |
 
@@ -178,6 +181,20 @@ Dropped after review:
 - ~~Stop hook that blocks "done" without a test run~~ — a `command` hook cannot
   force continuation, so it would be the only non-Python hook here, and the
   8-block cap makes it unreliable.
+
+- [x] `/feature` restructured into execution order with the missing
+      implementation-loop section written, and the duplication around it closed:
+      the tier table (whose rows were byte-identical to `rules/testing.md` 원칙 4,
+      with a second copy of the Yocto/Django illustration) became a pointer; the
+      loop rules moved out of Phase 4 rather than being copied; the background
+      unit-tier run got the Task-prompt template it never had, carrying the
+      script contract explicitly because a general-purpose subagent is not
+      guaranteed to load the rules; and three stale restatements of the sequence
+      (`README.md` twice, `CLAUDE.md` 진행 순서) plus a pointer in
+      `.claude/scripts/README.md` to a section that did not exist were corrected.
+      `references/task-patterns.md`, referenced by nothing and teaching "Testing"
+      as a final category against Phase 4's mandatory pairing, was fixed and
+      wired in.
 
 - [x] Always-loaded context split by WHO needs it, with three tests added before
       the cut so they would go red on the likely mistakes: tier/slug equality

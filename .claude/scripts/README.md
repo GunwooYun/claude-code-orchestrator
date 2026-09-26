@@ -104,7 +104,7 @@ clippy, deprecation 알림)가 흔하다. 그 출력을 삼키면 호출자가 "
 | 호출자 | 무엇을 |
 |---|---|
 | `.claude/hooks/lint-on-save.py` | `verify-save <path>` (조언만, 차단 못 함) |
-| `/feature` 구현 루프 | `verify-task`, 마지막에 `verify-unit` |
+| `.claude/skills/feature/SKILL.md` 의 "Implementation Loop" | `verify-task`, 마지막에 설정된 가장 느린 티어 |
 | `/feature` Phase 2b 검증 계획 | 시나리오의 "명령" 칸에 이 이름들을 쓴다 |
 | CI, 또는 `.git/hooks/pre-commit` | `verify-task` 또는 `verify-full` |
 

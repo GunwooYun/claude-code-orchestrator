@@ -36,7 +36,9 @@ Phase 3: Design + Verification Review (deep-reasoning Subagent)
     ↓
 Phase 4: Task Creation (Claude)               ← 구현 태스크마다 verify 태스크 짝
     ↓
-Phase 5: CLAUDE.md Update (Claude)
+Phase 4b: User Confirmation (Claude ↔ 사용자)  ← 코드를 쓰기 전 마지막 게이트
+    ↓
+Phase 5: CLAUDE.md Update (Claude)            ← 승인된 계획을 세션 밖으로 남긴다
     ↓
 Implementation Loop:  태스크 → verify:task → 다음 태스크
                       마지막에 설정된 가장 느린 티어
@@ -46,6 +48,11 @@ Phase 6: Multi-Session Review (New Session + deep-reasoning)
 
 **검증이 구현보다 먼저 정해진다.** Phase 2b 를 건너뛰면 Phase 4 의 태스크 짝을
 만들 수 없고, Phase 6 이 대조할 기준이 없어진다.
+
+**이 문서의 순서가 실행 순서다.** 위 도식의 단계마다 같은 이름의 섹션이 아래에 같은
+순서로 있고, `tests/test_feature_workflow.py` 가 그 일치를 검사한다 — 예전에는
+구현 루프에 섹션이 아예 없었고(코드를 쓰는 단계가 유일하게 지시 없는 단계였다),
+사용자 승인이 구현 후 리뷰보다 뒤에 있었다.
 
 ---
 
@@ -182,19 +189,9 @@ Ask in Korean:
   (`.claude/rules/writing-style.md` 의 정직성 규칙과 같은 원칙). 어떻게 하면
   이 테스트가 실패하는지 적지 못하면 그 시나리오는 아직 설계되지 않았다.
 - **검증할 수 없는 것을 빈칸으로 두지 않는다.** 적어서 남긴다.
-- **티어**는 아래 표를 따른다. 티어를 모르면 느린 쪽으로 적는다.
-
-| 티어 | 예산 | 언제 도는가 | 누가 |
-|------|------|-------------|------|
-| `save` | 초 | 파일 저장 시 | 훅 (조언) |
-| `task` | ≤5분 | 태스크 하나가 끝날 때마다 | 메인, 포그라운드 |
-| `unit` | 10~60분 | 작업 단위당 한 번, `risk:high` 태스크 뒤에 추가 | general-purpose 서브에이전트, 백그라운드, 10줄 이내 반환 |
-| `full` | 무제한 | CI 또는 사람이 명시적으로 | **어떤 훅도 자동 실행하지 않는다** |
-
-스택에 따라 티어의 내용이 완전히 달라진다. Django 라면 `task` 가 컨테이너 안
-pytest 일 수 있고, Yocto recipe 라면 `task` 가 `bitbake -p` 파싱 검사, `full` 이
-이미지 빌드와 `testimage` 다. **티어는 소요 시간으로 정하고, 이름으로 정하지
-않는다.**
+- **티어**는 `.claude/rules/testing.md` 의 "원칙 4" 가 정의한다 — 예산, 언제 도는가,
+  누가 돌리는가. 여기 옮겨 적지 않는다(표를 두 벌 두면 갈라진다). **모르면 느린
+  쪽으로 적는다.**
 
 ---
 
@@ -253,6 +250,9 @@ Task tool parameters:
 **모든 구현 태스크는 검증 태스크와 짝을 이룬다.** 실행 루프가 실제로 보는 것은
 todo 목록이므로, 여기에 없으면 검증은 일어나지 않는다.
 
+태스크를 얼마나 크게 쪼갤지, 의존 순서를 어떻게 잡을지는
+`references/task-patterns.md` 를 본다.
+
 ```python
 # 구현 태스크
 {
@@ -279,14 +279,49 @@ todo 목록이므로, 여기에 없으면 검증은 일어나지 않는다.
   10줄 이내 요약만 받는다 — 그동안 메인은 다른 todo 를 진행한다.
 - `verify:full` 은 todo 에 넣지 않는다. CI 또는 사람의 몫이다. 대신
   "무엇을 CI 에서 돌려야 하는지"를 완료 보고에 남긴다.
-- 검증 태스크가 실패하면 **다음 구현 태스크로 넘어가지 않는다.**
-  `.claude/rules/deep-reasoning-delegation.md` 에 따라 원인이 명확하지 않으면
-  deep-reasoning 에 넘긴다.
-- **테스트를 통과시키기 위해 테스트를 고치지 않는다.** 시나리오가 틀렸다고
-  판단되면 검증 계획을 고치고, 무엇을 왜 바꿨는지 남긴다.
+- 루프가 도는 방식(실패했을 때, `risk:high`, 느린 티어 위임, 완료 보고)은
+  아래 "Implementation Loop" 가 담는다 — 태스크를 **만드는** 일과 태스크를
+  **도는** 일은 다른 단계다.
 
 ---
 
+## Phase 4b: User Confirmation
+
+Present final plan to user (in Korean):
+
+```markdown
+## 프로젝트 계획 : {feature}
+
+### 조사 결과 (agy)
+{Key findings - 3-5 bullet points}
+
+### 설계 정책 (deep-reasoning 검토)
+{Approach with refinements}
+
+### 검증 계획
+{시나리오 표 — ID / 무엇을 / 명령 / 티어 / 음성 시험}
+{검증하지 않는 것}
+{검증할 수 없는 것 — 있으면 반드시 노출한다}
+
+### 작업 목록 ({N}개)
+{Task list — 구현 태스크와 verify 태스크가 짝지어진 상태로}
+
+### 위험과 주의사항
+{From deep-reasoning analysis}
+
+### 다음 단계
+1. 이 계획으로 진행하시겠습니까?
+2. 구현 완료 후 다른 세션에서 검토를 수행한다.
+
+---
+이 계획으로 진행하시겠습니까?
+```
+
+**승인 없이 코드를 쓰지 않는다.** 사용자가 계획을 바꾸면 **Phase 4 로 돌아가** 태스크
+목록을 고치고 다시 제시한다. 설계 자체가 바뀌면 Phase 3 으로 돌아간다. 승인 전에
+`CLAUDE.md` 를 쓰지 않는다 — 승인되지 않은 계획을 남기면 두 번 쓰게 된다.
+
+---
 ## Phase 5: CLAUDE.md Update (IMPORTANT)
 
 **프로젝트 관련 정보를 CLAUDE.md에 추가한다.**
@@ -311,7 +346,19 @@ rewritten by `/checkpointing`; anything placed after it is lost). Replace an exi
 
 ### Notes
 - {Important constraints or considerations}
+
+### Verification plan
+| ID | 무엇을 검증하는가 | 명령 | 티어 | 실패해야 할 때 실패하는가 |
+|----|------------------|------|------|---------------------------|
+| V1 | {행동} | {명령} | {티어} | {음성 시험} |
+- 검증하지 않는 것: {...}
+- 검증할 수 없는 것: {...}
 ```
+
+**검증 계획을 여기 남기는 것이 Phase 6 의 전제다.** Option A 는 새 세션에서
+"계획의 시나리오 ID 와 실제 테스트를 대조"하는데, 그 계획이 대화 안에만 있으면 새
+세션은 읽을 곳이 없다. 표는 압축해도 되지만 **시나리오 ID 와 음성 시험 칸은
+남긴다** — 그 두 칸이 대조의 근거다.
 
 **This ensures context persists across sessions.**
 
@@ -323,15 +370,87 @@ rewritten by `/checkpointing`; anything placed after it is lost). Replace an exi
 
 ---
 
+## Implementation Loop (구현 루프)
+
+**태스크 → `verify:task` → 다음 태스크.** Phase 4 가 만든 짝을 순서대로 돈다. 코드가
+쓰이는 단계는 여기뿐이다.
+
+### 검증이 실패했을 때
+
+- **다음 구현 태스크로 넘어가지 않는다.** 실패한 검증은 정보다.
+- 원인이 명확하지 않으면 `.claude/rules/deep-reasoning-delegation.md` 에 따라
+  deep-reasoning 에 넘긴다.
+- **테스트를 통과시키기 위해 테스트를 고치지 않는다.** 시나리오가 틀렸다고
+  판단되면 검증 계획을 고치고, 무엇을 왜 바꿨는지 남긴다 — 조용히 고치지 않는다.
+- 계획을 고쳤으면 `CLAUDE.md` 의 `### Verification plan` 도 같이 고친다. 두 벌이
+  갈라지면 Phase 6 이 대조할 기준을 잃는다.
+
+### `risk:high` 태스크 뒤
+
+Phase 3 이 위험하다고 표시한 태스크가 끝나면, 그 자리에서 **느린 티어를 한 번 더
+돈다**(`verify:unit` 이 설정돼 있으면 그것). 작업 끝까지 미루면 원인 범위가 그만큼
+넓어진다.
+
+### 느린 티어는 배경으로 넘긴다
+
+마지막(또는 `risk:high` 뒤) 티어는 general-purpose 서브에이전트에 넘긴다. **그
+서브에이전트는 이 스킬도 규칙 파일도 받는다고 보장되지 않으므로, 필요한 것은 Task
+프롬프트에 직접 쓴다.**
+
+```
+Task tool parameters:
+- subagent_type: "general-purpose"
+- run_in_background: true
+- prompt: |
+    Run the project's verification tier and report.
+
+    1. Run: .claude/scripts/verify-unit      (substitute the tier being run)
+    2. The EXIT CODE is the verdict: 0 = pass, non-zero = fail.
+       Output on exit 0 is informational (warnings, progress) — do NOT
+       discard it and do NOT report "clean" when there is output.
+    3. Do NOT modify any file. Do NOT fix a failing test. You are reporting,
+       not repairing.
+    4. Return AT MOST 10 lines: the exit code, which scenario IDs failed
+       ({scenario IDs from the verification plan}), and the first real error.
+       If it timed out or could not run, say that instead of guessing.
+```
+
+배경에서 도는 동안 메인은 **코드가 아닌 todo** 만 진행한다(완료 보고 준비 등).
+다음 작업 단위를 시작하지 않는다 — 아직 이 단위의 판정이 나오지 않았다.
+
+### 루프 중에 오는 리뷰 제안
+
+`post-implementation-review.py` 훅이 파일 3개·100줄을 넘기면 "deep-reasoning 리뷰를
+고려하라"를 끼워 넣는다. **그것은 Phase 6 Option B 이고, 루프 중에 시작하지
+않는다.** 지금 돌고 있는 짝을 끝내고, Phase 6 에서 처리한다.
+
+### 구현 중에 결정이 바뀌면
+
+`CLAUDE.md` 의 `### Decisions` 를 **그때 바로** 고친다. 끝에 몰아서 쓰면 무엇을 왜
+바꿨는지 잃는다.
+
+### 루프의 끝 — 완료 보고
+
+마지막 티어의 결과가 오면 보고한다. `/ticket` Step 5 가 이것을 그대로 쓴다.
+
+- **무엇을 돌렸는가**: 티어와 명령, 그리고 결과(통과/실패)
+- **시나리오별 결과**: 계획의 ID 마다 대응하는 테스트와 그 결과
+- **검증하지 못한 것**: 계획의 "검증할 수 없는 것" 과 루프 중에 새로 생긴 것
+- **CI 가 돌려야 하는 것**: `verify:full` 은 todo 에 넣지 않았으므로 여기 남긴다
+- **성공 로그는 검증이 아니다.** 통과만 확인한 것을 "검증했다"고 쓰지 않는다.
+
+---
 ## Phase 6: Multi-Session Review (Post-Implementation)
 
 **구현 완료 후 다른 세션에서 리뷰를 실시한다.**
 
 ### Option A: New Claude Session
 
-1. Start new Claude Code session
-2. Run: `git diff main...HEAD` to see all changes
-3. Ask Claude to review the implementation
+1. `git worktree add --detach ../<project>-review main` 으로 격리하고 그 안에서
+   새 `claude` 세션을 띄운다 — `CLAUDE.md` 운영 주의사항이 정한 방식이다.
+2. `git diff main...HEAD` 로 변경 전체를 본다.
+3. **"리포트 파일만 작성, 다른 파일 수정 금지"** 로 리뷰를 받고, 원 세션에서 반영한다.
+4. `CLAUDE.md` `### Verification plan` 의 시나리오 ID 와 실제 테스트를 대조하게 한다.
 
 ### Option B: deep-reasoning Review (via Subagent)
 
@@ -387,47 +506,14 @@ Task tool parameters:
 
 ---
 
-## User Confirmation
-
-Present final plan to user (in Korean):
-
-```markdown
-## 프로젝트 계획 : {feature}
-
-### 조사 결과 (agy)
-{Key findings - 3-5 bullet points}
-
-### 설계 정책 (deep-reasoning 검토)
-{Approach with refinements}
-
-### 검증 계획
-{시나리오 표 — ID / 무엇을 / 명령 / 티어 / 음성 시험}
-{검증하지 않는 것}
-{검증할 수 없는 것 — 있으면 반드시 노출한다}
-
-### 작업 목록 ({N}개)
-{Task list — 구현 태스크와 verify 태스크가 짝지어진 상태로}
-
-### 위험과 주의사항
-{From deep-reasoning analysis}
-
-### 다음 단계
-1. 이 계획으로 진행하시겠습니까?
-2. 구현 완료 후 다른 세션에서 검토를 수행한다.
-
----
-이 계획으로 진행하시겠습니까?
-```
-
----
-
 ## Output Files
 
 | File | Purpose |
 |------|---------|
-| `.claude/docs/research/{feature}.md` | agy research output |
-| `CLAUDE.md` | Updated with project context |
-| Task list (internal) | Progress tracking |
+| `.claude/docs/research/{feature}.md` | agy research output (또는 대체 경로로 만든 조사 기록) |
+| `CLAUDE.md` → `## Current Project` | 승인된 계획 + `### Verification plan` (Phase 6 이 대조하는 근거) |
+| Task list (internal) | 구현/verify 짝의 진행 상황 |
+| 완료 보고 (대화) | 무엇을 돌렸는지·시나리오별 결과·CI 몫 — `/ticket` Step 5 가 그대로 쓴다 |
 
 ---
 

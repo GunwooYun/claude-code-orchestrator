@@ -48,11 +48,16 @@ Connecting components:
 - Connect to external services
 - Integrate with existing features
 
-### 4. Testing
-Verification tasks:
-- Write unit tests
-- Add integration tests
-- Manual testing checklist
+### 4. Verification — NOT a category of its own
+
+**Verification is not a phase at the end.** Phase 4 of `/feature` pairs EVERY
+implementation task with a `verify:` task that names the scenario IDs and the
+command, so verification tasks are interleaved, never collected into a final
+block. Writing the tests is part of the implementation task they verify.
+
+A trailing block is allowed for exactly one thing: the slowest configured tier,
+run once at the end (see "Implementation Loop" in
+`.claude/skills/feature/SKILL.md`).
 
 ### 5. Documentation (Optional)
 Only when explicitly needed:
@@ -91,21 +96,28 @@ pending → in_progress → completed
 
 ## Core Implementation
 - [ ] Create User model with password hashing
+- [ ] verify:task V1 — .claude/scripts/verify-task
 - [ ] Implement UserRepository with CRUD operations
+- [ ] verify:task V2 — .claude/scripts/verify-task
 - [ ] Create AuthService with login/register logic
-- [ ] Build POST /auth/register endpoint
-- [ ] Build POST /auth/login endpoint
+- [ ] verify:task V3 — .claude/scripts/verify-task
+- [ ] Build POST /auth/register and /auth/login endpoints
 - [ ] Implement JWT middleware for protected routes
+- [ ] verify:task V4 — .claude/scripts/verify-task
 
 ## Integration
 - [ ] Add auth middleware to existing protected routes
+- [ ] verify:task V5 — .claude/scripts/verify-task
 - [ ] Update user creation flow to use new auth
+- [ ] verify:task V6 — .claude/scripts/verify-task
 
-## Testing
-- [ ] Write unit tests for AuthService
-- [ ] Write integration tests for auth endpoints
-- [ ] Test token refresh flow
+## End of the unit
+- [ ] verify:unit V1-V6 — .claude/scripts/verify-unit   (slowest configured tier)
 ```
+
+Every implementation line above is followed by the `verify:` line that proves it
+— that is the shape Phase 4 requires. The scenario IDs come from the Phase 2b
+verification plan; they are not invented here.
 
 ## Complexity Estimation
 
