@@ -239,6 +239,85 @@ class LargeChangeThresholdTests(unittest.TestCase):
         self.assertIn("보안 경계", body)
 
 
+class SectionPointerTests(unittest.TestCase):
+    """
+    A pointer that names a SECTION of another file must still find it.
+
+    `test_instructions_do_not_reference_missing_input_files` checks that the
+    file exists. It does not check the section, and the section is what the
+    reader needs: `.claude/agents/general-purpose.md` sends the subagent to
+    "agy 가 없을 때" in the routing rule, `/feature` to "라우팅은 주제가 아니라
+    비용으로 한다", `/initproject` to "Model Policy", and five files to CLAUDE.md's
+    「큰 변경」의 기준. Renaming or moving any of those leaves a pointer into
+    nothing, and the model follows it to a file where the section is absent —
+    which reads as "this rule does not exist" rather than as an error.
+
+    This is not a substring match on prose: it resolves each pointer against the
+    target file's actual headings, so it fails on a rename in either file.
+    """
+
+    # <file>.md followed by → / -> / " 의 " and a quoted section, or by 「section」.
+    POINTER = re.compile(
+        r"`?(?P<file>(?:\.claude/|\.agents/|)[\w./-]+\.md)`?"
+        r"(?:"
+        r'[^"「\n]{0,4}?(?:→|->|\s의\s)\s*(?:「(?P<k1>[^」]{3,60})」|"(?P<q1>[^"]{3,60})")'
+        r"|"
+        r"[ ]{0,2}(?:의[ ]?)?「(?P<k2>[^」]{3,60})」"
+        r")"
+    )
+
+    def _pointers(self) -> list[tuple[Path, str, str]]:
+        found = []
+        for path in sorted(REPO.rglob("*.md")):
+            if any(
+                part in (".git", "research", "node_modules", "checkpoints")
+                for part in path.parts
+            ):
+                continue
+            flat = " ".join(path.read_text(encoding="utf-8").split())
+            for match in self.POINTER.finditer(flat):
+                section = (
+                    match.group("k1") or match.group("q1") or match.group("k2") or ""
+                )
+                found.append((path, match.group("file"), section))
+        return found
+
+    def _resolve(self, ref: str) -> Path | None:
+        for candidate in (REPO / ref, REPO / ".claude" / ref):
+            if candidate.is_file():
+                return candidate
+        return None
+
+    def test_the_scan_finds_the_pointers_it_is_meant_to(self) -> None:
+        """Guards the scanner: one that matches nothing would pass vacuously."""
+        pointers = self._pointers()
+        self.assertGreaterEqual(
+            len(pointers), 12, f"the scan found only {len(pointers)} pointers"
+        )
+        targets = {ref for _, ref, _ in pointers}
+        self.assertTrue(
+            any("antigravity-delegation" in t for t in targets),
+            "the most-pointed-at rule is not among the matches",
+        )
+
+    def test_every_section_pointer_resolves_to_a_heading(self) -> None:
+        unresolved = []
+        for source, ref, section in self._pointers():
+            target = self._resolve(ref)
+            if target is None:
+                continue  # file existence is another test's job
+            headings = [
+                re.sub(r"^#+\s*", "", line).strip()
+                for line in target.read_text(encoding="utf-8").splitlines()
+                if line.startswith("#")
+            ]
+            if not any(section in heading for heading in headings):
+                unresolved.append(f"{source.relative_to(REPO)} -> {ref} :: {section!r}")
+        self.assertEqual(
+            [], unresolved, "section pointers into nothing: " + "; ".join(unresolved)
+        )
+
+
 class PhraseTestHonestyTests(unittest.TestCase):
     """
     A phrase test that claims more than it proves is worse than no test.
