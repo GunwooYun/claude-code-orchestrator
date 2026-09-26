@@ -156,16 +156,27 @@ Dropped after review:
 
 <!-- Unresolved issues, things to investigate -->
 
-- [ ] Profile schema granularity: too few slots and stack details leak back into
-      hook code; too many and `/initproject` becomes a twenty-question form.
-      To be reviewed adversarially before the schema is fixed.
-- [ ] A Stop hook cannot force continuation from a `command` hook — that needs a
-      `prompt` or `agent` hook returning `{"ok": false, "reason": ...}`, which
-      would be the only non-Python hook here. Worth the inconsistency, or drop
-      the "no done without a test run" check and rely on the commit gate?
 - [ ] "Tests were run" is enforceable; "the tests are meaningful" is not. The
-      closest available check is comparing receipts against the verification
-      plan's scenario IDs during review.
+      closest available checks are `/feature` Phase 6 comparing tests against the
+      verification plan's scenario IDs, and `/lens-review`'s verification-adequacy
+      lens. Both are judgement, not enforcement. **Standing limitation**, not a
+      task — do not expect this one to close.
+- [ ] Nothing here has been exercised on a real project yet. Every verification in
+      this session ran against the template itself, which has no `src/`, a
+      3-second test suite and only two verification tiers. The first real
+      `/initproject` on a Django or Yocto repository is where the assumptions get
+      tested. Record what breaks.
+- [ ] `/lens-review`, `/doc-write`, `/jira-setup`, `/ticket` and `agy-probe`'s
+      READY path have never actually run. Their tests assert their instructions,
+      not their behaviour in use.
+
+Closed, so that a later session does not reopen them:
+
+- ~~Profile schema granularity~~ — the profile was rejected; the contract is four
+  scripts and an exit code. See Key Decisions.
+- ~~Whether to add a Stop hook that blocks "done" without a test run~~ — dropped.
+  A `command` hook cannot force continuation, and the commit gate plus
+  `.git/hooks/pre-commit` cover the same ground more simply.
 
 ## Changelog
 
