@@ -10,6 +10,25 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
                             └─ Subagents (Parallel Tasks)
 ```
 
+## 지금 쓸 수 있는가 — 검증된 것과 아닌 것
+
+**쓸 수 있다.** 단, 무엇이 실제로 확인됐는지 알고 쓰는 편이 낫다.
+
+| | 상태 |
+|---|---|
+| 훅 8개 | **동작 확인.** 각 훅마다 "반응해야 하는 입력 / 무시해야 하는 입력" 한 쌍으로 테스트하고, 훅을 no-op 으로 만들면 빨간불이 나는 것까지 확인했다 |
+| `.claude/scripts/verify-save`, `verify-task` | **동작 확인.** 저장 게이트는 **읽기 전용**이다 — 파일을 고치지 않고 보고만 한다 |
+| 규칙·스킬 문서의 일관성 | **테스트로 고정.** 모델 등급↔슬러그 일치, 섹션 포인터 해소, 임계값 단일 정의, 항상-로드 예산 |
+| `checkpoint.py` | **동작 확인** (펜스·rename·범위·원자적 쓰기 회귀 테스트) |
+| **스킬 16개의 실제 실행** | **한 번도 안 해봤다.** `/initproject`·`/feature` 를 포함해 전부다. 테스트는 스킬의 *문서*가 일관되는지만 본다 |
+| agy 연동 | **미확인.** 이 저장소를 만든 컨테이너에 agy 가 없었다. 모델 정책·soft-deny 실동작은 문서상 설계다 |
+| Jira·Confluence | 커넥터로 **측정한 사실**에 기반하지만(프로젝트 141개, cloudId 중복 등), 스킬 실행은 미확인 |
+| Windows | **미확인.** `verify-*` 해석기 목록은 배려하지만 훅 등록(`python3`)은 아니다 |
+
+즉 **기계가 볼 수 있는 부분은 검증됐고, 프롬프트가 실제 세션에서 어떻게 작동하는지는 아직 아니다.** 처음 쓸 때 `/initproject` 가 첫 실전이 된다 — 어긋나는 게 나오면 그게 정상이고, 그때 고치면 된다.
+
+전체 미결 목록: `.claude/docs/DESIGN.md` 의 Open Questions.
+
 ## Quick Start
 
 기존 프로젝트의 루트로 실행:
@@ -17,6 +36,10 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
 ```bash
 git clone --depth 1 https://github.com/GunwooYun/claude-code-orchestrator.git .starter && cp -r .starter/.claude .starter/.agents .starter/CLAUDE.md . && rm -rf .starter && claude
 ```
+
+`tests/` 는 일부러 복사하지 않는다 — 대부분 이 저장소 자신을 검사하는 테스트다.
+검증 계약을 스택 무관하게 확인하는 `tests/test_verify_scripts.py` 하나만 쓸모가
+있으니, 원하면 그것만 따로 가져온다.
 
 ## Prerequisites
 
@@ -343,6 +366,12 @@ verify-full          무제한    CI 또는 사람만
 `0` 은 통과(출력 없음), `0 이외` 는 실패(이유 출력). **파일이 없으면 그 티어가
 설정되지 않았다는 뜻**이고, 호출자는 그 사실을 그대로 알린다 — 통과로 치지 않는다.
 
+**게이트는 파일을 고치지 않는다.** 저장 티어가 `--fix` 를 돌리면 모델이 방금 쓴
+파일을 조용히 다시 쓰게 되고(미사용 import 삭제, 종료 코드 0, 출력 0), 모델은 그
+사실을 알 방법이 없다. 자동 수정은 사람이 의도적으로 부르는 명령의 몫이다. 그래도
+고치는 티어를 두려면 **바뀌었으면 반드시 출력한다** — 침묵은 "할 말 없음" 하나만
+뜻해야 한다.
+
 언어·컨테이너·원격 장비·경로 변환·환경 준비는 **전부 스크립트 안에** 있다.
 그래서 사람이 손으로 재현할 수 있다.
 
@@ -416,7 +445,7 @@ claude
 
 `/initproject`는 스택을 감지하고, 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 묻고, 스택이 템플릿 기본값과 다르면 Step C의 파일들을 고치고, Step D의 `AGENTS.md`·`DESIGN.md`를 채운 뒤 스모크 테스트와 보고로 끝난다. 스택이 uv/ruff 그대로면 "맞출 게 없음"이라고 보고한다. 남은 판단은 `DESIGN.md` TODO에 기록되어 이후 세션이 이어받는다.
 
-**Step E — 스모크 테스트**: `/deep-reasoning`·`/antigravity-system` 스킬이 목록에 뜨는지, `agy -p "Reply with OK" --model gemini-3.7-flash-low`가 동작하는지, 파일 하나 편집 후 린트 훅 출력과 `git diff`(포매터가 과하게 손대지 않는지)를 확인한다.
+**Step E — 스모크 테스트**: `/deep-reasoning`·`/antigravity-system` 스킬이 목록에 뜨는지, `.claude/skills/antigravity-system/agy-probe` 가 `READY` 를 내는지(아니면 첫 단어가 상태다 — `MISSING`/`UNAUTHENTICATED`/`DEGRADED`), 파일 하나를 일부러 깨뜨려 저장했을 때 린트 훅이 **말을 하는지**, 그리고 `git status` 로 **게이트가 파일을 고치지 않았는지**를 확인한다. 게이트가 조용히 고치면 그 티어를 잘못 만든 것이다.
 
 남는 판단(테스트 실행 방식, 기존 린트 지적 처리 등)은 `DESIGN.md`의 TODO에 적어 두고 실제 작업하면서 오케스트레이터와 함께 정하면 된다 — `design-tracker`가 결정을 기록한다.
 
@@ -518,6 +547,10 @@ cd ../<project>-review && claude
 - deep-reasoning의 "읽기 전용"은 도구 제거 + 지시이지 커널 샌드박스가 아니다. 커밋 전 `git status`를 습관화한다.
 - 서브에이전트는 서브에이전트를 못 띄운다. general-purpose 안에서 설계 판단이 필요해지면 메인으로 돌아와 deep-reasoning을 부른다(훅 문구도 그렇게 안내한다).
 - agy 로그(`.claude/logs/`)와 체크포인트(`.claude/checkpoints/`)는 gitignore 대상이다 — 남기고 싶은 결론은 `docs/`로 옮긴다.
+- **게이트에 자동 수정 명령(`--fix`, 포매터)을 넣지 않는다.** 저장할 때마다 모델이 방금 쓴 파일이 조용히 바뀌고, 종료 코드 0 + 출력 0 이면 모델은 그걸 알 수 없다. `/initproject` 가 `verify-*` 를 쓸 때 이 규칙을 지킨다.
+- **리뷰용 워크트리를 `main` 에 체크아웃하지 않는다.** 그러면 그 안에서 `HEAD == main` 이라 `git diff main...HEAD` 가 빈 출력을 내고, 리뷰 세션이 "변경 없음"을 보고 조용히 끝난다. 작업 브랜치에 체크아웃한다.
+- **맨몸 `poe`·`pytest` 를 문서에 적지 않는다.** `poe` 는 exit 127 이고 `python3 -m unittest` 는 0개를 돌리고 OK 를 낸다 — 둘 다 "통과했다"로 읽힌다. `uv run` 을 붙인다.
+- **항상 로드되는 `rules/dev-environment.md` 를 프로젝트에 맞게 고치지 않으면** 세션마다 틀린 도구·없는 경로를 읽는다. 없는 경로에 타입 체커는 흔히 **exit 0** 을 내므로 거짓 통과가 된다.
 
 ## 개발 (Development)
 
@@ -541,15 +574,19 @@ uv add <package>           # 패키지 추가
 uv add --dev <package>     # 개발 종속성 추가
 uv sync                    # 종속성 동기화
 
-# 품질 점검
-poe lint                   # ruff check --fix (포맷은 poe format)
-poe format                 # ruff format
-poe typecheck              # mypy src/  ← src/ 디렉토리가 있어야 동작 (이 템플릿 저장소에는 없음)
-poe test                   # pytest (tests/)
-poe all                    # lint → format → typecheck → test
+# 품질 점검 — `poe` 는 프로젝트 환경 안에만 있다. 맨몸으로 부르면 exit 127
+uv run poe lint            # ruff check .        (읽기 전용)
+uv run poe format-check    # ruff format --check (읽기 전용)
+uv run poe typecheck       # ty check .claude/hooks .claude/skills/checkpointing/checkpoint.py
+uv run poe test            # pytest
+uv run poe all             # lint → format-check → typecheck → test  ← 게이트
+
+# 고치는 쪽은 게이트가 아니라 사람이 부른다
+uv run poe fix             # ruff check --fix .
+uv run poe format          # ruff format .
 
 # 직접 실행
-uv run pytest -v
+uv run pytest -q
 uv run ruff check .
 ```
 
@@ -560,15 +597,17 @@ uv run ruff check .
 | 후크 | 트리거 | 동작 |
 |--------|----------|------|
 | `agent-router.py` | 사용자 입력 | deep-reasoning / agy 라우팅 제안 |
-| `lint-on-save.py` | 파일 저장 | 자동 lint 실행 |
-| `suggest-deep-reasoning-before-write.py` | 파일 쓰기 전 | 심층 추론 리뷰 제안 |
+| `lint-on-save.py` | 파일 저장 | `.claude/scripts/verify-save` 에 경로를 넘기고 출력을 그대로 전달. **도구 이름을 하나도 모른다** — 무엇을 검사하는지는 스크립트가 정한다. 티어가 없으면 세션당 한 번만 알린다 |
+| `suggest-deep-reasoning-before-write.py` | 파일 쓰기 전 | 심층 추론 리뷰 제안. 크기 규칙(500자)은 **소스 파일에만** 적용된다 — 긴 문서는 설계 결정이 아니다. 경로가 설계처럼 보이면(`DESIGN.md`, `core/`, `schema`) 내용과 무관하게 발동 |
 | `suggest-deep-reasoning-after-plan.py` | Plan 태스크 후 | 계획 리뷰 제안 |
 | `suggest-antigravity-research.py` | 웹 검색/페치 전 | agy 리서치 제안 |
 | `post-test-analysis.py` | 테스트 실패 | 디버깅 분석 제안 |
-| `post-implementation-review.py` | 파일 3개 이상 / 100줄 이상 수정 후 | 코드 리뷰 제안 |
+| `post-implementation-review.py` | 파일 3개 이상 / 100줄 이상 수정 후 | 코드 리뷰 제안. **세션당 한 번**만 (상태는 세션 id 로 분리) |
 | `log-cli-tools.py` | agy 실행 | I/O 로깅 (`.claude/logs/cli-tools.jsonl`) |
 
 훅은 전부 **제안만** 한다(차단하지 않음). 훅 파일명을 바꾸면 `.claude/settings.json`의 등록 경로를 **같은 커밋에서** 함께 바꿔야 한다 — 어긋나면 PreToolUse 훅 오류로 모든 Edit이 막힌다.
+
+훅마다 "반응해야 하는 payload / 무시해야 하는 payload" 한 쌍이 `tests/test_hook_effects.py` 에 있다. 계약 테스트(`test_hook_contract.py`)만으로는 **죽은 훅을 잡을 수 없다** — 빈 출력은 "보고할 것 없음"이라는 합법적인 답이므로, payload 를 읽고 바로 리턴하는 훅이 전부 통과한다. 실제로 그랬던 훅이 있었다.
 
 ## Language Rules
 
