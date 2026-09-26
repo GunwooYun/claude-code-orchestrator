@@ -189,16 +189,42 @@ class TierVocabularyTests(unittest.TestCase):
 
     TIERS = ("save", "task", "unit", "full")
 
-    def test_the_skill_uses_the_contract_tier_names(self) -> None:
+    def test_the_skill_invents_no_verification_command(self) -> None:
+        """
+        Asserted against the SKILL's own text, and scoped to the right property.
+
+        Two corrections are recorded here rather than made silently, per
+        `.claude/rules/testing.md` principle 5.
+
+        1. The original concatenated `.claude/scripts/README.md`, which always
+           contains all four tier names, so the assertion held no matter what the
+           skill said. An independent review reproduced it: replacing every
+           `verify-*` in the skill with a placeholder left this class green.
+        2. The first repair over-corrected — it demanded all four entrypoints in
+           the skill, and went red on a correct file. `/feature` has no reason to
+           name `verify-save` (the save tier belongs to a hook, not a todo) and
+           deliberately never runs `verify-full` ("CI 또는 사람의 몫"). The
+           scenario was wrong, so the scenario changed.
+
+        What actually matters: the skill must not INVENT a command. Every
+        verification command it names has to be one of the contract's four
+        entrypoints, and it must name the two it drives.
+        """
         body = text()
-        for tier in self.TIERS:
+        used = set(re.findall(r"verify[-:]([a-z]+)", body))
+        invented = sorted(used - set(self.TIERS))
+        self.assertEqual(
+            [],
+            invented,
+            f"the skill names verification commands that are not contract tiers: "
+            f"{invented}. Tier commands come from .claude/scripts/, not from prose",
+        )
+        for tier in ("task", "unit"):
             self.assertIn(
-                f"verify-{tier}" if tier != "save" else "verify-save",
-                body
-                + (REPO / ".claude" / "scripts" / "README.md").read_text(
-                    encoding="utf-8"
-                ),
-                f"the {tier} tier has no entrypoint name anywhere",
+                tier,
+                used,
+                f"the skill drives the {tier} tier but never names it, so the "
+                "implementation loop has no command to run",
             )
 
     def test_the_tier_table_is_owned_by_the_testing_rule(self) -> None:

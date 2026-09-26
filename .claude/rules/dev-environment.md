@@ -54,7 +54,7 @@ uv run ruff format .
 
 ```toml
 [tool.ruff]
-target-version = "py312"
+target-version = "py311"   # 이 저장소 기준. 프로젝트에 맞게
 line-length = 88
 
 [tool.ruff.lint]
@@ -76,7 +76,7 @@ quote-style = "double"
 
 ```bash
 # Run type check
-uv run ty check src/
+uv run ty check <체크할 경로>
 ```
 
 ### ty Features
@@ -125,12 +125,22 @@ Manage multiple tool executions in `pyproject.toml` scripts or poe:
 
 ```toml
 [tool.poe.tasks]
-lint = "ruff check . && ruff format --check ."
-format = "ruff check --fix . && ruff format ."
-typecheck = "ty check src/"
-test = "pytest -v"
-all = ["lint", "typecheck", "test"]
+# 게이트는 읽기 전용이어야 실패할 수 있다 — 자동 수정 명령을 게이트에 넣지 않는다.
+lint = "ruff check ."
+format-check = "ruff format --check ."
+typecheck = "ty check <체크할 경로>"
+test = "pytest"
+all = ["lint", "format-check", "typecheck", "test"]
+
+# 파일을 고치는 것은 사람이 의도적으로 돌리는 쪽에 둔다.
+fix = "ruff check --fix ."
+format = "ruff format ."
 ```
+
+**`src/` 를 전제하지 않는다.** 없는 경로에 `ty` 는 **exit 0** 을 내므로(거짓 통과)
+체크 대상은 실제로 존재하는 경로로 적는다. 이 저장소 자신은 `.claude/hooks` 와
+`.claude/skills/checkpointing/checkpoint.py` 를 체크한다 — `/initproject` 가
+프로젝트마다 이 파일을 다시 쓴다.
 
 ## Common Commands
 
@@ -144,15 +154,15 @@ source .venv/bin/activate
 uv sync --all-extras
 
 # Quality check (all)
-uv run ruff check . && uv run ruff format --check . && uv run ty check src/ && uv run pytest
+uv run ruff check . && uv run ruff format --check . && uv run ty check <체크할 경로> && uv run pytest
 
-# Or via poe
-poe all
+# Or via poe — `poe` 는 프로젝트 환경 안에만 있다. 맨몸으로 부르면 exit 127
+uv run poe all
 ```
 
 ## Pre-commit Checklist
 
 - [ ] `uv run ruff check .` passes
 - [ ] `uv run ruff format --check .` passes
-- [ ] `uv run ty check src/` passes
+- [ ] `uv run ty check <체크할 경로>` passes
 - [ ] `uv run pytest` passes

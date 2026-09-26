@@ -203,6 +203,50 @@ class ProcessHookInputTests(unittest.TestCase):
         self.assertEqual(_json.loads(lines[0])["prompt"], "한글")
 
 
+class SoftDenySuccessTests(unittest.TestCase):
+    """
+    The success flag must reflect agy's headless soft-deny.
+
+    This is not just a log field: checkpoint.py renders it as [OK] / [FAILED] in
+    the session history. A regression records a DENIED agy call as a success, so
+    a later session reads "we researched that" when nothing was researched — the
+    exact failure `CLAUDE.md` 운영 주의사항 singles out. Measured by an
+    independent review: removing the soft-deny branch left all 312 tests green.
+    """
+
+    def test_a_soft_denied_call_is_not_a_success(self) -> None:
+        for marker in hook.SOFT_DENY_MARKERS:
+            with self.subTest(marker=marker):
+                self.assertFalse(
+                    hook.determine_success("some answer text", f"warning: {marker}\n"),
+                    f"stderr containing {marker!r} was counted as success",
+                )
+
+    def test_an_empty_answer_is_not_a_success(self) -> None:
+        self.assertFalse(hook.determine_success("", ""))
+        self.assertFalse(hook.determine_success("   \n", ""))
+
+    def test_a_json_result_is_gated_on_status_and_response(self) -> None:
+        self.assertFalse(
+            hook.determine_success('{"status": "SUCCESS", "response": ""}', ""),
+            "an empty response with status SUCCESS is the soft-deny shape",
+        )
+        self.assertFalse(
+            hook.determine_success('{"status": "ERROR", "response": "text"}', "")
+        )
+
+    def test_a_real_answer_is_a_success(self) -> None:
+        """The flag must not be achieved by calling everything a failure."""
+        self.assertTrue(hook.determine_success("a real answer", ""))
+        self.assertTrue(
+            hook.determine_success('{"status": "SUCCESS", "response": "text"}', "")
+        )
+        self.assertTrue(
+            hook.determine_success("a real answer", "note: cache warmed\n"),
+            "ordinary stderr noise must not mark a good call as failed",
+        )
+
+
 class BuildEntryTests(unittest.TestCase):
     def test_builds_entry_for_real_call(self):
         entry = hook.build_entry('agy -p "Q" --model=m1', {"stdout": "A", "stderr": ""})

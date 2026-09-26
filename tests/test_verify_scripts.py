@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -249,9 +250,14 @@ class CallerContractTests(unittest.TestCase):
 
 class SaveTierContractTests(unittest.TestCase):
     """
-    The project's real verify-save, on inputs that need no toolchain.
+    The project's real verify-save.
 
-    Only paths it must ignore are used, so nothing runs and nothing is mutated.
+    The earlier version of this class used ONLY paths the script must ignore,
+    and said so: "nothing runs and nothing is mutated". That is why a real
+    defect survived — `verify-save` was running `ruff check --fix`, so every
+    save silently rewrote the file (an unused import was deleted with exit 0 and
+    no output), and no test ever handed it a file the tier actually processes.
+    `NonMutationTests` below closes that.
     """
 
     def setUp(self) -> None:
@@ -293,6 +299,102 @@ class SaveTierContractTests(unittest.TestCase):
                 "",
                 (result.stdout + result.stderr).strip(),
                 "an unhandled path must produce no output",
+            )
+
+
+class NonMutationTests(unittest.TestCase):
+    """
+    A save-tier gate reports; it does not rewrite the file.
+
+    This is a contract property, not a Python one: the hook runs this script
+    after EVERY Edit/Write, on the file the model just wrote. A gate that edits
+    that file puts the model's memory and the disk out of step, and when it does
+    so silently — exit 0, no output, which the contract defines as "nothing to
+    report" — nobody finds out. Auto-fixing belongs in a command a person runs.
+
+    The extension to probe is read out of the tier script itself (the `*.ext)`
+    globs of its case statement), so this works for a project that checks .js or
+    .rs rather than .py. If it cannot be determined, the test skips loudly
+    rather than passing on a file the tier ignores — which is exactly how the
+    original defect hid.
+    """
+
+    def setUp(self) -> None:
+        self.script = entrypoints().get("save")
+        if self.script is None:
+            self.skipTest("no save tier configured")
+
+    def _checked_extensions(self) -> list[str]:
+        body = self.script.read_text(encoding="utf-8", errors="replace")
+        # `    *.py) ;;` — the globs a shell case uses to select files.
+        return re.findall(r"\*(\.[A-Za-z0-9_]+)\)", body)
+
+    def run_save(self, path: Path) -> subprocess.CompletedProcess[str]:
+        argv = [str(self.script), str(path)]
+        if self.script.suffix == ".py":
+            argv = [sys.executable, *argv]
+        return subprocess.run(
+            argv, cwd=str(REPO), capture_output=True, text=True, timeout=300
+        )
+
+    def test_the_tier_declares_which_files_it_checks(self) -> None:
+        """Guards the probe below: with no extension found it would skip forever."""
+        self.assertTrue(
+            self._checked_extensions(),
+            "cannot tell which files this save tier processes, so the "
+            "non-mutation property below is untested",
+        )
+
+    def test_a_processed_file_is_not_rewritten(self) -> None:
+        extensions = self._checked_extensions()
+        if not extensions:
+            self.skipTest("cannot determine which files the save tier processes")
+        with tempfile.TemporaryDirectory() as tmp:
+            # Content a linter is likely to want to change: an unused import and
+            # loose spacing. Deliberately NOT already-clean, or the assertion
+            # would hold for the wrong reason.
+            target = Path(tmp) / f"probe{extensions[0]}"
+            target.write_text(
+                "import os\n\n\ndef f(a: int, b: int) -> int:\n    return  a+b\n",
+                encoding="utf-8",
+            )
+            before = target.read_bytes()
+            result = self.run_save(target)
+            after = target.read_bytes()
+            self.assertEqual(
+                before,
+                after,
+                "the save tier rewrote the file it was asked to check "
+                f"(exit {result.returncode}, output "
+                f"{(result.stdout + result.stderr).strip()[:200]!r}). A gate "
+                "reports; it does not edit. Auto-fixing belongs in a command a "
+                "person runs.",
+            )
+
+    def test_a_problem_is_reported_rather_than_fixed(self) -> None:
+        """
+        The other half: non-mutation must not be achieved by doing nothing. The
+        tier has to still notice something.
+        """
+        extensions = self._checked_extensions()
+        if not extensions:
+            self.skipTest("cannot determine which files the save tier processes")
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / f"probe{extensions[0]}"
+            target.write_text(
+                "import os\n\n\ndef f(a: int, b: int) -> int:\n    return  a+b\n",
+                encoding="utf-8",
+            )
+            result = self.run_save(target)
+            self.assertNotEqual(
+                0,
+                result.returncode,
+                "the save tier reported nothing at all about a file with an "
+                "unused import and loose spacing, so it is not checking",
+            )
+            self.assertTrue(
+                (result.stdout + result.stderr).strip(),
+                "a failing save tier must say why",
             )
 
 

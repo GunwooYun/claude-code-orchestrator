@@ -89,6 +89,8 @@
 | The per-project contract is the **filesystem** (four scripts), not a profile schema | An adversarial review falsified the premise. Measured: exactly ONE hook runs stack tools, and the real generality bug was `/initproject` Step 5 omitting `tdd`/`simplify` (6 hardcoded `uv run pytest` lines surviving setup). A profile would also have been a 4th copy of the test command — after `pyproject.toml`, `rules/testing.md` and `CLAUDE.md` — creating exactly the drift Step 3 exists to prevent. `runs_in: container` alone would force the hook to become a path-mapping execution adapter | A `project-profile.toml` schema; reading existing files (`pyproject.toml` is Python-only, Yocto has neither) | 2026-09-25 |
 | Verification plan comes FIRST, before any tooling | It is prose, it was already the highest-leverage step, and applying it to a real Yocto and a real Django repo is what reveals which commands need names. Designing a schema before observing its consumers was the core mistake | Schema first, then hooks, then the plan | 2026-09-25 |
 | Verification tiers are defined by DURATION, not by the words unit/e2e | "e2e" means an HTTP request to a compose stack in one project and a QEMU `testimage` run in another; the word cannot drive a decision, the budget can | Model unit/integration/e2e as first-class | 2026-09-25 |
+| A save-tier gate is READ-ONLY, and a test hands it a file the tier actually processes | `verify-save` ran `ruff format` and `ruff check --fix`, so the hook rewrote every file the model had just written: an unused import deleted, exit 0, no output — the silence the contract defines as "nothing to report". `/initproject` Step 5 already said "never put an auto-fixing command in a gate" and this repository's own gate did. No test caught it because `SaveTierContractTests` used only paths the tier IGNORES and said so in its docstring. Found by the separate-session review | Keep `--fix` and document the hazard; report the change instead of removing it | 2026-09-26 |
+| The review worktree is checked out at the WORK branch, never at `main` | `/feature` Phase 6 Option A said to check out `main` and then run `git diff main...HEAD`, which inside that worktree compares main with itself and prints nothing — the review session sees "no changes" and stops, silently. README described the same procedure differently (`git diff <base>..main`), so the two files disagreed about where the work lives. Introduced by the restructure that carried CLAUDE.md's worktree command into the skill. The cloud case (no interactive `claude`) is now written down too: push the branch and start a fresh session against it, since the isolation that matters is context, not files | Leave the recipe local-only; keep two wordings | 2026-09-26 |
 | `/feature`'s document order IS its execution order, and a test compares the two | The workflow diagram promised an "Implementation Loop" step that had no section anywhere in the file — the one step where code is written was the only step with no instructions, and its rules were parked in Phase 4 (Task Creation) for want of a home. `## User Confirmation`, the gate before any code, sat AFTER the post-implementation review section. Both are structural and no substring test could see them, so `tests/test_feature_workflow.py` parses the diagram and the headings and asserts both directions: every diagram step has a section in order, and every `## Phase` section is in the diagram (the direction that would have caught the stray `## User Confirmation`) | Reorder and rely on review; write a phrase test | 2026-09-26 |
 | The confirmation gate is numbered `Phase 4b`, and phases are never renumbered | "Phase N" is a public name: eight files point into `/feature` by phase number (CLAUDE.md, two rules, `/ticket`, `/plan`, `.claude/scripts/README.md`, DESIGN.md) and none of it was tested, so a renumbering would have drifted silently. An unnumbered step between 4 and 5 also reads as an aside a model may skip, while `4 → 4b → 5` reads as a sequence — the file already used that convention for Phase 2b. A test resolves every inbound phase reference | Renumber into 1..8; leave the gate unnumbered | 2026-09-26 |
 | The verification plan is persisted into `## Current Project`, not only into the conversation | Phase 6 Option A asks a NEW session to compare the plan's scenario IDs against the tests, and the plan existed only in the finished conversation — the template had a step whose input it never saved. The `## Current Project` block now carries a compact scenario table, keeping the IDs and the negative-test column, which are what the comparison is made of | Leave it in the plan document; drop the comparison | 2026-09-26 |
@@ -181,6 +183,40 @@ Dropped after review:
 - ~~Stop hook that blocks "done" without a test run~~ — a `command` hook cannot
   force continuation, so it would be the only non-Python hook here, and the
   8-block cap makes it unreliable.
+
+- [x] Separate-session neutral review performed (the procedure this file's
+      Phase 6 Option A prescribes), on commit `45c4afa`. A fresh session with no
+      context from the implementing one reviewed `main...HEAD` and pushed its
+      report to the branch `claude/review-45c4afa`. It found 13 defects and
+      three mutations that left all 312 tests green. **Twelve of its claims were
+      re-reproduced here before anything was accepted; all twelve reproduced
+      exactly**, including byte-identical md5 sums on the verify-save case.
+
+      Fixed in this session: F1 (review worktree / empty diff, in `/feature`,
+      README and CLAUDE.md), F2 (`verify-save` made read-only, contract amended,
+      non-mutation test added), F3 (`poe` → `uv run poe` where the always-loaded
+      files point), F4 (`dev-environment.md` realigned with `pyproject.toml`:
+      py311, no `src/`, real task list), and the four verification gaps — the
+      symlink refusal, the soft-deny success flag, the line-count trigger, and a
+      vacuous tier test of my own that passed with every `verify-*` stripped out
+      of the skill.
+
+      Deferred with the reviewer's agreement (follow-up, not merge-blocking):
+      F5 `checkpoint.py` drops renames (`R` status is neither A/M/D, and this
+      branch contains three); F6 its commit walker is unbounded while the file
+      walkers use `HEAD~10`, so one summary mixes two ranges; F8 the executor
+      agent file is told to follow the fallback ladder without carrying it;
+      F9 DESIGN.md asserts no MCP tool names are in the template while two
+      appear in `/doc-write`; F10 the byte figure in the budget docstring is
+      367 bytes stale; F11 README's `python3 -m unittest` runs 0 tests and
+      reports OK; F12 the new `Bash(.claude/scripts/*)` allowance pre-approves
+      scripts the model itself writes; F13 the design-review hook fires on any
+      write over 500 characters.
+
+      What the review did NOT cover, in its own words: it never ran `/feature`,
+      `/initproject`, `/lens-review`, `/doc-write`, `/jira-setup` or `/ticket`;
+      agy, Jira and Windows are all unverified; and six test modules were read
+      but not mutation-checked.
 
 - [x] `/feature` restructured into execution order with the missing
       implementation-loop section written, and the duplication around it closed:

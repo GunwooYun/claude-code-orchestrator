@@ -248,6 +248,89 @@ class HousekeepingTests(unittest.TestCase):
             self.assertTrue(expected.is_file(), "this session's own state was removed")
 
 
+class SymlinkRefusalTests(unittest.TestCase):
+    """
+    R3, actually exercised.
+
+    The hook refuses to write through a symlink, and both its own docstring and
+    DESIGN.md record that as a closed defect with regression tests attached.
+    Measured by an independent review: deleting the check
+    (`if path.is_symlink(): return` -> `if False: return`) left all 312 tests
+    green. The claim was true of the code and false of the tests.
+    """
+
+    def test_state_is_not_written_through_a_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            victim = root / "victim.json"
+            victim.write_text("untouched\n", encoding="utf-8")
+            directory = hook.state_dir(root)
+            directory.mkdir(parents=True, exist_ok=True)
+            planted = directory / hook.state_filename("s1")
+            planted.symlink_to(victim)
+
+            hook.save_state(planted, {"files_changed": ["a.py"], "total_lines": 10})
+
+            self.assertEqual(
+                "untouched\n",
+                victim.read_text(encoding="utf-8"),
+                "the hook wrote through a planted symlink",
+            )
+
+    def test_a_regular_path_is_still_written(self) -> None:
+        """The refusal must not be achieved by never writing at all."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "state.json"
+            hook.save_state(path, {"files_changed": ["a.py"], "total_lines": 10})
+            self.assertTrue(path.is_file(), "no state was written")
+            self.assertEqual(["a.py"], json.loads(path.read_text())["files_changed"])
+
+
+class LineThresholdTests(unittest.TestCase):
+    """
+    The second trigger. The file-count threshold had tests; the line threshold
+    had none, so raising MIN_LINES_FOR_REVIEW to 100000 left the suite green.
+    """
+
+    # Deliberate literals, not `hook.MIN_LINES_FOR_REVIEW`. Deriving the input
+    # from the constant makes the test adapt to any retuning — measured: with
+    # `total_lines: hook.MIN_LINES_FOR_REVIEW`, raising the constant to 100000
+    # kept the suite green, which is the tautology this class exists to avoid.
+    # These two numbers bracket the shipped value (100) and are a ratchet: a
+    # deliberate retuning outside the bracket must fail here and be argued for.
+    CLEARLY_LARGE = 200
+    CLEARLY_SMALL = 20
+
+    def test_the_line_threshold_fires_on_one_big_file(self) -> None:
+        should, reason = hook.should_suggest_review(
+            {
+                "files_changed": ["only.py"],
+                "total_lines": self.CLEARLY_LARGE,
+                "review_suggested": False,
+            }
+        )
+        self.assertTrue(
+            should,
+            f"{self.CLEARLY_LARGE} lines in a single file did not trigger a "
+            "review suggestion, so only the file-count trigger works",
+        )
+        self.assertIn("lines", reason)
+
+    def test_a_small_single_file_stays_quiet(self) -> None:
+        should, _ = hook.should_suggest_review(
+            {
+                "files_changed": ["only.py"],
+                "total_lines": self.CLEARLY_SMALL,
+                "review_suggested": False,
+            }
+        )
+        self.assertFalse(
+            should,
+            f"{self.CLEARLY_SMALL} lines triggered a review — the threshold is "
+            "ignored, so the hook fires on every edit",
+        )
+
+
 class RobustnessTests(unittest.TestCase):
     """The hook is advisory: nothing it meets may break the session."""
 

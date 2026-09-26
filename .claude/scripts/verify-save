@@ -10,6 +10,12 @@
 #
 # Silent on success: the contract says a passing run prints nothing, so the
 # caller can stay quiet instead of announcing every saved file.
+#
+# READ-ONLY. Every tool here runs in check mode. An earlier version ran
+# `ruff format` and `ruff check --fix`, so each save silently rewrote the file
+# the model had just written — an unused import was deleted with exit 0 and no
+# output, which the contract defines as "nothing to report". Auto-fixing belongs
+# in `uv run poe fix` / `poe format`, which a person runs on purpose.
 set -u
 
 path="${1:-}"
@@ -49,9 +55,9 @@ report() {
 }
 
 # shellcheck disable=SC2086
-report "ruff format" $run ruff format "$path"
+report "ruff format" $run ruff format --check "$path"
 # shellcheck disable=SC2086
-report "ruff check" $run ruff check --fix "$path"
+report "ruff check" $run ruff check "$path"
 # shellcheck disable=SC2086
 report "ty check" $run ty check "$path"
 

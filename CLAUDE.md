@@ -189,11 +189,11 @@ description 은 본문 없이 읽힌다), 어긋나는 순간
     - type check
 - **pytest**
     - 테스트 표준
-- 공통 명령어
+- 공통 명령어 (`poe` 는 프로젝트 환경 안에만 있다 — 맨몸으로 부르면 exit 127)
     ```
-    poe lint
-    poe test
-    poe all
+    uv run poe lint
+    uv run poe test
+    uv run poe all
     ```
 
 → 참고: `.claude/rules/dev-environment.md`
@@ -234,7 +234,7 @@ Session History 는 항상 마지막이다.** `/checkpointing` 이 그 섹션을
 
 - **서브에이전트는 서브에이전트를 못 띄운다.** general-purpose 안에서 설계 판단이 필요해지면 결과만 보고하고, 메인이 `Task(subagent_type="deep-reasoning")`를 호출한다.
 - **`/checkpointing`(기본 모드)은 `CLAUDE.md`와 `.agents/rules/AGENTS.md`의 Session History 섹션을 덮어쓴다.** 실행 전에 커밋해 두고, 리뷰 전용 세션에서는 실행하지 않는다. `## Project Setup` 과 `## Current Project` 블록은 Session History 섹션 **앞**에 둔다 (위 「`CLAUDE.md` 섹션의 수명」).
-- **리뷰는 별도 세션에서.** 구현한 세션은 자기 코드에 편향되므로 `git worktree add --detach ../<project>-review main`으로 격리한 새 `claude` 세션에서 "리포트 파일만 작성, 다른 파일 수정 금지"로 리뷰를 받고, 원 세션에서 반영한다. 세션 안에서의 가벼운 리뷰는 deep-reasoning 서브에이전트로 충분하다.
+- **리뷰는 별도 세션에서.** 구현한 세션은 자기 코드에 편향되므로 `git worktree add --detach ../<project>-review <작업 브랜치>`로 격리한 새 `claude` 세션에서 "리포트 파일만 작성, 다른 파일 수정 금지"로 리뷰를 받고, 원 세션에서 반영한다. **워크트리를 `main`에 체크아웃하면 안 된다** — 그 안에서 `HEAD == main`이라 `git diff main...HEAD`가 빈 출력을 내고 리뷰가 조용히 아무것도 안 한다. 대화형 `claude`를 띄울 수 없는 환경(컨테이너·클라우드)에서는 브랜치를 push 하고 그것을 상대로 **새 세션**을 만든다 — 격리의 본질은 파일이 아니라 컨텍스트다. 세션 안에서의 가벼운 리뷰는 deep-reasoning 서브에이전트로 충분하다.
 - **훅 파일명을 바꾸면 `.claude/settings.json` 등록 경로를 같은 커밋에서 함께 바꾼다.** 어긋나면 PreToolUse 훅 오류로 모든 Edit이 막힌다.
 - **agy 헤드리스 호출의 빈 응답은 실패다** (soft-deny, exit 0). stderr를 버리지 말고 `--output-format json`의 `.status`/`response`로 판단한다. 파일을 읽는 호출은 템플릿 패턴의 플래그와 "파일 수정 금지" 문구를 그대로 쓴다.
 - **deep-reasoning의 읽기 전용은 도구 제거 + 지시**이지 커널 샌드박스가 아니다. 커밋 전 `git status`로 의도치 않은 변경을 확인한다.

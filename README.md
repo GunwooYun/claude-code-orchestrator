@@ -467,10 +467,17 @@ claude
 구현한 세션은 자기 코드에 편향된다. 리뷰는 **git worktree**로 격리한 새 세션에서 받는다:
 
 ```bash
-git worktree add --detach ../<project>-review main   # main이 체크아웃된 상태라 --detach 필요
+git worktree add --detach ../<project>-review <작업 브랜치>   # main이 아니라 작업 브랜치
 cd ../<project>-review && claude
-# → "git diff <base>..main 을 리뷰하고 결과를 .claude/docs/review-report.md 에만 작성해. 다른 파일은 수정하지 마."
+# → "git diff main...HEAD 를 리뷰하고 결과를 .claude/docs/review-report.md 에만 작성해. 다른 파일은 수정하지 마."
 ```
+
+**`main` 에 체크아웃하지 않는다.** 그러면 워크트리 안에서 `HEAD == main` 이 되어
+`git diff main...HEAD` 가 빈 출력을 내고, 리뷰 세션은 검토할 것을 찾지 못한 채
+끝난다 — 조용히 실패한다.
+
+컨테이너·클라우드라 대화형 `claude` 를 띄울 수 없으면 작업 브랜치를 push 하고 그것을
+상대로 **새 세션**을 만든다. 리포트는 별도 리뷰 브랜치로 받는다.
 
 - 리뷰 세션에서는 `/checkpointing`을 실행하지 않는다(CLAUDE.md·AGENTS.md를 덮어쓴다).
 - 리포트를 원래 세션에서 읽고 항목별로 반영 → 리포트 삭제 → `git worktree remove ../<project>-review`.
