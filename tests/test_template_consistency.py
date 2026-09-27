@@ -630,5 +630,51 @@ class ScriptContractTests(unittest.TestCase):
             )
 
 
+class InitprojectSkillTests(unittest.TestCase):
+    """Findings from the first real /initproject run (skill-test-initproject.md)."""
+
+    SKILL = SKILLS / "initproject" / "SKILL.md"
+
+    def _drift_grep(self) -> str:
+        """The Step 6 drift grep, exactly as the skill tells the model to run it."""
+        text = self.SKILL.read_text(encoding="utf-8")
+        match = re.search(r"```bash\n(grep -rn 'uv run.*?)```", text, re.DOTALL)
+        self.assertIsNotNone(match, "Step 6 drift grep block not found")
+        assert match is not None
+        return match.group(1)
+
+    def test_drift_grep_does_not_report_the_skills_own_files(self) -> None:
+        # Behavioural: runs the documented pipeline. Every hit it prints must be
+        # judged by a person, so hits on the skill's own instructions are noise
+        # the person has to learn to ignore on every run.
+        import subprocess
+
+        result = subprocess.run(
+            ["sh", "-c", self._drift_grep()],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        hits = result.stdout.splitlines()
+        self.assertTrue(hits, "the grep found nothing — the scan itself is broken")
+        own = [h for h in hits if h.startswith(".claude/skills/initproject/")]
+        self.assertEqual([], own, "the drift grep reports the skill's own text")
+
+    def test_no_document_promises_a_fixed_number_of_scripts(self) -> None:
+        # Step 5 says a tier with no honest answer gets no script, so a fixed
+        # count is a promise the skill is told to break.
+        promise = re.compile(r"four verification scripts|스크립트 4개")
+        for path in (REPO / "README.md", self.SKILL):
+            with self.subTest(path=path.name):
+                text = path.read_text(encoding="utf-8")
+                self.assertIsNone(promise.search(text))
+
+    def test_rules_for_what_you_write_point_at_the_helper_convention(self) -> None:
+        text = self.SKILL.read_text(encoding="utf-8")
+        section = text.split("### Rules for what you write", 1)[1].split("\n### ", 1)[0]
+        self.assertIn("_lib.sh", section)
+
+
 if __name__ == "__main__":
     unittest.main()

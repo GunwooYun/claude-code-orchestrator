@@ -348,7 +348,7 @@ Confluence 페이지, Jira 티켓 본문, 저장소 준거 문서, 구현 계획
 
 ### `/initproject` — 첫 세션 설정 (프로젝트당 1회)
 
-템플릿을 복사한 직후 실행한다. 스택을 감지하고 → 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 물은 뒤 → `CLAUDE.md` 기술 스택/`## Project Setup`을 채우고 → `.claude/scripts/`의 검증 스크립트 4개를 이 프로젝트의 실제 명령으로 작성하고(계약), 템플릿 자신의 도구가 드러난 산문(`rules/dev-environment.md` 등)을 맞추고 → `.agents/rules/AGENTS.md`에 프로젝트 단락, `docs/DESIGN.md`에 아키텍처 시드를 쓰고 → 스모크 테스트 후 보고한다. 설치·커밋 정책 변경은 반드시 먼저 묻는다.
+템플릿을 복사한 직후 실행한다. 스택을 감지하고 → 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 물은 뒤 → `CLAUDE.md` 기술 스택/`## Project Setup`을 채우고 → `.claude/scripts/`의 검증 스크립트를 이 프로젝트에 정직하게 존재하는 티어만큼 실제 명령으로 작성하고(계약), 템플릿 자신의 도구가 드러난 산문(`rules/dev-environment.md` 등)을 맞추고 → `.agents/rules/AGENTS.md`에 프로젝트 단락, `docs/DESIGN.md`에 아키텍처 시드를 쓰고 → 스모크 테스트 후 보고한다. 설치·커밋 정책 변경은 반드시 먼저 묻는다. 산출물 대부분이 `.claude/` 안에 있어서 **파일마다 쓰기 승인 요청이 뜬다** — 대화형 세션에서 돌린다.
 
 ## 검증 계약 — 어떤 스택에도 붙는 방법
 
@@ -552,6 +552,7 @@ cd ../<project>-review && claude
 - 서브에이전트는 서브에이전트를 못 띄운다. general-purpose 안에서 설계 판단이 필요해지면 메인으로 돌아와 deep-reasoning을 부른다(훅 문구도 그렇게 안내한다).
 - agy 로그(`.claude/logs/`)와 체크포인트(`.claude/checkpoints/`)는 gitignore 대상이다 — 남기고 싶은 결론은 `docs/`로 옮긴다.
 - **게이트에 자동 수정 명령(`--fix`, 포매터)을 넣지 않는다.** 저장할 때마다 모델이 방금 쓴 파일이 조용히 바뀌고, 종료 코드 0 + 출력 0 이면 모델은 그걸 알 수 없다. `/initproject` 가 `verify-*` 를 쓸 때 이 규칙을 지킨다.
+- **신뢰하지 않은 워크스페이스에서 헤드리스(`claude -p`)로 돌리면 `settings.json` 의 `permissions.allow` 가 통째로 무시된다** (`Ignoring N permissions.allow entries ... this workspace has not been trusted`). Quick Start 처럼 대화형 `claude` 로 한 번 열어 신뢰를 수락하면 해결된다. 복사만 해 두고 나중에 헤드리스로 돌리는 경로의 함정이다.
 - **리뷰용 워크트리를 `main` 에 체크아웃하지 않는다.** 그러면 그 안에서 `HEAD == main` 이라 `git diff main...HEAD` 가 빈 출력을 내고, 리뷰 세션이 "변경 없음"을 보고 조용히 끝난다. 작업 브랜치에 체크아웃한다.
 - **맨몸 `poe`·`pytest` 를 문서에 적지 않는다.** `poe` 는 exit 127 이고 `python3 -m unittest` 는 0개를 돌리고 OK 를 낸다 — 둘 다 "통과했다"로 읽힌다. `uv run` 을 붙인다.
 - **항상 로드되는 `rules/dev-environment.md` 를 프로젝트에 맞게 고치지 않으면** 세션마다 틀린 도구·없는 경로를 읽는다. 없는 경로에 타입 체커는 흔히 **exit 0** 을 내므로 거짓 통과가 된다.

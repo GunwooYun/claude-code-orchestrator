@@ -1,6 +1,6 @@
 ---
 name: initproject
-description: First-session setup after copying the orchestrator template into a project. Detects the stack, confirms the per-agent model matrix with the user, checks whether agy is installed and logged in (asking for installation or login while a person is present), writes the four verification scripts in .claude/scripts/ that form this project's contract with the orchestrator, adapts CLAUDE.md / rules / permissions where the template's own toolchain shows through, and seeds the agy context (.agents/rules/AGENTS.md) and DESIGN.md. Run once per project.
+description: First-session setup after copying the orchestrator template into a project. Detects the stack, confirms the per-agent model matrix with the user, checks whether agy is installed and logged in (asking for installation or login while a person is present), writes the verification scripts in .claude/scripts/ (one per tier the project honestly has) that form this project's contract with the orchestrator, adapts CLAUDE.md / rules / permissions where the template's own toolchain shows through, and seeds the agy context (.agents/rules/AGENTS.md) and DESIGN.md. Run once per project.
 disable-model-invocation: true
 ---
 
@@ -22,6 +22,10 @@ in order; skip a step when it does not apply and say so in the final report.
 - `.agents/rules/AGENTS.md` is Antigravity CLI's context: add a project
   paragraph, keep its read-only rules intact, never create a root `AGENTS.md`.
 - Ask before installing anything or changing what gets committed.
+- Tell the user up front that this skill writes several files under `.claude/`
+  and that Claude Code asks for approval on each of them. In a non-interactive
+  run those writes were refused even with `--permission-mode acceptEdits`, while
+  `CLAUDE.md` and `.gitignore` went through — so a headless run stops short.
 
 ## Step 1 — Detect the stack
 
@@ -126,7 +130,7 @@ Leave `## Current Project` for `/feature` to write.
 ## Step 5 — Write the verification scripts (the project contract)
 
 This is where stack detection ends up. Everything the orchestrator will ever know
-about this project's toolchain is captured here, in four executables, and nothing
+about this project's toolchain is captured here, in these executables, and nothing
 downstream needs to know the stack again.
 
 Read `.claude/scripts/README.md` first — it is the contract. Then read
@@ -174,6 +178,10 @@ than no script: it reports success that was never checked.
   tier, or saving a file starts a build.
 - If a tool may be absent, the script decides whether that is a failure and says
   so — do not let the caller guess.
+- Code shared by several scripts (container entry, toolchain sourcing) goes in a
+  helper whose name starts with `_` (e.g. `.claude/scripts/_lib.sh`) or under
+  `lib/` — see `.claude/scripts/README.md`. A name without `_` reads as an
+  entrypoint.
 
 ### Verify what you wrote
 
@@ -212,7 +220,7 @@ Then prove nothing still names the template's default toolchain:
 
 ```bash
 grep -rn 'uv run\|ruff\|\bty\b\|pytest' .claude/rules .claude/skills CLAUDE.md \
-  | grep -v initproject/references
+  | grep -v initproject/
 ```
 
 Every remaining hit must be either this project's real toolchain or an
