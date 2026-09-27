@@ -1,5 +1,10 @@
 {
   "$schema": "https://code.claude.com/schemas/settings.json",
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -156,7 +161,9 @@
       "Bash(else)",
       "Bash(fi)",
       "Bash(done)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(.claude/scripts/*)",
+      "Bash(.claude/skills/antigravity-system/agy-probe)"
     ],
     "deny": [
       "Read(./.env)",

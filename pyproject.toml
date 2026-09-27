@@ -9,14 +9,16 @@ dependencies = []
 [project.optional-dependencies]
 dev = [
     "ruff>=0.8",
-    "mypy>=1.13",
+    "ty>=0.0.1a1",
     "pytest>=8.0",
     "poethepoet>=0.31",
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+# Not a distributable package: this repository is a template whose code lives in
+# .claude/. Declaring a build backend made `uv run` fail ("Unable to determine
+# which files to ship"), which took down every poe task with it.
+[tool.uv]
+package = false
 
 # ============================================================
 # ruff
@@ -33,6 +35,7 @@ select = [
     "I",      # isort
     "B",      # flake8-bugbear
     "UP",     # pyupgrade
+    "ANN",    # flake8-annotations (ty cannot enforce missing annotations)
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
@@ -41,34 +44,28 @@ ignore = [
 [tool.ruff.format]
 quote-style = "double"
 
-# ============================================================
-# mypy
-# ============================================================
-[tool.mypy]
-python_version = "3.11"
-strict = true
-warn_return_any = true
-warn_unused_ignores = true
-disallow_untyped_defs = true
-
-[[tool.mypy.overrides]]
-module = ["tests.*"]
-disallow_untyped_defs = false
+[tool.ruff.lint.per-file-ignores]
+# Test methods carry no annotations by convention.
+"tests/*" = ["ANN"]
 
 # ============================================================
 # pytest
 # ============================================================
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
 addopts = "-v --tb=short"
 
 # ============================================================
 # poethepoet
 # ============================================================
 [tool.poe.tasks]
-lint = "ruff check . --fix"
-format = "ruff format ."
-typecheck = "mypy src/"
+# Read-only checks: these are the gate, so they must be able to fail.
+lint = "ruff check ."
+format-check = "ruff format --check ."
+typecheck = "ty check .claude/hooks .claude/skills/checkpointing/checkpoint.py"
 test = "pytest"
-all = ["lint", "format", "typecheck", "test"]
+all = ["lint", "format-check", "typecheck", "test"]
+
+# Mutating helpers, run on purpose rather than as part of the gate.
+fix = "ruff check --fix ."
+format = "ruff format ."

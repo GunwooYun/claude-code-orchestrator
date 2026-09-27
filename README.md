@@ -10,6 +10,25 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
                             └─ Subagents (Parallel Tasks)
 ```
 
+## 지금 쓸 수 있는가 — 검증된 것과 아닌 것
+
+**쓸 수 있다.** 단, 무엇이 실제로 확인됐는지 알고 쓰는 편이 낫다.
+
+| | 상태 |
+|---|---|
+| 훅 8개 | **동작 확인.** 각 훅마다 "반응해야 하는 입력 / 무시해야 하는 입력" 한 쌍으로 테스트하고, 훅을 no-op 으로 만들면 빨간불이 나는 것까지 확인했다 |
+| `.claude/scripts/verify-save`, `verify-task` | **동작 확인.** 저장 게이트는 **읽기 전용**이다 — 파일을 고치지 않고 보고만 한다 |
+| 규칙·스킬 문서의 일관성 | **테스트로 고정.** 모델 등급↔슬러그 일치, 섹션 포인터 해소, 임계값 단일 정의, 항상-로드 예산 |
+| `checkpoint.py` | **동작 확인** (펜스·rename·범위·원자적 쓰기 회귀 테스트) |
+| 스킬 실행 | `/lens-review` 와 `/deep-reasoning` 은 **실제로 돌았고 진짜 결함을 찾았다**(이 저장소의 `DESIGN.md` 에 "Found by `/lens-review`" 로 남아 있다). **나머지 14개는 한 번도 안 돌렸다** — `/initproject`·`/feature` 포함. 테스트는 스킬의 *문서*가 일관되는지만 본다 |
+| agy 연동 | **미확인.** 이 저장소를 만든 컨테이너에 agy 가 없었다. 모델 정책·soft-deny 실동작은 문서상 설계다 |
+| Jira·Confluence | 커넥터로 **측정한 사실**에 기반하지만(프로젝트 141개, cloudId 중복 등), 스킬 실행은 미확인 |
+| Windows | **미확인.** `verify-*` 해석기 목록은 배려하지만 훅 등록(`python3`)은 아니다 |
+
+즉 **기계가 볼 수 있는 부분은 검증됐고, 프롬프트가 실제 세션에서 어떻게 작동하는지는 아직 아니다.** 처음 쓸 때 `/initproject` 가 첫 실전이 된다 — 어긋나는 게 나오면 그게 정상이고, 그때 고치면 된다.
+
+전체 미결 목록: `.claude/docs/DESIGN.md` 의 Open Questions.
+
 ## Quick Start
 
 기존 프로젝트의 루트로 실행:
@@ -17,6 +36,10 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
 ```bash
 git clone --depth 1 https://github.com/GunwooYun/claude-code-orchestrator.git .starter && cp -r .starter/.claude .starter/.agents .starter/CLAUDE.md . && rm -rf .starter && claude
 ```
+
+`tests/` 는 일부러 복사하지 않는다 — 대부분 이 저장소 자신을 검사하는 테스트다.
+검증 계약을 스택 무관하게 확인하는 `tests/test_verify_scripts.py` 하나만 쓸모가
+있으니, 원하면 그것만 따로 가져온다.
 
 ## Prerequisites
 
@@ -91,15 +114,24 @@ agy models   # 사용 가능한 모델 슬러그 확인
 ├── README.md
 ├── pyproject.toml # Python 프로젝트 설정
 ├── uv.lock # 의존성 잠금 파일
-├── tests/ # 훅 단위 테스트 (python3 -m unittest)
+├── tests/ # 테스트 (uv run pytest — 맨몸 `python3 -m unittest` 는 0개를 돌리고 OK 를 낸다)
 │
 ├── .claude/
 │   ├── agents/
 │   │   ├── deep-reasoning.md    # 심층 추론 서브에이전트 (Claude Fable)
 │   │   └── general-purpose.md   # 범용 서브에이전트 (agy 호출)
 │   │
+│   ├── scripts/                 # 검증 계약 (프로젝트가 소유, /initproject가 작성)
+│   │   ├── README.md            # 계약 전문 — 네 이름과 종료 코드
+│   │   └── verify-{save,task,unit,full}
+│   │
 │   ├── skills/                  # 재사용 가능한 워크플로우
-│   │   ├── startproject/        # 프로젝트 시작
+│   │   ├── initproject/         # 첫 세션 설정 (프로젝트당 1회)
+│   │   ├── doc-write/           # 문서 작성 (자동 발동)
+│   │   ├── jira-setup/          # Jira 연결 (프로젝트당 1회)
+│   │   ├── ticket/              # 티켓에서 작업 시작 (자동 발동)
+│   │   ├── lens-review/         # 다관점 병렬 리뷰 (자동 발동)
+│   │   ├── feature/             # 작업 단위 킥오프 (티켓마다)
 │   │   ├── plan/                # 구현 계획
 │   │   ├── tdd/                 # 테스트 주도 개발
 │   │   ├── checkpointing/       # 세션 영속화
@@ -109,7 +141,7 @@ agy models   # 사용 가능한 모델 슬러그 확인
 │   │
 │   ├── hooks/                   # 자동화 훅
 │   │   ├── agent-router.py      # 에이전트 라우팅
-│   │   ├── lint-on-save.py      # 저장 시 자동 린트
+│   │   ├── lint-on-save.py      # 저장 시 verify-save 호출 (도구 이름 모름)
 │   │   └── ...
 │   │
 │   ├── rules/                   # 개발 규칙
@@ -132,19 +164,39 @@ agy models   # 사용 가능한 모델 슬러그 확인
 
 ## Skills
 
-### `/startproject` — 프로젝트 시작
+**먼저 읽을 것 — `/initproject`와 `/feature`의 관계.** 둘 다 쓰며, 순서가 있다.
+`/initproject`는 템플릿을 복사한 직후 **프로젝트당 한 번** 실행해서 **템플릿 자체를**
+이 프로젝트에 맞게 고친다. `/feature`는 **작업 단위마다 반복** 실행해서 **제품 코드를**
+만든다. 즉 `/initproject` 1회 → 이후 티켓마다 `/feature`. 설계 판단이 없는 작업
+(버그 수정, 문구 변경, 설정값 조정)은 `/feature` 없이 바로 처리한다.
 
-멀티에이전트 협업으로 프로젝트를 킥오프한다.
+### `/feature` — 작업 단위 킥오프 (티켓마다 반복)
+
+멀티에이전트 협업으로 **작업 단위 하나**를 킥오프한다. 티켓 하나당 한 번 실행하고,
+같은 기능의 후속 수정 티켓에도 다시 실행한다.
 
 ```
-/startproject 사용자 인증 기능
+/feature 사용자 인증 기능
 ```
 
 **워크플로우:**
 1. **agy** → 리포지토리 분석·사전 조사
 2. **Claude** → 요구사항 정리·계획 수립
-3. **deep-reasoning** → 계획 리뷰·리스크 분석
-4. **Claude** → 실행 태스크 목록 생성
+2b. **Claude** → **검증 계획 (코드보다 먼저, 생략 불가)** — 시나리오 / 명령 / 티어 /
+    실패해야 할 때 실패하는지
+3. **deep-reasoning** → 계획 리뷰·리스크 분석 + **검증 충분성** (어떤 동작이
+   시나리오로 덮이지 않았는지)
+4. **Claude** → 실행 태스크 목록 생성 — **구현 태스크마다 `verify:` 태스크를 짝**
+4b. **사용자 승인** → 코드를 쓰기 전 마지막 게이트. 계획이 바뀌면 4로 되돌아간다
+5. **Claude** → `CLAUDE.md` `## Current Project` 에 승인된 계획과 **검증 계획**을 남긴다
+   (세션이 끊겨도, 그리고 별도 세션 리뷰가 대조할 수 있도록)
+6. 구현 루프: 태스크 → `verify:task` → 다음 태스크, 마지막에 **이 프로젝트에 설정된
+   가장 느린 티어**(`verify-unit` 이 없으면 `verify-task` 가 마지막이다)
+7. **별도 세션 리뷰** → 계획의 시나리오 ID 와 실제 테스트를 대조
+
+검증 티어는 **소요 시간**으로 정한다 — `save`(초) / `task`(≤5분) /
+`unit`(5~60분) / `full`(무제한, CI 전용). `unit`/`e2e` 같은 말은 스택마다 뜻이
+달라 판단 기준이 못 된다. 자세한 원칙은 `.claude/rules/testing.md`.
 
 ### `/plan` — 구현 계획 수립
 
@@ -213,13 +265,131 @@ Red → Green → Refactor 사이클을 강제한다.
 
 아키텍처 및 구현 결정을 `.claude/docs/DESIGN.md`에 자동으로 기록합니다. `/update-design`은 같은 파일을 수동으로 강제 갱신한다.
 
+### `/doc-write` — 문서 작성 (자동 발동, 타이핑 불필요)
+
+Confluence 페이지, Jira 티켓 본문, 저장소 준거 문서, 구현 계획서를 **사용자가 정의한
+스타일 규칙으로** 쓴다. `description` 에 발동 경계가 박혀 있어 **이름을 칠 필요가
+없다** — "문서로 정리해줘" 같은 요청에 스스로 발동한다.
+
+```
+발동함     Confluence 링크 + 작성 요청 / "보고서 써줘" / 티켓 본문 / 저장소 준거 문서
+발동 안 함  "설명해줘", "분석해줘", "요약해줘" → 채팅 답변 / 코드 주석 / 커밋 메시지
+애매하면    채팅으로 답하고 "문서로 만들까요?" 한 줄
+```
+
+역할 분리: **규칙은 `.claude/docs/writing-style.md`(무엇을 지키는가), 절차는 이
+스킬(어떻게 하는가).** 스킬은 규칙을 복사하지 않고 가리킨다 — 테스트가 전사를
+금지한다.
+
+발행 정책은 비대칭이다. **새 페이지는 발행하고 링크와 함께 보고**하지만,
+**기존 페이지는 반드시 먼저 확인받는다**(다른 사람이 읽고 있을 수 있다).
+스페이스·부모 페이지가 정해지지 않았으면 **묻고**, 답을 `CLAUDE.md` 의
+`## Project Setup` 에 기록해서 다음부터 묻지 않는다 — 템플릿에 박지 않는다.
+
+### `/jira-setup`, `/ticket` — Jira 연동
+
+`/jira-setup` 은 **프로젝트당 한 번** 실행해서 연결 상태를 판별하고 사이트·프로젝트
+키·프로젝트 style·전이 이름·쓰기 정책을 `CLAUDE.md` 의 `## Project Setup` 에
+기록한다. 수동 전용이다 — 기록을 실수로 덮으면 안 된다.
+
+`/ticket` 은 **자동 발동**한다. `ABC-123` 이나 Jira 링크를 주면서 작업을 요청하면
+티켓을 읽고 → 작업 크기를 판정해 `/feature` 또는 직접 작업으로 보내고 → 구현 후
+코멘트와 상태 전이로 닫는다.
+
+실제 커넥터로 측정해서 설계가 바뀐 지점들:
+
+| 측정 | 설계 결과 |
+|---|---|
+| 한 조직에 프로젝트 **141개** | 목록을 나열하지 않고 **키를 묻는다** |
+| `classic`(company-managed)과 `next-gen`(team-managed) 혼재 | style 을 기록하고 **전이 이름을 조회한다 — 추측하지 않는다** |
+| 같은 사이트가 스코프 그룹별로 **중복 등장** (Confluence 용 / Jira 용) | 사이트를 유일하다고 가정하지 않고, **Confluence 접근이 Jira 접근을 뜻하지 않음**을 구분 |
+
+쓰기 정책은 문서 정책과 같은 논리다 — **덧붙이는 것은 보고, 덮는 것은 먼저 확인.**
+코멘트는 초안을 보여주고 승인 후, **상태 전이와 설명 수정은 항상 확인**한다(공유
+상태이고 남이 쓴 것일 수 있다). 자격증명은 기록하지 않는다 — 인증은 커넥터가 관리하고
+**로그인은 대신 할 수 없다**.
+
+### `/lens-review` — 다관점 병렬 리뷰 (자동 발동)
+
+같은 변경을 **직교하는 관점 3개로 병렬 검토**하고 취합한다. 기본 렌즈는
+`correctness`(주장한 동작을 하는가) / `design`(구조가 유지되는가) /
+`robustness`(적대적 입력·실패 모드). 변경 성격에 따라 하나를 교체한다 — 테스트가
+빈약하면 `design` → 검증 충분성, 순수 리팩터링이면 `correctness` → 동작 보존.
+
+**가장 큰 가치는 발견 목록이 아니라 관점 간 충돌이다.** correctness 가 "여기 가드를
+추가하라"고 하는데 design 이 "이 함수는 존재하지 않아야 한다"고 하면, 그것이 진짜
+설계 결정 지점이다. 취합 단계는 **충돌을 임의로 판정하지 않고** 양쪽 근거와
+무엇을 잃는지를 나란히 제시한다.
+
+```
+큰 변경 ──> agy 프리필터 (한 번, 모든 렌즈에 같은 목록)
+              ├─> correctness  ─┐
+              ├─> design       ─┼─> 취합: 중복 제거 → 충돌 노출 → 심각도 정렬
+              └─> robustness   ─┘
+```
+
+비용은 렌즈 수에 선형이라 **3개를 권한다** — 4개 이상에서는 새 발견보다 중복이
+빠르게 늘어난다. **작은 변경에는 쓰지 않는다**: deep-reasoning 한 번이 더 싸고
+결과도 같다. 발견의 적대적 재검증은 조건부다(자동 수정에 쓸 때, 또는 렌즈가 신뢰도를
+낮게 표시했을 때).
+
+**별도 세션 리뷰를 대체하지 않는다.** 렌즈는 격리된 컨텍스트에서 돌지만
+**프롬프트를 이 세션이 쓰므로 프레이밍 편향이 남는다.** 최종 리뷰는 여전히
+`git worktree` 로 격리한 새 세션이 담당한다 — 이 스킬은 그 전에 명백한 것들을
+걷어내 최종 리뷰가 어려운 것에 집중하게 한다.
+
 ### `/research-lib`, `/update-lib-docs` — 라이브러리 제약 문서
 
 `/research-lib <lib>`는 라이브러리 조사 결과를 `.claude/docs/libraries/<lib>.md`에 저장하고, `/update-lib-docs`는 기존 문서를 최신화한다. deep-reasoning 코드 리뷰와 agy 리서치가 이 문서를 제약 조건으로 참조한다.
 
-### `/init` — 첫 세션 설정 (프로젝트당 1회)
+### `/initproject` — 첫 세션 설정 (프로젝트당 1회)
 
-템플릿을 복사한 직후 실행한다. 스택을 감지하고 → 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 물은 뒤 → `CLAUDE.md` 기술 스택/`## Current Project`를 채우고 → 스택이 uv/ruff와 다르면 `rules/dev-environment.md`·`hooks/lint-on-save.py`·`rules/testing.md`·`settings.json` 권한을 프로젝트 도구로 맞추고 → `.agents/rules/AGENTS.md`에 프로젝트 단락, `docs/DESIGN.md`에 아키텍처 시드를 쓰고 → 스모크 테스트 후 보고한다. 설치·커밋 정책 변경은 반드시 먼저 묻는다.
+템플릿을 복사한 직후 실행한다. 스택을 감지하고 → 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 물은 뒤 → `CLAUDE.md` 기술 스택/`## Project Setup`을 채우고 → `.claude/scripts/`의 검증 스크립트를 이 프로젝트에 정직하게 존재하는 티어만큼 실제 명령으로 작성하고(계약), 템플릿 자신의 도구가 드러난 산문(`rules/dev-environment.md` 등)을 맞추고 → `.agents/rules/AGENTS.md`에 프로젝트 단락, `docs/DESIGN.md`에 아키텍처 시드를 쓰고 → 스모크 테스트 후 보고한다. 설치·커밋 정책 변경은 반드시 먼저 묻는다. 산출물 대부분이 `.claude/` 안에 있어서 **파일마다 쓰기 승인 요청이 뜬다** — 대화형 세션에서 돌린다.
+
+## 검증 계약 — 어떤 스택에도 붙는 방법
+
+오케스트레이터는 프로젝트의 언어·도구·실행 위치를 **알지 못한다.** 대신
+`.claude/scripts/` 의 네 실행 파일을 호출하고 종료 코드를 읽는다.
+
+```
+verify-save <path>   초        파일 저장 시 (훅)
+verify-task          ≤5분      태스크마다 (게이트)
+verify-unit          5~60분    작업 단위당 한 번
+verify-full          무제한    CI 또는 사람만
+```
+
+네 티어를 다 가질 필요는 없다. **이 저장소는 `save` 와 `task` 만 가진다** — 전체
+테스트가 3초에 끝나므로 더 느린 티어가 정직하게 존재하지 않는다. 있는 척하는
+스크립트(항상 0을 반환하는 것)는 검사하지 않은 성공을 보고하므로 없는 것보다
+나쁘다. 템플릿 자신이 이 규칙을 지킨다.
+
+`0` 은 통과(출력 없음), `0 이외` 는 실패(이유 출력). **파일이 없으면 그 티어가
+설정되지 않았다는 뜻**이고, 호출자는 그 사실을 그대로 알린다 — 통과로 치지 않는다.
+
+**게이트는 파일을 고치지 않는다.** 저장 티어가 `--fix` 를 돌리면 모델이 방금 쓴
+파일을 조용히 다시 쓰게 되고(미사용 import 삭제, 종료 코드 0, 출력 0), 모델은 그
+사실을 알 방법이 없다. 자동 수정은 사람이 의도적으로 부르는 명령의 몫이다. 그래도
+고치는 티어를 두려면 **바뀌었으면 반드시 출력한다** — 침묵은 "할 말 없음" 하나만
+뜻해야 한다.
+
+언어·컨테이너·원격 장비·경로 변환·환경 준비는 **전부 스크립트 안에** 있다.
+그래서 사람이 손으로 재현할 수 있다.
+
+```bash
+.claude/scripts/verify-save path/to/file   # 저장 시점과 똑같이
+.claude/scripts/verify-task; echo $?       # 게이트를 그대로
+```
+
+`/initproject` 가 프로젝트당 한 번 작성한다. 스택별 레시피는 없다 — 티어마다
+네 가지만 묻는다: **실패할 수 있는 명령은 무엇인가 / 어디서 도는가 / 얼마나
+걸리는가 / 어떻게 빨간불이 나는가.** 정직하게 답할 수 없는 티어는 스크립트를
+만들지 않는다.
+
+이 저장소의 `verify-*` 는 **이 저장소 자신의 구현**(Python + uv)이며 다른
+프로젝트의 참고 답안이 아니다. `tests/test_verify_scripts.py` 는 언어를 가정하지
+않고 계약만 검사하므로 그대로 복사해 쓸 수 있다.
+
+→ 계약 전문: `.claude/scripts/README.md`
 
 ## 실전 활용 가이드 — 120% 뽑아내기
 
@@ -254,7 +424,7 @@ git clone --depth 1 https://github.com/GunwooYun/claude-code-orchestrator.git .s
 |---|---|---|
 | `CLAUDE.md` 기술 스택 섹션 | 세션이 매번 읽는 유일한 스택 정보 | 백엔드/프론트/실행 방식/품질 도구/커밋 규칙으로 교체 |
 | `.claude/rules/dev-environment.md` | 규칙이 uv 명령을 강요함 | pip·Docker·black/isort/flake8·pytest-django 기준으로 재작성, 보안 민감 디렉토리 명시 |
-| `.claude/hooks/lint-on-save.py` | `uv run ruff`를 호출 → 없는 도구면 조용히 무동작 | 프로젝트 도구(black→isort→flake8, eslint)로 교체하고 도구를 로컬에 같은 버전으로 설치(`pipx install black==<핀 버전>`), 또는 `settings.json`에서 훅 등록 제거 |
+| `.claude/scripts/verify-*` | 없으면 해당 티어가 설정되지 않은 것 | `/initproject` Step 5가 작성. 훅과 스킬은 이 이름만 알고 내용은 모른다 |
 | `.claude/rules/testing.md` | `uv run pytest` 표기 | 실제 테스트 명령으로 |
 | `.claude/settings.json` `permissions.allow` | 프로젝트 도구 명령 자동 허용 | `Bash(isort:*)`, `Bash(flake8:*)`, `Bash(docker compose:*)` 추가 |
 
@@ -265,17 +435,17 @@ git clone --depth 1 https://github.com/GunwooYun/claude-code-orchestrator.git .s
 1. **`.agents/rules/AGENTS.md`** 상단에 프로젝트 설명 한 단락 — agy가 리서치할 때 읽는 유일한 프로젝트 컨텍스트다. 보안 민감 프로젝트면 "키·비밀값은 출력 금지"도 여기에.
 2. **`.claude/docs/DESIGN.md`** — 아키텍처 5줄, 주요 라이브러리 표, 미결 질문. deep-reasoning이 리뷰 전에 항상 읽는다.
 
-**실제로는 이렇게 한다 — C·D는 `/init`이 수행한다.** 오케스트레이터는 첫 세션에서 스스로 맞춤화를 시작하지 않는다(그런 지시가 CLAUDE.md에 없고, README는 복사되지 않는다). 그래서 사람이 할 일은 세 가지뿐이다:
+**실제로는 이렇게 한다 — C·D는 `/initproject`가 수행한다.** 오케스트레이터는 첫 세션에서 스스로 맞춤화를 시작하지 않는다(그런 지시가 CLAUDE.md에 없고, README는 복사되지 않는다). 그래서 사람이 할 일은 세 가지뿐이다:
 
 ```bash
 # A. 복사  → B. 커밋 여부(로컬 전용이면 .git/info/exclude) → 첫 세션
 claude
-> /init
+> /initproject
 ```
 
-`/init`은 스택을 감지하고, 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 묻고, 스택이 템플릿 기본값과 다르면 Step C의 파일들을 고치고, Step D의 `AGENTS.md`·`DESIGN.md`를 채운 뒤 스모크 테스트와 보고로 끝난다. 스택이 uv/ruff 그대로면 "맞출 게 없음"이라고 보고한다. 남은 판단은 `DESIGN.md` TODO에 기록되어 이후 세션이 이어받는다.
+`/initproject`는 스택을 감지하고, 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 묻고, 스택이 템플릿 기본값과 다르면 Step C의 파일들을 고치고, Step D의 `AGENTS.md`·`DESIGN.md`를 채운 뒤 스모크 테스트와 보고로 끝난다. 스택이 uv/ruff 그대로면 "맞출 게 없음"이라고 보고한다. 남은 판단은 `DESIGN.md` TODO에 기록되어 이후 세션이 이어받는다.
 
-**Step E — 스모크 테스트**: `/deep-reasoning`·`/antigravity-system` 스킬이 목록에 뜨는지, `agy -p "Reply with OK" --model gemini-3.7-flash-low`가 동작하는지, 파일 하나 편집 후 린트 훅 출력과 `git diff`(포매터가 과하게 손대지 않는지)를 확인한다.
+**Step E — 스모크 테스트**: `/deep-reasoning`·`/antigravity-system` 스킬이 목록에 뜨는지, `.claude/skills/antigravity-system/agy-probe` 가 `READY` 를 내는지(아니면 첫 단어가 상태다 — `MISSING`/`UNAUTHENTICATED`/`DEGRADED`), 파일 하나를 일부러 깨뜨려 저장했을 때 린트 훅이 **말을 하는지**, 그리고 `git status` 로 **게이트가 파일을 고치지 않았는지**를 확인한다. 게이트가 조용히 고치면 그 티어를 잘못 만든 것이다.
 
 남는 판단(테스트 실행 방식, 기존 린트 지적 처리 등)은 `DESIGN.md`의 TODO에 적어 두고 실제 작업하면서 오케스트레이터와 함께 정하면 된다 — `design-tracker`가 결정을 기록한다.
 
@@ -293,7 +463,8 @@ claude
 ### 3. 기능 하나의 표준 사이클
 
 ```
-/startproject <기능>   agy 사전조사 → 요구사항 → deep-reasoning 계획 리뷰 → 태스크 목록 → CLAUDE.md 갱신
+/feature <기능>       agy 사전조사 → 요구사항 → 검증 계획 → deep-reasoning 리뷰 → 태스크 목록
+                      → 사용자 승인 → CLAUDE.md 갱신 → 구현 루프 → 별도 세션 리뷰
       ↓
 /plan <세부 항목>        단계·파일·검증 기준 분해
       ↓
@@ -308,7 +479,9 @@ claude
 /checkpointing --full --analyze   세션 기록 + 반복 패턴을 스킬 후보로 추출
 ```
 
-`/startproject`가 CLAUDE.md에 추가하는 `## Current Project` 블록은 다음 세션의 출발점이다. 기능이 끝나면 지우거나 요약해 둔다.
+`/feature`가 CLAUDE.md에 추가하는 `## Current Project` 블록은 다음 세션의 출발점이다. 기능이 끝나면 지우거나 요약해 둔다.
+
+**섹션마다 수명이 다르다.** `## Project Setup`(프로젝트 영구 — 스택 개요·Jira·Confluence 설정)은 여러 스킬이 **덧붙이고** 아무도 교체하지 않는다. `## Current Project`(작업 단위)는 `/feature`가 **교체한다**. `## Session History`(세션)는 `/checkpointing`이 **덮어쓰고 항상 마지막**이다. 수명이 다른 상태를 한 헤딩에 두면 교체 규칙이 남의 상태를 지운다 — 전체 표는 `CLAUDE.md` 「`CLAUDE.md` 섹션의 수명」.
 
 ### 4. 컨텍스트를 지키는 규칙
 
@@ -323,10 +496,17 @@ claude
 구현한 세션은 자기 코드에 편향된다. 리뷰는 **git worktree**로 격리한 새 세션에서 받는다:
 
 ```bash
-git worktree add --detach ../<project>-review main   # main이 체크아웃된 상태라 --detach 필요
+git worktree add --detach ../<project>-review <작업 브랜치>   # main이 아니라 작업 브랜치
 cd ../<project>-review && claude
-# → "git diff <base>..main 을 리뷰하고 결과를 .claude/docs/review-report.md 에만 작성해. 다른 파일은 수정하지 마."
+# → "git diff main...HEAD 를 리뷰하고 결과를 .claude/docs/review-report.md 에만 작성해. 다른 파일은 수정하지 마."
 ```
+
+**`main` 에 체크아웃하지 않는다.** 그러면 워크트리 안에서 `HEAD == main` 이 되어
+`git diff main...HEAD` 가 빈 출력을 내고, 리뷰 세션은 검토할 것을 찾지 못한 채
+끝난다 — 조용히 실패한다.
+
+컨테이너·클라우드라 대화형 `claude` 를 띄울 수 없으면 작업 브랜치를 push 하고 그것을
+상대로 **새 세션**을 만든다. 리포트는 별도 리뷰 브랜치로 받는다.
 
 - 리뷰 세션에서는 `/checkpointing`을 실행하지 않는다(CLAUDE.md·AGENTS.md를 덮어쓴다).
 - 리포트를 원래 세션에서 읽고 항목별로 반영 → 리포트 삭제 → `git worktree remove ../<project>-review`.
@@ -336,7 +516,13 @@ cd ../<project>-review && claude
 
 - **웹 리서치는 플래그 없이** `agy -p "..."`. **저장소 파일을 읽어야 하면** 템플릿 패턴대로 `--dangerously-skip-permissions --sandbox`(+ 긴 분석은 `--print-timeout 10m`). 그 프롬프트에는 반드시 "파일을 만들거나 수정하지 말 것"이 들어가야 한다.
 - **빈 응답은 실패다.** 헤드리스 agy는 권한 없는 도구를 조용히 건너뛰고 exit 0을 낸다(soft-deny). `--output-format json`으로 `.status`와 `response`를 함께 보고, stderr를 버리지 않는다. `log-cli-tools.py`도 이 경우 `success: false`로 기록한다.
-- **모델은 규칙에 따라 오케스트레이터가 선택**(자동 판별이 아니라 표를 따르는 판단): 템플릿 호출은 `--model`을 항상 명시한다 — T1 한 줄 사실 확인 `gemini-3.7-flash-low`, T2 웹 페이지 하나·작은 파일 하나 요약 `gemini-3.7-flash-high`(스크립트가 소비하는 추출은 `gemini-3.1-pro-low`), T3 비교·종합·마이그레이션 가이드 `gemini-3.1-pro-high`, T4 레포 전체·모듈 설명·멀티모달 `gemini-3.1-pro-high` + `--print-timeout 10m`. 헤드리스 플래그는 등급이 아니라 **입력이 파일/디렉토리/레포를 언급하는지**로 결정한다. 애매하면 상위 등급, T4는 하향 금지, 빈 답은 먼저 soft-deny(stderr `auto-denied`)인지 확인한 뒤에만 Pro로 1회 재실행. 전역 기본값(`agy` TUI의 `/model`)은 `--model`이 없는 호출에만 적용된다. 정책 전문: `.claude/rules/antigravity-delegation.md`.
+- **모델은 규칙에 따라 오케스트레이터가 선택**(자동 판별이 아니라 표를 따르는 판단): 템플릿 호출은 `--model`을 항상 명시한다.
+  - T1 한 줄 사실 확인 → `gemini-3.7-flash-low`
+  - T2 웹 페이지 하나·작은 파일 하나 요약 → `gemini-3.7-flash-high` (스크립트가 소비하는 추출은 `gemini-3.1-pro-low`)
+  - T3 비교·종합·마이그레이션 가이드 → `gemini-3.1-pro-high`
+  - T4 레포 전체·모듈 설명·멀티모달 → `gemini-3.1-pro-high` + `--print-timeout 10m`
+
+  한 줄에 여러 등급을 적지 않는다 — `tests/test_template_consistency.py` 의 등급·슬러그 대조가 **한 줄에 등급이 하나일 때만** 이 사본을 검사할 수 있고, 검사받지 않는 사본이 곧 갈라지는 사본이다. 헤드리스 플래그는 등급이 아니라 **입력이 파일/디렉토리/레포를 언급하는지**로 결정한다. 애매하면 상위 등급, T4는 하향 금지, 빈 답은 먼저 soft-deny(stderr `auto-denied`)인지 확인한 뒤에만 Pro로 1회 재실행. 전역 기본값(`agy` TUI의 `/model`)은 `--model`이 없는 호출에만 적용된다. 등급 표와 라우팅: `.claude/rules/antigravity-delegation.md`(항상 로드, 결정만). 명령 문법과 플래그: `.claude/agents/general-purpose.md`(실행자)와 `.claude/skills/antigravity-system/SKILL.md`(프롬프트 작성).
 - **쿼터**: "Individual quota reached … Resets in Xh"가 뜨면 리셋까지 기다린다. 큰 리서치는 하나의 잘 짜인 프롬프트로 몰아서 보낸다.
 - **멀티모달**: 이미지·PDF는 검증됨. 절대경로를 프롬프트에 넣는다(stdin 리다이렉트 불가). 영상·음성은 미검증.
 - 상세: `.claude/docs/research/antigravity-cli.md`, `.claude/rules/antigravity-delegation.md`.
@@ -346,7 +532,7 @@ cd ../<project>-review && claude
 | 파일 | 손볼 이유 |
 |---|---|
 | `CLAUDE.md` 기술 스택 / `rules/dev-environment.md` | 프로젝트 스택에 맞추기 (기본값은 uv/ruff/ty) |
-| `hooks/lint-on-save.py` | 실제 린터·타입체커 명령으로 교체 |
+| `scripts/verify-*` | 이 프로젝트의 실제 검증 명령으로 작성 (훅은 손대지 않는다) |
 | `hooks/agent-router.py` 트리거 목록 | 팀이 자주 쓰는 표현 추가, 과잉 매칭 단어("문서" 등) 조정 |
 | `agents/deep-reasoning.md` `model:` | 세션 모델과 다른 리뷰 모델을 쓰고 싶을 때만 |
 | `settings.json` `permissions.allow` | 프로젝트 도구 명령(`docker`, `npm` 등) 추가 |
@@ -354,13 +540,19 @@ cd ../<project>-review && claude
 
 ### 8. 자주 밟는 함정
 
-- **적용이 끝난 프로젝트에 템플릿을 다시 복사하면 맞춤화가 전부 원본으로 덮어써진다.** 복사는 프로젝트당 **한 번**이다. 이후 템플릿 개선을 가져오려면 파일 단위로 골라 복사한다 — 템플릿 소유(그대로 덮어써도 되는 것): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`(단 `lint-on-save.py` 제외), `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`, `rules/security.md`, `rules/language.md`. **프로젝트 소유(덮어쓰지 말 것)**: `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`, `hooks/lint-on-save.py`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
+- **적용이 끝난 프로젝트에 템플릿을 다시 복사하면 맞춤화가 전부 원본으로 덮어써진다.** 복사는 프로젝트당 **한 번**이다. 이후 템플릿 개선을 가져오려면 파일 단위로 골라 복사한다 — 템플릿 소유(그대로 덮어써도 되는 것): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`(전부 — 훅은 더 이상 스택을 모른다), `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`, `rules/security.md`, `rules/language.md`. **프로젝트 소유(덮어쓰지 말 것)**: `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
 
 - 훅 파일명 변경 후 `settings.json` 미동기화 → PreToolUse 오류로 편집 전면 차단. 같은 커밋에서 함께 바꾼다.
 - `/checkpointing` 기본 모드가 `CLAUDE.md`·`AGENTS.md`를 덮어쓴다. 실행 전 커밋해 둔다.
 - deep-reasoning의 "읽기 전용"은 도구 제거 + 지시이지 커널 샌드박스가 아니다. 커밋 전 `git status`를 습관화한다.
 - 서브에이전트는 서브에이전트를 못 띄운다. general-purpose 안에서 설계 판단이 필요해지면 메인으로 돌아와 deep-reasoning을 부른다(훅 문구도 그렇게 안내한다).
 - agy 로그(`.claude/logs/`)와 체크포인트(`.claude/checkpoints/`)는 gitignore 대상이다 — 남기고 싶은 결론은 `docs/`로 옮긴다.
+- **게이트에 자동 수정 명령(`--fix`, 포매터)을 넣지 않는다.** 저장할 때마다 모델이 방금 쓴 파일이 조용히 바뀌고, 종료 코드 0 + 출력 0 이면 모델은 그걸 알 수 없다. `/initproject` 가 `verify-*` 를 쓸 때 이 규칙을 지킨다.
+- **신뢰하지 않은 워크스페이스에서 헤드리스(`claude -p`)로 돌리면 `settings.json` 의 `permissions.allow` 가 통째로 무시된다** (`Ignoring N permissions.allow entries ... this workspace has not been trusted`). Quick Start 처럼 대화형 `claude` 로 한 번 열어 신뢰를 수락하면 해결된다. 복사만 해 두고 나중에 헤드리스로 돌리는 경로의 함정이다.
+- **`verify-save` 가 조용하다고 저장 게이트가 동작한다는 뜻은 아니다.** 다루지 않는 파일에 침묵하는 것이 계약이라, `/initproject` 를 안 돌렸거나 중간에 멈춘 프로젝트에서는 템플릿 기본값(`*.py` 만)이 남아 모든 파일에 침묵한다. 검사해야 할 파일 하나를 일부러 깨뜨려 `.claude/scripts/verify-save <그 파일>` 이 0 이외를 내는지 본다.
+- **리뷰용 워크트리를 `main` 에 체크아웃하지 않는다.** 그러면 그 안에서 `HEAD == main` 이라 `git diff main...HEAD` 가 빈 출력을 내고, 리뷰 세션이 "변경 없음"을 보고 조용히 끝난다. 작업 브랜치에 체크아웃한다.
+- **맨몸 `poe`·`pytest` 를 문서에 적지 않는다.** `poe` 는 exit 127 이고 `python3 -m unittest` 는 0개를 돌리고 OK 를 낸다 — 둘 다 "통과했다"로 읽힌다. `uv run` 을 붙인다.
+- **항상 로드되는 `rules/dev-environment.md` 를 프로젝트에 맞게 고치지 않으면** 세션마다 틀린 도구·없는 경로를 읽는다. 없는 경로에 타입 체커는 흔히 **exit 0** 을 내므로 거짓 통과가 된다.
 
 ## 개발 (Development)
 
@@ -374,7 +566,7 @@ cd ../<project>-review && claude
 | **pytest** | 테스트 (`tests/`) |
 | **poethepoet** | 태스크 러너 |
 
-> 알려진 불일치: `pyproject.toml`/`poe typecheck`는 **mypy**를 쓰지만 `CLAUDE.md`, `.claude/rules/dev-environment.md`, `lint-on-save.py` 훅은 **ty**(`uv run ty check`)를 전제한다(upstream부터 존재). 적용하는 프로젝트에서 둘 중 하나로 통일할 것 — ty를 쓰려면 `uv add --dev ty` 후 `typecheck = "ty check src/"`로, mypy를 유지하려면 규칙 문서와 훅의 `ty` 호출을 `mypy`로 바꾼다.
+> 이 저장소는 순수 Python 이라 `ty` 로 통일되어 있다(`pyproject.toml`, `poe typecheck`, `verify-save`). **타입체커는 템플릿이 정하지 않는다** — `/initproject` 가 스택을 보고 고른다. 측정된 주의사항은 `.claude/skills/initproject/references/known-pitfalls.md` 에 있다(요약: 디스크립터로 속성 타입을 바꾸는 프레임워크에서는 `ty` 가 정상 코드를 오탐하므로 플러그인을 지원하는 체커를 쓴다).
 
 ### Commands
 
@@ -384,15 +576,19 @@ uv add <package>           # 패키지 추가
 uv add --dev <package>     # 개발 종속성 추가
 uv sync                    # 종속성 동기화
 
-# 품질 점검
-poe lint                   # ruff check --fix (포맷은 poe format)
-poe format                 # ruff format
-poe typecheck              # mypy src/  ← src/ 디렉토리가 있어야 동작 (이 템플릿 저장소에는 없음)
-poe test                   # pytest (tests/)
-poe all                    # lint → format → typecheck → test
+# 품질 점검 — `poe` 는 프로젝트 환경 안에만 있다. 맨몸으로 부르면 exit 127
+uv run poe lint            # ruff check .        (읽기 전용)
+uv run poe format-check    # ruff format --check (읽기 전용)
+uv run poe typecheck       # ty check .claude/hooks .claude/skills/checkpointing/checkpoint.py
+uv run poe test            # pytest
+uv run poe all             # lint → format-check → typecheck → test  ← 게이트
+
+# 고치는 쪽은 게이트가 아니라 사람이 부른다
+uv run poe fix             # ruff check --fix .
+uv run poe format          # ruff format .
 
 # 직접 실행
-uv run pytest -v
+uv run pytest -q
 uv run ruff check .
 ```
 
@@ -403,15 +599,17 @@ uv run ruff check .
 | 후크 | 트리거 | 동작 |
 |--------|----------|------|
 | `agent-router.py` | 사용자 입력 | deep-reasoning / agy 라우팅 제안 |
-| `lint-on-save.py` | 파일 저장 | 자동 lint 실행 |
-| `suggest-deep-reasoning-before-write.py` | 파일 쓰기 전 | 심층 추론 리뷰 제안 |
+| `lint-on-save.py` | 파일 저장 | `.claude/scripts/verify-save` 에 경로를 넘기고 출력을 그대로 전달. **도구 이름을 하나도 모른다** — 무엇을 검사하는지는 스크립트가 정한다. 티어가 없으면 세션당 한 번만 알린다 |
+| `suggest-deep-reasoning-before-write.py` | 파일 쓰기 전 | 심층 추론 리뷰 제안. 크기 규칙(500자)은 **소스 파일에만** 적용된다 — 긴 문서는 설계 결정이 아니다. 경로가 설계처럼 보이면(`DESIGN.md`, `core/`, `schema`) 내용과 무관하게 발동 |
 | `suggest-deep-reasoning-after-plan.py` | Plan 태스크 후 | 계획 리뷰 제안 |
 | `suggest-antigravity-research.py` | 웹 검색/페치 전 | agy 리서치 제안 |
 | `post-test-analysis.py` | 테스트 실패 | 디버깅 분석 제안 |
-| `post-implementation-review.py` | 파일 3개 이상 / 100줄 이상 수정 후 | 코드 리뷰 제안 |
+| `post-implementation-review.py` | 파일 3개 이상 / 100줄 이상 수정 후 | 코드 리뷰 제안. **세션당 한 번**만 (상태는 세션 id 로 분리) |
 | `log-cli-tools.py` | agy 실행 | I/O 로깅 (`.claude/logs/cli-tools.jsonl`) |
 
 훅은 전부 **제안만** 한다(차단하지 않음). 훅 파일명을 바꾸면 `.claude/settings.json`의 등록 경로를 **같은 커밋에서** 함께 바꿔야 한다 — 어긋나면 PreToolUse 훅 오류로 모든 Edit이 막힌다.
+
+훅마다 "반응해야 하는 payload / 무시해야 하는 payload" 한 쌍이 `tests/test_hook_effects.py` 에 있다. 계약 테스트(`test_hook_contract.py`)만으로는 **죽은 훅을 잡을 수 없다** — 빈 출력은 "보고할 것 없음"이라는 합법적인 답이므로, payload 를 읽고 바로 리턴하는 훅이 전부 통과한다. 실제로 그랬던 훅이 있었다.
 
 ## Language Rules
 

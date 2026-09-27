@@ -4,7 +4,13 @@ import importlib.util
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).parent.parent / ".claude" / "skills" / "checkpointing" / "checkpoint.py"
+SCRIPT = (
+    Path(__file__).parent.parent
+    / ".claude"
+    / "skills"
+    / "checkpointing"
+    / "checkpoint.py"
+)
 spec = importlib.util.spec_from_file_location("checkpoint", SCRIPT)
 checkpoint = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checkpoint)
@@ -22,7 +28,9 @@ class ReplaceSessionHistoryTests(unittest.TestCase):
         self.assertIn("- another note", out)
         self.assertIn("## Language", out)
         self.assertTrue(out.rstrip().endswith("- ✓ test..."))
-        self.assertEqual(out.count("## Session History"), 2)  # inline mention + real section
+        self.assertEqual(
+            out.count("## Session History"), 2
+        )  # inline mention + real section
 
     def test_existing_section_is_replaced_not_duplicated(self):
         doc = "# Doc\n\n## Session History\n\n### 2026-08-01\n\n- old\n"
@@ -48,7 +56,9 @@ class ReplaceSessionHistoryTests(unittest.TestCase):
 class LocalDateTests(unittest.TestCase):
     def test_offset_timestamp_keeps_local_calendar_day(self):
         # 2026-08-31 01:00 KST is 2026-08-30 16:00 UTC; grouping must follow the offset given.
-        self.assertEqual(checkpoint.local_date("2026-08-31T01:00:00+09:00")[:7], "2026-08")
+        self.assertEqual(
+            checkpoint.local_date("2026-08-31T01:00:00+09:00")[:7], "2026-08"
+        )
 
     def test_invalid_timestamp_falls_back(self):
         self.assertEqual(checkpoint.local_date("garbage"), "garbage")

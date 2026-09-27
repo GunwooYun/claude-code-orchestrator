@@ -7,9 +7,7 @@ for design decisions, complex implementations, or architectural changes.
 """
 
 import json
-import os
 import sys
-from pathlib import Path
 
 # Input validation constants
 MAX_PATH_LENGTH = 4096
@@ -44,7 +42,6 @@ DESIGN_INDICATORS = [
     "/core/",
     "config",
     "settings",
-
     # Code patterns in content
     "class ",
     "interface ",
@@ -55,6 +52,34 @@ DESIGN_INDICATORS = [
     "@dataclass",
     "TypedDict",
 ]
+
+# Prose, data and config. The SIZE rule below does not apply to these: a long
+# document is not a design decision, and a hook that fires on every substantial
+# write trains people to ignore hook output (the same argument lint-on-save.py
+# makes about repeating its notice). A path that looks like design still
+# triggers, whatever it contains — DESIGN.md is prose and is exactly the case
+# this hook exists for.
+NON_DESIGN_SUFFIXES = frozenset(
+    {
+        ".md",
+        ".markdown",
+        ".rst",
+        ".txt",
+        ".adoc",
+        ".tex",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".csv",
+        ".tsv",
+        ".lock",
+        ".log",
+        ".jsonl",
+    }
+)
 
 # Files that are typically simple edits (skip suggestion)
 SIMPLE_EDIT_PATTERNS = [
@@ -68,10 +93,10 @@ SIMPLE_EDIT_PATTERNS = [
 ]
 
 
-def should_suggest_deep_reasoning(file_path: str, content: str | None = None) -> tuple[bool, str]:
+def should_suggest_deep_reasoning(
+    file_path: str, content: str | None = None
+) -> tuple[bool, str]:
     """Determine if deep-reasoning consultation should be suggested."""
-    path = Path(file_path)
-    filename = path.name.lower()
     filepath_lower = file_path.lower()
 
     # Skip simple edits
@@ -84,6 +109,14 @@ def should_suggest_deep_reasoning(file_path: str, content: str | None = None) ->
         if indicator.lower() in filepath_lower:
             return True, f"File path contains '{indicator}' - likely a design decision"
 
+    # Content rules apply to source only. Prose and config reach this point when
+    # their PATH did not look like design, and for those the size of the write
+    # says nothing about whether a design decision is being made.
+    suffix = filepath_lower.rsplit(".", 1)
+    extension = f".{suffix[1]}" if len(suffix) == 2 else ""
+    if extension in NON_DESIGN_SUFFIXES:
+        return False, ""
+
     # Check content if available
     if content:
         # New file with significant content
@@ -93,7 +126,10 @@ def should_suggest_deep_reasoning(file_path: str, content: str | None = None) ->
         # Check for design patterns in content
         for indicator in DESIGN_INDICATORS:
             if indicator in content:
-                return True, f"Content contains '{indicator}' - likely architectural code"
+                return (
+                    True,
+                    f"Content contains '{indicator}' - likely architectural code",
+                )
 
     # New files in src/ directory
     if "/src/" in file_path or file_path.startswith("src/"):
@@ -103,7 +139,7 @@ def should_suggest_deep_reasoning(file_path: str, content: str | None = None) ->
     return False, ""
 
 
-def main():
+def main() -> None:
     try:
         data = json.load(sys.stdin)
         tool_input = data.get("tool_input", {})
@@ -127,7 +163,7 @@ def main():
                         "**Recommended**: Use Task tool with subagent_type='deep-reasoning' "
                         "(isolated context; returns a concise recommendation). "
                         "If you are a subagent, report back to the orchestrator instead."
-                    )
+                    ),
                 }
             }
             print(json.dumps(output))

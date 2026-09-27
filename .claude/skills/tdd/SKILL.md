@@ -49,7 +49,7 @@ def test_{function}_basic():
 
 Run test and **confirm failure**:
 ```bash
-uv run pytest tests/test_{module}.py -v
+{TEST_ONE}   # 이 템플릿 기본값: uv run pytest tests/test_{module}.py -v
 ```
 
 #### Step 2: Implementation (Green)
@@ -61,7 +61,7 @@ Write **minimal** code to pass the test:
 
 Run test and **confirm success**:
 ```bash
-uv run pytest tests/test_{module}.py -v
+{TEST_ONE}   # 이 템플릿 기본값: uv run pytest tests/test_{module}.py -v
 ```
 
 #### Step 3: Refactoring (Refactor)
@@ -72,7 +72,7 @@ Improve while tests still pass:
 - Clean up structure
 
 ```bash
-uv run pytest tests/test_{module}.py -v  # Confirm still passes
+{TEST_ONE}   # Confirm still passes (템플릿 기본값: uv run pytest tests/test_{module}.py -v)
 ```
 
 #### Step 4: Next Test
@@ -83,11 +83,22 @@ Return to Step 1 with next test case from the list.
 
 ```bash
 # Run all tests
-uv run pytest -v
+{TEST_ALL}   # 이 템플릿 기본값: uv run pytest -v
 
-# Check coverage (target 80%+)
-uv run pytest --cov={module} --cov-report=term-missing
+# Check coverage (target 80%+), when the project measures it
+{TEST_COVERAGE}   # 이 템플릿 기본값: uv run pytest --cov={module} --cov-report=term-missing
 ```
+
+## 명령어 치환 (stack-agnostic)
+
+`{TEST_ONE}` / `{TEST_ALL}` / `{TEST_COVERAGE}` 는 자리표시자다. 실제 명령은
+`CLAUDE.md` 의 `공통 명령어` 블록에서 읽는다. `/initproject` 가 그 블록을 이
+프로젝트의 실제 명령으로 채워 두었다.
+
+Red-Green-Refactor 가 성립하지 않는 스택도 있다. 예를 들어 Yocto recipe
+유지보수에서는 단위 테스트가 없고 `bitbake -p` 파싱 검사와 `ptest`/`oeqa`
+런타임 테스트가 그 자리를 대신한다. 그 경우 **실패를 먼저 재현**한다는 원칙만
+유지하고 명령은 프로젝트 것을 쓴다.
 
 ## Report Format
 

@@ -12,40 +12,83 @@ import sys
 # Triggers for the deep-reasoning subagent (design, debugging, deep reasoning)
 DEEP_REASONING_TRIGGERS = {
     "ko": [
-        "설계", "어떻게 설계", "아키텍처",
-        "왜 움직이지 않는다", "오류", "버그", "디버깅",
-        "어느 쪽이 좋다", "비교해", "트레이드오프",
-        "구현 방법", "어떻게 구현",
+        "설계",
+        "어떻게 설계",
+        "아키텍처",
+        "왜 움직이지 않는다",
+        "오류",
+        "버그",
+        "디버깅",
+        "어느 쪽이 좋다",
+        "비교해",
+        "트레이드오프",
+        "구현 방법",
+        "어떻게 구현",
         "리팩토링",
-        "리뷰", "보여줘",
-        "생각해", "분석해", "깊게",
+        "리뷰",
+        "보여줘",
+        "생각해",
+        "분석해",
+        "깊게",
     ],
     "en": [
-        "design", "architecture", "architect",
-        "debug", "error", "bug", "not working", "fails",
-        "compare", "trade-off", "tradeoff", "which is better",
-        "how to implement", "implementation",
-        "refactor", "simplify",
-        "review", "check this",
-        "think", "analyze", "deeply",
+        "design",
+        "architecture",
+        "architect",
+        "debug",
+        "error",
+        "bug",
+        "not working",
+        "fails",
+        "compare",
+        "trade-off",
+        "tradeoff",
+        "which is better",
+        "how to implement",
+        "implementation",
+        "refactor",
+        "simplify",
+        "review",
+        "check this",
+        "think",
+        "analyze",
+        "deeply",
     ],
 }
 
 # Triggers for Antigravity CLI (research, multimodal, large context)
 ANTIGRAVITY_TRIGGERS = {
     "ko": [
-        "검사해", "리서치해", "조사해",
-        "동영상", "오디오", "이미지",
-        "코드베이스 전체", "리포지토리 전체",
-        "최신", "문서",
-        "라이브러리", "패키지",
+        "검사해",
+        "리서치해",
+        "조사해",
+        "동영상",
+        "오디오",
+        "이미지",
+        "코드베이스 전체",
+        "리포지토리 전체",
+        "최신",
+        "문서",
+        "라이브러리",
+        "패키지",
     ],
     "en": [
-        "research", "investigate", "look up", "find out",
-        "pdf", "video", "audio", "image",
-        "entire codebase", "whole repository",
-        "latest", "documentation", "docs",
-        "library", "package", "framework",
+        "research",
+        "investigate",
+        "look up",
+        "find out",
+        "pdf",
+        "video",
+        "audio",
+        "image",
+        "entire codebase",
+        "whole repository",
+        "latest",
+        "documentation",
+        "docs",
+        "library",
+        "package",
+        "framework",
     ],
 }
 
@@ -69,7 +112,7 @@ def detect_agent(prompt: str) -> tuple[str | None, str]:
     return None, ""
 
 
-def main():
+def main() -> None:
     try:
         data = json.load(sys.stdin)
         prompt = data.get("prompt", "")
@@ -89,7 +132,7 @@ def main():
                         "deep reasoning in an isolated context. Consider: Task tool with "
                         "subagent_type='deep-reasoning' for design decisions, debugging, "
                         "or complex analysis."
-                    )
+                    ),
                 }
             }
             print(json.dumps(output))
@@ -103,7 +146,7 @@ def main():
                         "Antigravity CLI's research capabilities. Consider: "
                         '`agy -p "Research: {topic}" --model {slug per Model Policy}` (via general-purpose subagent) '
                         "for documentation, library research, or multimodal content."
-                    )
+                    ),
                 }
             }
             print(json.dumps(output))
