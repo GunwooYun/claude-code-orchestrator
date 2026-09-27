@@ -10,10 +10,6 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
                             └─ Subagents (Parallel Tasks)
 ```
 
-> **이 저장소에서 작업을 이어받는 경우**(다른 세션·다른 머신): 루트의
-> [`HANDOFF.md`](HANDOFF.md) 를 먼저 읽는다. 현재 브랜치·검증 상태·열려 있는 작업
-> 대기열·지켜야 할 규칙이 거기 있다. 템플릿을 *사용*하려는 사람에게는 필요 없다.
-
 ## 지금 쓸 수 있는가 — 검증된 것과 아닌 것
 
 **쓸 수 있다.** 단, 무엇이 실제로 확인됐는지 알고 쓰는 편이 낫다.

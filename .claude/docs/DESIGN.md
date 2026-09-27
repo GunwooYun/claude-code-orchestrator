@@ -285,11 +285,21 @@ Dropped after review:
       verification plan's scenario IDs, and `/lens-review`'s verification-adequacy
       lens. Both are judgement, not enforcement. **Standing limitation**, not a
       task — do not expect this one to close.
-- [ ] Nothing here has been exercised on a real project yet. Every verification in
-      this session ran against the template itself, which has no `src/`, a
-      3-second test suite and only two verification tiers. The first real
-      `/initproject` on a Django or Yocto repository is where the assumptions get
-      tested. Record what breaks.
+- [ ] **`/initproject` has not been run to completion interactively.** Correction
+      (2026-09-28): this item used to say nothing had run on a real project. A
+      first real run did happen, headless, and stopped at Step 2 (one
+      AskUserQuestion, nobody to answer) after Steps 1–3 — then exited as
+      `success`. Its report is `skill-test-initproject.md` on branch
+      `claude/skilltest-initproject`; findings B–I from it are closed (b94c2fb,
+      a0edc2d, a736da0, c6fa880). Open: run it once in an interactive session.
+      If it completes, document "headless runs are not supported"; if it
+      stalls, give each Step 2/3 question a no-human default and report its use.
+      Whether "commit the template or not" may have a default at all is the
+      user's call, not the skill's.
+- [ ] The skills README lists as never run (`/feature` first) still have not. Method: hand one to a
+      session with no context and make it quote the sentence it got stuck on.
+- [ ] Loop/graph orchestration on top of `/feature` — the user's option, not yet
+      researched. Real use of `/feature` should come first.
 - [ ] `/lens-review`, `/doc-write`, `/jira-setup`, `/ticket` and `agy-probe`'s
       READY path have never actually run. Their tests assert their instructions,
       not their behaviour in use.
