@@ -132,6 +132,10 @@ docstring 이 그 예시다(두 번의 정정을 적어 뒀다).
 `.claude/scripts/README.md` 는 이미 철회했는데 스킬에만 남아 있었다)도 함께
 고쳤다. C 도 완료. **남은 것: A, F, G.**
 
+**대기열 밖 추가 (사용자 요구, 절대 규칙)**: 채택 프로젝트의 커밋·PR 에 오케스트레이터가
+귀속 푸터를 넣지 않는다 — `.claude/settings.json` `attribution` + `CLAUDE.md` 운영 주의사항 한 줄.
+이미 템플릿을 복사한 프로젝트는 `settings.json` 이 프로젝트 소유라 자동으로 받지 못한다.
+
 ### A. 비대화형에서 Step 2 에서 멈춘다 — 가장 큰 것
 
 - **어디**: `.claude/skills/initproject/SKILL.md:37` (`## Step 2 — Ask the user (one AskUserQuestion, several questions)`), `:69`

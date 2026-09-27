@@ -630,6 +630,25 @@ class ScriptContractTests(unittest.TestCase):
             )
 
 
+class CommitAttributionTests(unittest.TestCase):
+    """The orchestrator must never add an attribution footer in an adopting
+    project's commits or PRs. The template's settings.json is what Claude Code
+    reads there; the CLAUDE.md line covers what the setting cannot (a model
+    writing the trailer itself, a local settings file overriding it)."""
+
+    def test_settings_hide_every_attribution(self) -> None:
+        settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
+        attribution = settings.get("attribution", {})
+        self.assertEqual("", attribution.get("commit"))
+        self.assertEqual("", attribution.get("pr"))
+        self.assertIs(False, attribution.get("sessionUrl"))
+
+    def test_claude_md_forbids_the_footer(self) -> None:
+        # Drift tripwire over prose.
+        text = (REPO / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn("Co-Authored-By", text)
+
+
 class TierBudgetTests(unittest.TestCase):
     """The tier budgets must leave no gap and agree everywhere they are restated.
 

@@ -1,5 +1,10 @@
 {
   "$schema": "https://code.claude.com/schemas/settings.json",
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
   "hooks": {
     "UserPromptSubmit": [
       {
