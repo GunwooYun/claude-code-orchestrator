@@ -630,6 +630,41 @@ class ScriptContractTests(unittest.TestCase):
             )
 
 
+class TierBudgetTests(unittest.TestCase):
+    """The tier budgets must leave no gap and agree everywhere they are restated.
+
+    A real target's e2e took 6m32s: over `task` (≤5 min) and under `unit`
+    (10–60 min), so no tier admitted it. Drift tripwire over prose.
+    """
+
+    SITES = (
+        REPO / "CLAUDE.md",
+        REPO / "README.md",
+        REPO / ".claude" / "rules" / "testing.md",
+        REPO / ".claude" / "scripts" / "README.md",
+        SKILLS / "initproject" / "SKILL.md",
+    )
+    TASK_MAX = re.compile(r"≤\s*(\d+)\s*(?:분|min)")
+    UNIT_RANGE = re.compile(r"(\d+)\s*[~–]\s*60\s*(?:분|min)")
+
+    def _found(self, pattern: re.Pattern[str]) -> list[tuple[str, int]]:
+        return [
+            (path.name, int(m.group(1)))
+            for path in self.SITES
+            for m in pattern.finditer(path.read_text(encoding="utf-8"))
+        ]
+
+    def test_the_scan_finds_every_restatement(self) -> None:
+        self.assertGreaterEqual(len(self._found(self.TASK_MAX)), 6)
+        self.assertGreaterEqual(len(self._found(self.UNIT_RANGE)), 6)
+
+    def test_unit_starts_where_task_ends(self) -> None:
+        task_max = {value for _, value in self._found(self.TASK_MAX)}
+        unit_min = {value for _, value in self._found(self.UNIT_RANGE)}
+        self.assertEqual(1, len(task_max), f"task budgets disagree: {task_max}")
+        self.assertEqual(task_max, unit_min, "a gap or overlap between task and unit")
+
+
 class InitprojectSkillTests(unittest.TestCase):
     """Findings from the first real /initproject run (skill-test-initproject.md)."""
 

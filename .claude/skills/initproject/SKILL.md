@@ -156,7 +156,7 @@ tiers in order and answer the same four questions for each:
 |---|---|---|---|
 | `verify-save` | seconds | one host file path | Which file types are worth checking on save, and with what? |
 | `verify-task` | ≤5 min | none | What is the fast gate after each task? |
-| `verify-unit` | 10–60 min | none | What runs once per unit of work? |
+| `verify-unit` | 5–60 min | none | What runs once per unit of work? |
 | `verify-full` | unbounded | none | What only CI or a person should ever run? |
 
 **A tier with no honest answer gets no script.** An absent script means "not

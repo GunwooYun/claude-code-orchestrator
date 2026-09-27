@@ -199,7 +199,7 @@ agy models   # 사용 가능한 모델 슬러그 확인
 7. **별도 세션 리뷰** → 계획의 시나리오 ID 와 실제 테스트를 대조
 
 검증 티어는 **소요 시간**으로 정한다 — `save`(초) / `task`(≤5분) /
-`unit`(10~60분) / `full`(무제한, CI 전용). `unit`/`e2e` 같은 말은 스택마다 뜻이
+`unit`(5~60분) / `full`(무제한, CI 전용). `unit`/`e2e` 같은 말은 스택마다 뜻이
 달라 판단 기준이 못 된다. 자세한 원칙은 `.claude/rules/testing.md`.
 
 ### `/plan` — 구현 계획 수립
@@ -358,7 +358,7 @@ Confluence 페이지, Jira 티켓 본문, 저장소 준거 문서, 구현 계획
 ```
 verify-save <path>   초        파일 저장 시 (훅)
 verify-task          ≤5분      태스크마다 (게이트)
-verify-unit          10~60분   작업 단위당 한 번
+verify-unit          5~60분    작업 단위당 한 번
 verify-full          무제한    CI 또는 사람만
 ```
 
