@@ -675,6 +675,15 @@ class InitprojectSkillTests(unittest.TestCase):
         section = text.split("### Rules for what you write", 1)[1].split("\n### ", 1)[0]
         self.assertIn("_lib.sh", section)
 
+    def test_the_skill_does_not_permit_a_gate_that_rewrites_files(self) -> None:
+        # .claude/scripts/README.md already retracted "a formatter may rewrite
+        # the file" after it made verify-save silently rewrite what the model
+        # wrote; the skill kept the old permission and passed it to adopters.
+        text = self.SKILL.read_text(encoding="utf-8")
+        for stale in ("formatter may rewrite", "if a formatter was enabled"):
+            with self.subTest(stale=stale):
+                self.assertNotIn(stale, text)
+
 
 if __name__ == "__main__":
     unittest.main()

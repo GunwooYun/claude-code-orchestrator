@@ -172,8 +172,12 @@ than no script: it reports success that was never checked.
   path inside the script — do not add a config file.
 - Path translation is the script's job. `verify-save` receives a **host** path;
   if the tool runs elsewhere, convert it there.
-- No destructive actions: a formatter may rewrite the file, but nothing commits,
-  pushes, deploys, or creates resources.
+- Gates do not modify files: no formatter, no `--fix`. A gate that silently
+  rewrites what the model just wrote exits 0 with no output, and the model cannot
+  tell that from "nothing to say" (this template's own `verify-save` did exactly
+  that). Auto-fixing is a command a person runs on purpose. If a tier must fix
+  anyway, it prints what it changed.
+- No destructive actions: nothing commits, pushes, deploys, or creates resources.
 - `verify-full` may chain `verify-unit`; `verify-save` must never chain a slower
   tier, or saving a file starts a build.
 - If a tool may be absent, the script decides whether that is a failure and says
@@ -252,5 +256,5 @@ the bug this step exists to prevent.
   what it costs if not `READY`, which verification
   tiers exist and which were skipped and why, what was changed per file, what was
   skipped and why, what the user still has to decide (also written to
-  `DESIGN.md` TODO), and a reminder to check `git diff` after the first edit
-  if a formatter was enabled.
+  `DESIGN.md` TODO), and the command a person runs to auto-fix (kept out of the
+  gates).

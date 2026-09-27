@@ -125,7 +125,12 @@ docstring 이 그 예시다(두 번의 정정을 적어 뒀다).
 ## 5. 작업 대기열 — `/initproject` 첫 실전에서 나온 것
 
 전문은 `claude/skilltest-initproject` 브랜치의 `skill-test-initproject.md`(962줄).
-아래 9건은 **클라우드 세션이 직접 재현 확인했다.** 아직 **하나도 고치지 않았다.**
+아래 9건은 **클라우드 세션이 직접 재현 확인했다.**
+
+**진행 상황 (2026-09-27, 로컬 세션)**: B·D·E·H·I 는 완료(`b94c2fb`). 대기열 밖에서
+발견한 `SKILL.md` Step 5 의 "a formatter may rewrite the file" 허용(계약 문서
+`.claude/scripts/README.md` 는 이미 철회했는데 스킬에만 남아 있었다)도 함께
+고쳤다. **남은 것: A, C, F, G.**
 
 ### A. 비대화형에서 Step 2 에서 멈춘다 — 가장 큰 것
 
@@ -143,7 +148,7 @@ docstring 이 그 예시다(두 번의 정정을 적어 뒀다).
   **로컬에서 이것부터 확인하는 것이 순서상 맞다** — 대화형에서 완주하면 이 항목의
   성격이 "버그"에서 "헤드리스 자동화 미지원 명시"로 바뀐다.
 
-### B. `.claude/**` 쓰기가 승인을 요구한다 — 예고가 없다
+### B. `.claude/**` 쓰기가 승인을 요구한다 — 예고가 없다 — **완료**
 
 - **무엇**: 비대화형에서 `.claude/scripts/_lib.sh` 등의 Write 가
   `"... which is a sensitive file"` 로 거부됐다. `--permission-mode acceptEdits`,
@@ -162,7 +167,7 @@ docstring 이 그 예시다(두 번의 정정을 적어 뒀다).
   타이브레이크를 표 안에 명시한다. **`CLAUDE.md` 와 `testing.md` 를 같은 커밋에서
   함께 고친다** — 두 곳에 같은 표가 있다.
 
-### D. README 가 "검증 스크립트 4개"라고 약속한다
+### D. README 가 "검증 스크립트 4개"라고 약속한다 — **완료**
 
 - **어디**: `README.md:347`
 - **모순**: `.claude/skills/initproject/SKILL.md:158` — *"A tier with no honest answer
@@ -170,7 +175,7 @@ docstring 이 그 예시다(두 번의 정정을 적어 뒀다).
   판단**했다(CI job 이 둘뿐이라 `unit` 보다 느린 티어가 없다).
 - **제안**: "4개" → "이 프로젝트에 정직하게 존재하는 티어만큼".
 
-### E. Step 6 의 드리프트 grep 이 스킬 자기 파일을 잡는다
+### E. Step 6 의 드리프트 grep 이 스킬 자기 파일을 잡는다 — **완료**
 
 - **어디**: `.claude/skills/initproject/SKILL.md:215` — `| grep -v initproject/references`
 - **확인**: 그 grep 이 `initproject/SKILL.md` 를 **3건** 잡는다. 스킬의 지시문 자체라
@@ -197,7 +202,7 @@ docstring 이 그 예시다(두 번의 정정을 적어 뒀다).
 - **제안**: Step 4 에 "H1 을 프로젝트 이름으로 바꾼다"를 한 줄 추가. 단 Ground rules 의
   "never add a second H1" 과 충돌하지 않게 문구를 맞춘다.
 
-### H. workspace trust — `settings.json` 허용 79개가 조용히 무시된다
+### H. workspace trust — `settings.json` 허용 79개가 조용히 무시된다 — **완료**
 
 - **확인**: 신뢰 대화상자를 수락하지 않은 워크스페이스에서 헤드리스로 돌리면
   `Ignoring 79 permissions.allow entries ... this workspace has not been trusted`
@@ -205,7 +210,7 @@ docstring 이 그 예시다(두 번의 정정을 적어 뒀다).
   따르면 해결된다.** "복사만 하고 나중에 헤드리스로 돌리는" 경로의 함정.
 - **제안**: README 함정 절에 한 줄.
 
-### I. `_lib.sh` 가 `SKILL.md` Step 5 에 없다
+### I. `_lib.sh` 가 `SKILL.md` Step 5 에 없다 — **완료**
 
 - **어디**: `.claude/scripts/README.md:76` 에만 있고 `SKILL.md` Step 5 의
   "Rules for what you write" 에는 없다. 그래도 스킬은 알아서 잘 만들었다.
@@ -241,11 +246,10 @@ docstring 이 그 예시다(두 번의 정정을 적어 뒀다).
 - **브랜치**: `claude/eager-wozniak-wr8agz` 에만 커밋·push 한다. 다른 브랜치로 push
   하려면 **명시적 허락**을 받는다. PR 은 **요청받지 않으면 만들지 않는다.**
 - **커밋 메시지**: 무엇을 왜 고쳤는지, 어떻게 확인했는지(뮤테이션 결과 포함).
-  이 브랜치의 기존 메시지들이 그 형식이다. 푸터:
-  ```
-  Co-Authored-By: Claude <noreply@anthropic.com>
-  ```
-  (모델 식별자는 커밋·PR·코드 주석에 넣지 않는다.)
+  이 브랜치의 기존 메시지들이 그 형식이다. **`Co-Authored-By` 푸터는 넣지 않는다**
+  (2026-09-27 사용자 지시. 이 문서의 이전 판은 이 푸터를 넣으라고 적었고,
+  `b94c2fb` 까지의 커밋에는 그 푸터가 붙어 있다). 모델 식별자도 커밋·PR·코드
+  주석에 넣지 않는다.
 - **언어**: 사고·코드·커밋 메시지는 영어, 사용자 대화는 한국어
   (`.claude/rules/language.md`).
 - **정직성** (`.claude/rules/writing-style.md`, 예외 없음):
