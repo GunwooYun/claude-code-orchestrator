@@ -12,10 +12,10 @@ in order; skip a step when it does not apply and say so in the final report.
 
 ## Ground rules
 
-- `CLAUDE.md`: touch only `## 기술 스택(Tech Stack)` and `## Project Setup`
+- `CLAUDE.md`: touch only the H1 title line, `## 기술 스택(Tech Stack)` and `## Project Setup`
   (create it if missing, place it after `## 언어 프로토콜`, then
   `## Current Project`, then **before** any `## Session History`). Never edit the
-  other sections, never add a second H1. The section lifetimes are defined in
+  other sections. Replace the H1 in place (Step 4); never add a second one. The section lifetimes are defined in
   `CLAUDE.md` → 「`CLAUDE.md` 섹션의 수명」: `## Project Setup` holds what lasts as
   long as the project, `## Current Project` is replaced per work unit by
   `/feature`, so **do not put project-permanent state in the latter**.
@@ -117,6 +117,11 @@ If the user declines, or the state does not become `READY`:
 take the answer as final and move on.
 
 ## Step 4 — CLAUDE.md
+
+Replace the H1 (`# Claude Code Orchestrator`) with `# <project name>`, in place.
+This file is now the project's only always-loaded context and should not open by
+naming the template. Keep exactly one H1; the template's own sections below it
+stay as they are.
 
 Replace the body of `## 기술 스택(Tech Stack)` with the detected stack: language
 and framework versions, package manager, quality tools with versions, how the

@@ -729,6 +729,33 @@ class InitprojectSkillTests(unittest.TestCase):
         section = text.split("### Rules for what you write", 1)[1].split("\n### ", 1)[0]
         self.assertIn("_lib.sh", section)
 
+    def test_step_4_retitles_the_copied_claude_md(self) -> None:
+        # G: without this, an adopter's only always-loaded context opens with
+        # "# Claude Code Orchestrator". The ground rules must allow the edit
+        # Step 4 asks for, or the two instructions contradict each other.
+        text = self.SKILL.read_text(encoding="utf-8")
+        step4 = text.split("## Step 4", 1)[1].split("\n## ", 1)[0]
+        ground = text.split("## Ground rules", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("H1", step4)
+        self.assertIn("project name", step4)
+        self.assertIn("the H1", ground)
+
+    def test_the_save_tiers_structural_silence_is_documented(self) -> None:
+        # F: an unconfigured or half-configured verify-save is silent on every
+        # file, indistinguishable from "nothing to report". Not fixable by the
+        # contract (silence IS the contract for unhandled types), so it must be
+        # written where people look. Drift tripwire over prose; the behaviour
+        # itself is covered in test_verify_scripts.py.
+        contract = (REPO / ".claude" / "scripts" / "README.md").read_text(
+            encoding="utf-8"
+        )
+        marker = '**"해당 없음"은 종료 코드로 표현하지 않는다.**'
+        paragraph = contract.split(marker, 1)[1].split("\n## ", 1)[0]
+        self.assertIn("/initproject", paragraph)
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        pitfalls = readme.split("### 8. 자주 밟는 함정", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("verify-save", pitfalls)
+
     def test_the_skill_does_not_permit_a_gate_that_rewrites_files(self) -> None:
         # .claude/scripts/README.md already retracted "a formatter may rewrite
         # the file" after it made verify-save silently rewrite what the model

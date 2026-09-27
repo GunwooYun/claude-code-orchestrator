@@ -553,6 +553,7 @@ cd ../<project>-review && claude
 - agy 로그(`.claude/logs/`)와 체크포인트(`.claude/checkpoints/`)는 gitignore 대상이다 — 남기고 싶은 결론은 `docs/`로 옮긴다.
 - **게이트에 자동 수정 명령(`--fix`, 포매터)을 넣지 않는다.** 저장할 때마다 모델이 방금 쓴 파일이 조용히 바뀌고, 종료 코드 0 + 출력 0 이면 모델은 그걸 알 수 없다. `/initproject` 가 `verify-*` 를 쓸 때 이 규칙을 지킨다.
 - **신뢰하지 않은 워크스페이스에서 헤드리스(`claude -p`)로 돌리면 `settings.json` 의 `permissions.allow` 가 통째로 무시된다** (`Ignoring N permissions.allow entries ... this workspace has not been trusted`). Quick Start 처럼 대화형 `claude` 로 한 번 열어 신뢰를 수락하면 해결된다. 복사만 해 두고 나중에 헤드리스로 돌리는 경로의 함정이다.
+- **`verify-save` 가 조용하다고 저장 게이트가 동작한다는 뜻은 아니다.** 다루지 않는 파일에 침묵하는 것이 계약이라, `/initproject` 를 안 돌렸거나 중간에 멈춘 프로젝트에서는 템플릿 기본값(`*.py` 만)이 남아 모든 파일에 침묵한다. 검사해야 할 파일 하나를 일부러 깨뜨려 `.claude/scripts/verify-save <그 파일>` 이 0 이외를 내는지 본다.
 - **리뷰용 워크트리를 `main` 에 체크아웃하지 않는다.** 그러면 그 안에서 `HEAD == main` 이라 `git diff main...HEAD` 가 빈 출력을 내고, 리뷰 세션이 "변경 없음"을 보고 조용히 끝난다. 작업 브랜치에 체크아웃한다.
 - **맨몸 `poe`·`pytest` 를 문서에 적지 않는다.** `poe` 는 exit 127 이고 `python3 -m unittest` 는 0개를 돌리고 OK 를 낸다 — 둘 다 "통과했다"로 읽힌다. `uv run` 을 붙인다.
 - **항상 로드되는 `rules/dev-environment.md` 를 프로젝트에 맞게 고치지 않으면** 세션마다 틀린 도구·없는 경로를 읽는다. 없는 경로에 타입 체커는 흔히 **exit 0** 을 내므로 거짓 통과가 된다.
