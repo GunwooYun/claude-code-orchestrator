@@ -2,7 +2,7 @@
 Regression tests for post-implementation-review.py.
 
 Written before the fixes, per `.claude/rules/testing.md` principle 1. Scenario
-IDs match the notes in `.claude/docs/DESIGN.md`:
+IDs match the notes in `docs/DESIGN.md`:
 
   R1  state lived at one hard-coded /tmp path shared by every project, so
       counters accumulated across unrelated repositories

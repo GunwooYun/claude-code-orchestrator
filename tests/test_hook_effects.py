@@ -158,7 +158,7 @@ class AgentRouterTests(unittest.TestCase):
 class SuggestBeforeWriteTests(unittest.TestCase):
     HOOK = HOOKS / "suggest-deep-reasoning-before-write.py"
 
-    def edit(self, file_path: str, new_string: str = "x = 1\n") -> str:
+    def edit(self, file_path: str, new_string: str = "x = 1\n", **extra: str) -> str:
         return context(
             run(
                 self.HOOK,
@@ -166,12 +166,33 @@ class SuggestBeforeWriteTests(unittest.TestCase):
                     "hook_event_name": "PreToolUse",
                     "tool_name": "Edit",
                     "tool_input": {"file_path": file_path, "new_string": new_string},
+                    **extra,
                 },
             )
         )
 
     def test_a_design_path_suggests_a_review(self) -> None:
         emitted = self.edit("/tmp/project/core/schema.py")
+        self.assertIn("[Design Review Reminder]", emitted)
+
+    def test_inside_a_subagent_the_same_edit_stays_silent(self) -> None:
+        """
+        A subagent cannot spawn deep-reasoning, so the reminder is noise there:
+        the first interactive /initproject run got it 8 times inside one
+        general-purpose subagent. `agent_id` is present only when the hook fires
+        inside a subagent (code.claude.com/docs/en/hooks, common input fields).
+        """
+        emitted = self.edit(
+            "/tmp/project/core/schema.py",
+            agent_id="a1b2c3",
+            agent_type="general-purpose",
+        )
+        self.assertEqual("", emitted)
+
+    def test_a_main_session_run_with_agent_still_suggests(self) -> None:
+        # `--agent` sets agent_type without agent_id; that is still the main
+        # thread, which can spawn deep-reasoning.
+        emitted = self.edit("/tmp/project/core/schema.py", agent_type="reviewer")
         self.assertIn("[Design Review Reminder]", emitted)
 
     def test_a_readme_edit_stays_silent(self) -> None:

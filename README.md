@@ -20,14 +20,14 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
 | `.claude/scripts/verify-save`, `verify-task` | **동작 확인.** 저장 게이트는 **읽기 전용**이다 — 파일을 고치지 않고 보고만 한다 |
 | 규칙·스킬 문서의 일관성 | **테스트로 고정.** 모델 등급↔슬러그 일치, 섹션 포인터 해소, 임계값 단일 정의, 항상-로드 예산 |
 | `checkpoint.py` | **동작 확인** (펜스·rename·범위·원자적 쓰기 회귀 테스트) |
-| 스킬 실행 | `/lens-review` 와 `/deep-reasoning` 은 **실제로 돌았고 진짜 결함을 찾았다**(이 저장소의 `DESIGN.md` 에 "Found by `/lens-review`" 로 남아 있다). **나머지 14개는 한 번도 안 돌렸다** — `/initproject`·`/feature` 포함. 테스트는 스킬의 *문서*가 일관되는지만 본다 |
+| 스킬 실행 | `/lens-review` 와 `/deep-reasoning` 은 **실제로 돌았고 진짜 결함을 찾았다**(이 저장소의 `docs/DESIGN.md` 에 "Found by `/lens-review`" 로 남아 있다). **나머지 14개는 한 번도 안 돌렸다** — `/initproject`·`/feature` 포함. 테스트는 스킬의 *문서*가 일관되는지만 본다 |
 | agy 연동 | **미확인.** 이 저장소를 만든 컨테이너에 agy 가 없었다. 모델 정책·soft-deny 실동작은 문서상 설계다 |
 | Jira·Confluence | 커넥터로 **측정한 사실**에 기반하지만(프로젝트 141개, cloudId 중복 등), 스킬 실행은 미확인 |
 | Windows | **미확인.** `verify-*` 해석기 목록은 배려하지만 훅 등록(`python3`)은 아니다 |
 
 즉 **기계가 볼 수 있는 부분은 검증됐고, 프롬프트가 실제 세션에서 어떻게 작동하는지는 아직 아니다.** 처음 쓸 때 `/initproject` 가 첫 실전이 된다 — 어긋나는 게 나오면 그게 정상이고, 그때 고치면 된다.
 
-전체 미결 목록: `.claude/docs/DESIGN.md` 의 Open Questions.
+전체 미결 목록: `docs/DESIGN.md` 의 Open Questions (이 템플릿 자신의 설계 기록 — 복사되지 않는다. 채택 프로젝트가 받는 `.claude/docs/DESIGN.md` 는 빈 뼈대다).
 
 ## Quick Start
 
@@ -344,7 +344,7 @@ Confluence 페이지, Jira 티켓 본문, 저장소 준거 문서, 구현 계획
 
 ### `/initproject` — 첫 세션 설정 (프로젝트당 1회)
 
-템플릿을 복사한 직후 실행한다. 스택을 감지하고 → 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 물은 뒤 → `CLAUDE.md` 기술 스택/`## Project Setup`을 채우고 → `.claude/scripts/`의 검증 스크립트를 이 프로젝트에 정직하게 존재하는 티어만큼 실제 명령으로 작성하고(계약), 템플릿 자신의 도구가 드러난 산문(`rules/dev-environment.md` 등)을 맞추고 → `.agents/rules/AGENTS.md`에 프로젝트 단락, `docs/DESIGN.md`에 아키텍처 시드를 쓰고 → 스모크 테스트 후 보고한다. 설치·커밋 정책 변경은 반드시 먼저 묻는다. 산출물 대부분이 `.claude/` 안에 있어서 **파일마다 쓰기 승인 요청이 뜬다** — 대화형 세션에서 돌린다.
+템플릿을 복사한 직후 실행한다. 스택을 감지하고 → 커밋 정책·린트 훅 처리·프로젝트 개요를 한 번에 물은 뒤 → `CLAUDE.md` 기술 스택/`## Project Setup`을 채우고 → `.claude/scripts/`의 검증 스크립트를 이 프로젝트에 정직하게 존재하는 티어만큼 실제 명령으로 작성하고(계약), 템플릿 자신의 도구가 드러난 산문(`rules/dev-environment.md` 등)을 맞추고 → `.agents/rules/AGENTS.md`에 프로젝트 단락, `docs/DESIGN.md`에 아키텍처 시드를 쓰고 → 스모크 테스트 후 보고한다. 설치·커밋 정책 변경은 반드시 먼저 묻는다. 산출물 대부분이 `.claude/` 안에 있어서 **파일마다 쓰기 승인 요청이 뜬다** — 대화형 세션에서 돌린다. **헤드리스(`claude -p`) 실행은 지원하지 않는다**: Step 2 질문에서 멈추고도 `success` 로 끝난다(Node 프로젝트에서 대화형으로는 8단계를 끝까지 완주했다, 2026-09-28).
 
 ## 검증 계약 — 어떤 스택에도 붙는 방법
 
@@ -540,6 +540,7 @@ cd ../<project>-review && claude
 
 ### 8. 자주 밟는 함정
 
+- **2026-09-28 이전에 복사한 프로젝트의 `.claude/docs/DESIGN.md` 에는 이 템플릿 자신의 설계 기록이 섞여 있다.** deep-reasoning 은 그것을 그 프로젝트의 설계로 읽는다. 파일을 덮어쓰지 말고(프로젝트 소유다), 이 템플릿을 설명하는 항목 — `/initproject`·`/feature`·`/lens-review`·`checkpoint.py`·훅을 다루는 Key Decisions 행, TODO, Open Questions, Changelog — 을 지우고 프로젝트가 추가한 것만 남긴다.
 - **적용이 끝난 프로젝트에 템플릿을 다시 복사하면 맞춤화가 전부 원본으로 덮어써진다.** 복사는 프로젝트당 **한 번**이다. 이후 템플릿 개선을 가져오려면 파일 단위로 골라 복사한다 — 템플릿 소유(그대로 덮어써도 되는 것): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`(전부 — 훅은 더 이상 스택을 모른다), `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`, `rules/security.md`, `rules/language.md`. **프로젝트 소유(덮어쓰지 말 것)**: `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
 
 - 훅 파일명 변경 후 `settings.json` 미동기화 → PreToolUse 오류로 편집 전면 차단. 같은 커밋에서 함께 바꾼다.

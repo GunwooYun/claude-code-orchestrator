@@ -53,6 +53,7 @@ SOURCES = (
     REPO / ".claude" / "agents",
     REPO / ".claude" / "scripts" / "README.md",
     REPO / ".claude" / "docs" / "DESIGN.md",
+    REPO / "docs" / "DESIGN.md",
 )
 
 # Optional by design, so absence is not a defect. Kept as an explicit short list
@@ -630,6 +631,53 @@ class ScriptContractTests(unittest.TestCase):
             )
 
 
+class ShippedDesignSkeletonTests(unittest.TestCase):
+    """`.claude/docs/DESIGN.md` is copied into every adopting project and read by
+    deep-reasoning as THAT project's design. It must be an empty skeleton; the
+    template's own record lives in `docs/DESIGN.md`, which Quick Start does not
+    copy. Found on the first interactive /initproject run: the adopter's file
+    still carried this template's Key Decisions."""
+
+    SKELETON = REPO / ".claude" / "docs" / "DESIGN.md"
+    RECORD = REPO / "docs" / "DESIGN.md"
+    HEADINGS = [
+        "# Project Design Document",
+        "## Overview",
+        "## Architecture",
+        "## Implementation Plan",
+        "### Patterns & Approaches",
+        "### Libraries & Roles",
+        "### Key Decisions",
+        "## TODO",
+        "## Open Questions",
+        "## Changelog",
+    ]
+
+    def _lines(self) -> list[str]:
+        text = self.SKELETON.read_text(encoding="utf-8")
+        text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+        text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+        return [line.strip() for line in text.splitlines() if line.strip()]
+
+    def test_the_skeleton_keeps_the_headings_skills_write_into(self) -> None:
+        headings = [line for line in self._lines() if line.startswith("#")]
+        self.assertEqual(self.HEADINGS, headings)
+
+    def test_the_skeleton_carries_no_content(self) -> None:
+        for line in self._lines():
+            if line.startswith("#") or line.startswith(">"):
+                continue
+            if re.fullmatch(r"\|[-\s|]*\|", line):  # separator or empty row
+                continue
+            if re.fullmatch(r"\|(\s*[A-Z][\w &]*\s*\|)+", line):  # header row
+                continue
+            self.fail(f"the shipped skeleton carries content: {line!r}")
+
+    def test_the_template_keeps_its_own_record(self) -> None:
+        text = self.RECORD.read_text(encoding="utf-8")
+        self.assertIn("deep-reasoning pins `model: fable`", text)
+
+
 class CommitAttributionTests(unittest.TestCase):
     """The orchestrator must never add an attribution footer in an adopting
     project's commits or PRs. The template's settings.json is what Claude Code
@@ -714,6 +762,43 @@ class InitprojectSkillTests(unittest.TestCase):
         self.assertTrue(hits, "the grep found nothing — the scan itself is broken")
         own = [h for h in hits if h.startswith(".claude/skills/initproject/")]
         self.assertEqual([], own, "the drift grep reports the skill's own text")
+
+    def test_drift_grep_catches_python_test_examples(self) -> None:
+        # The first interactive run (Node project) left conftest.py / None in
+        # testing.md's examples: the grep only knew tool names, and Step 6 said
+        # only `## 명령` named the template's tools.
+        import subprocess
+
+        result = subprocess.run(
+            ["sh", "-c", self._drift_grep()],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertIn("conftest", result.stdout)
+
+    def test_step_6_covers_what_the_first_run_had_to_adapt(self) -> None:
+        # Drift tripwire over prose.
+        text = self.SKILL.read_text(encoding="utf-8")
+        step6 = text.split("## Step 6", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("`.claude/rules/language.md`", step6)
+        self.assertNotIn("Only the short `## 명령` section", step6)
+
+    def test_the_skill_says_it_needs_a_person(self) -> None:
+        # A: headless it stops at Step 2 and still exits `success`;
+        # interactively it completed (2026-09-28). Drift tripwire over prose.
+        text = self.SKILL.read_text(encoding="utf-8")
+        ground = text.split("## Ground rules", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("claude -p", ground)
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        section = readme.split("### `/initproject`", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("claude -p", section)
+
+    def test_step_4_replaces_the_template_tagline(self) -> None:
+        text = self.SKILL.read_text(encoding="utf-8")
+        step4 = text.split("## Step 4", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("멀티 에이전트 협업 프레임워크", step4)
 
     def test_no_document_promises_a_fixed_number_of_scripts(self) -> None:
         # Step 5 says a tier with no honest answer gets no script, so a fixed
