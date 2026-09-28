@@ -20,12 +20,12 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
 | `.claude/scripts/verify-save`, `verify-task` | **동작 확인.** 저장 게이트는 **읽기 전용**이다 — 파일을 고치지 않고 보고만 한다 |
 | 규칙·스킬 문서의 일관성 | **테스트로 고정.** 모델 등급↔슬러그 일치, 섹션 포인터 해소, 임계값 단일 정의, 항상-로드 예산 |
 | `checkpoint.py` | **동작 확인** (펜스·rename·범위·원자적 쓰기 회귀 테스트) |
-| 스킬 실행 | `/lens-review` 와 `/deep-reasoning` 은 **실제로 돌았고 진짜 결함을 찾았다**(이 저장소의 `docs/DESIGN.md` 에 "Found by `/lens-review`" 로 남아 있다). **나머지 14개는 한 번도 안 돌렸다** — `/initproject`·`/feature` 포함. 테스트는 스킬의 *문서*가 일관되는지만 본다 |
+| 스킬 실행 | `/lens-review` 와 `/deep-reasoning` 은 **실제로 돌았고 진짜 결함을 찾았다**(이 저장소의 `docs/DESIGN.md` 에 "Found by `/lens-review`" 로 남아 있다). `/initproject` 는 **Node/TS 프로젝트에서 대화형으로 8단계를 완주했다**(2026-09-28) — 생성된 검증 스크립트가 실제로 실패하는 것까지 세션 밖에서 확인했고, 드러난 결함 다섯 개는 고쳤다. 헤드리스(`claude -p`)는 지원하지 않는다. **나머지 13개는 한 번도 안 돌렸다** — `/feature` 포함. 테스트는 스킬의 *문서*가 일관되는지만 본다 |
 | agy 연동 | **미확인.** 이 저장소를 만든 컨테이너에 agy 가 없었다. 모델 정책·soft-deny 실동작은 문서상 설계다 |
 | Jira·Confluence | 커넥터로 **측정한 사실**에 기반하지만(프로젝트 141개, cloudId 중복 등), 스킬 실행은 미확인 |
 | Windows | **미확인.** `verify-*` 해석기 목록은 배려하지만 훅 등록(`python3`)은 아니다 |
 
-즉 **기계가 볼 수 있는 부분은 검증됐고, 프롬프트가 실제 세션에서 어떻게 작동하는지는 아직 아니다.** 처음 쓸 때 `/initproject` 가 첫 실전이 된다 — 어긋나는 게 나오면 그게 정상이고, 그때 고치면 된다.
+즉 **기계가 볼 수 있는 부분은 검증됐고, 프롬프트가 실제 세션에서 어떻게 작동하는지는 아직 아니다.** `/initproject` 는 한 스택(Node/TS)에서만 돌았으므로 다른 스택에서는 여전히 어긋날 수 있다 — 어긋나는 게 나오면 그게 정상이고, 그때 고치면 된다. 다음 실전 대상은 `/feature` 다.
 
 전체 미결 목록: `docs/DESIGN.md` 의 Open Questions (이 템플릿 자신의 설계 기록 — 복사되지 않는다. 채택 프로젝트가 받는 `.claude/docs/DESIGN.md` 는 빈 뼈대다).
 
