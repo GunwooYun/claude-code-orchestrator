@@ -59,6 +59,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -111,6 +112,7 @@ COVERED = {
     "log-cli-tools.py",
     "lint-on-save.py",
     "post-implementation-review.py",
+    "bash-write-check.py",
 }
 
 
@@ -408,9 +410,18 @@ class LogCliToolsTests(unittest.TestCase):
 class LintOnSaveTests(unittest.TestCase):
     """
     The full chain: stdin payload -> file path -> the project's verify-save
-    script -> its output relayed to stderr. A stub script stands in for the
+    script -> its output relayed to CLAUDE. A stub script stands in for the
     project's real one, which is what the contract in .claude/scripts/README.md
     promises is possible.
+
+    Corrected 2026-09-28, recorded rather than changed silently: these tests
+    used to assert on stderr, and the hook wrote there with exit 0. The hooks
+    reference (code.claude.com/docs/en/hooks) says stderr from a hook that exits
+    0 "goes to the debug log only ... and Claude never sees it". So every
+    assertion passed while the model saw nothing — observed in this repo's own
+    session, where Edit-written test files failed `ruff format --check` three
+    times and the failure surfaced only at verify-task. The assertions now read
+    `additionalContext`, the channel Claude actually receives.
     """
 
     def setUp(self) -> None:
@@ -441,39 +452,152 @@ class LintOnSaveTests(unittest.TestCase):
             cwd=self.project,
         )
 
-    def test_a_failing_check_is_reported_with_its_output(self) -> None:
+    def test_a_failing_check_reaches_claude_with_its_output(self) -> None:
         self.write_verify_save('#!/bin/sh\necho "BOOM: bad indent"\nexit 1\n')
         result = self.edit()
-        self.assertIn("[lint-on-save]", result.stderr)
-        self.assertIn("BOOM: bad indent", result.stderr)
+        seen = context(result)
+        self.assertIn("[lint-on-save]", seen)
+        self.assertIn("BOOM: bad indent", seen)
         self.assertEqual(0, result.returncode, "a PostToolUse hook must exit 0")
 
     def test_the_edited_path_is_passed_to_the_script(self) -> None:
         self.write_verify_save('#!/bin/sh\necho "got:$1"\nexit 1\n')
-        self.assertIn(f"got:{self.edited}", self.edit().stderr)
+        self.assertIn(f"got:{self.edited}", context(self.edit()))
 
     def test_output_on_success_is_relayed_not_swallowed(self) -> None:
         self.write_verify_save('#!/bin/sh\necho "warning: deprecated call"\nexit 0\n')
-        result = self.edit()
-        self.assertIn("passed with notes", result.stderr)
-        self.assertIn("warning: deprecated call", result.stderr)
+        seen = context(self.edit())
+        self.assertIn("passed with notes", seen)
+        self.assertIn("warning: deprecated call", seen)
 
     def test_a_silent_pass_says_nothing(self) -> None:
         self.write_verify_save("#!/bin/sh\nexit 0\n")
-        self.assertEqual("", self.edit().stderr.strip())
+        result = self.edit()
+        self.assertEqual("", result.stdout.strip())
+        self.assertEqual("", result.stderr.strip())
 
     def test_a_missing_tier_is_reported_once_per_session(self) -> None:
         first = self.edit()
-        self.assertIn("not configured", first.stderr)
+        self.assertIn("not configured", context(first))
         second = self.edit()
         self.assertEqual(
-            "", second.stderr.strip(), "the notice repeated on the next save"
+            "", second.stdout.strip(), "the notice repeated on the next save"
         )
 
     def test_a_path_that_does_not_exist_is_ignored(self) -> None:
         self.write_verify_save('#!/bin/sh\necho "should not run"\nexit 1\n')
         result = self.edit(file_path=str(self.project / "gone.py"))
-        self.assertEqual("", result.stderr.strip())
+        self.assertEqual("", result.stdout.strip())
+
+
+class BashWriteCheckTests(unittest.TestCase):
+    """
+    Files written through Bash (`sed -i`, redirection, a python heredoc) skip the
+    Edit/Write hooks, so verify-save never saw them. Observed twice on real runs
+    in an adopting project, including the gate scripts themselves. The hook marks
+    the time before a Bash call and, after it, runs verify-save on files modified
+    since — mtime, not git, because the observed files were gitignored.
+    """
+
+    HOOK = HOOKS / "bash-write-check.py"
+
+    def setUp(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.project = Path(tmp.name)
+        scripts = self.project / ".claude" / "scripts"
+        scripts.mkdir(parents=True)
+        self.gate = scripts / "verify-save"
+        self.gate.write_text('#!/bin/sh\necho "FAIL:$1"\nexit 1\n', encoding="utf-8")
+        self.gate.chmod(self.gate.stat().st_mode | stat.S_IEXEC)
+        self.source = self.project / "a.py"
+        self.source.write_text("x = 1\n", encoding="utf-8")
+        old = time.time() - 60
+        for path in (self.gate, self.source):
+            os.utime(path, (old, old))
+
+    def call(self, event: str, command: str, tool_use_id: str = "toolu_1") -> str:
+        result = run(
+            self.HOOK,
+            {
+                "hook_event_name": event,
+                "session_id": "effects-test",
+                "tool_use_id": tool_use_id,
+                "tool_name": "Bash",
+                "tool_input": {"command": command},
+            },
+            env={"CLAUDE_PROJECT_DIR": str(self.project)},
+            cwd=self.project,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        return context(result)
+
+    def touch(self, rel: str) -> None:
+        path = self.project / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("changed\n", encoding="utf-8")
+
+    def test_a_file_written_by_sed_is_checked_and_nudged(self) -> None:
+        self.assertEqual("", self.call("PreToolUse", "sed -i s/1/2/ a.py"))
+        self.touch("a.py")
+        seen = self.call("PostToolUse", "sed -i s/1/2/ a.py")
+        self.assertIn("[bash-write] a.py", seen)
+        self.assertIn("FAIL:", seen)
+        self.assertIn("Edit/Write", seen)
+
+    def test_a_heredoc_write_is_still_checked(self) -> None:
+        command = "python3 - <<'EOF'\nopen('a.py','w').write('y')\nEOF"
+        self.call("PreToolUse", command)
+        self.touch("a.py")
+        self.assertIn("[bash-write] a.py", self.call("PostToolUse", command))
+
+    def test_rewriting_the_gate_script_asks_for_a_smoke_test(self) -> None:
+        self.call("PreToolUse", "cat > .claude/scripts/verify-save <<'EOF'")
+        self.touch(".claude/scripts/verify-save")
+        self.gate.chmod(self.gate.stat().st_mode | stat.S_IEXEC)
+        self.assertIn("smoke-test", self.call("PostToolUse", "cat > x"))
+
+    def test_the_number_of_files_checked_is_capped(self) -> None:
+        self.call("PreToolUse", "sed -i s/a/b/ *.py")
+        for index in range(8):
+            self.touch(f"m{index}.py")
+        self.assertIn("checked 5 of 8", self.call("PostToolUse", "sed -i s/a/b/ *.py"))
+
+    def test_nothing_written_says_nothing(self) -> None:
+        self.call("PreToolUse", "ls")
+        self.assertEqual("", self.call("PostToolUse", "ls"))
+
+    def test_a_file_changed_before_the_command_is_not_reported(self) -> None:
+        self.touch("a.py")
+        time.sleep(0.05)  # past the kernel's coarse mtime tick
+        self.call("PreToolUse", "sed -i s/1/2/ b.py")
+        self.assertEqual("", self.call("PostToolUse", "sed -i s/1/2/ b.py"))
+
+    def test_build_output_and_logs_are_not_scanned(self) -> None:
+        self.call("PreToolUse", "npm run build > build/log.txt")
+        self.touch("build/out.py")
+        self.touch("node_modules/pkg/index.py")
+        self.touch(".claude/logs/cli-tools.jsonl")
+        self.assertEqual("", self.call("PostToolUse", "npm run build > build/log.txt"))
+
+    def test_a_post_without_its_pre_says_nothing(self) -> None:
+        self.touch("a.py")
+        self.assertEqual(
+            "", self.call("PostToolUse", "sed -i s/1/2/ a.py", "toolu_unknown")
+        )
+
+    def test_git_commands_are_not_reported(self) -> None:
+        self.call("PreToolUse", "git checkout -- a.py")
+        self.touch("a.py")
+        self.assertEqual("", self.call("PostToolUse", "git checkout -- a.py"))
+
+    def test_a_passing_file_from_a_non_editing_command_stays_silent(self) -> None:
+        self.gate.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        old = time.time() - 60
+        os.utime(self.gate, (old, old))
+        self.call("PreToolUse", "npm test")
+        self.touch("a.py")
+        self.assertEqual("", self.call("PostToolUse", "npm test"))
 
 
 class PostImplementationReviewTests(unittest.TestCase):

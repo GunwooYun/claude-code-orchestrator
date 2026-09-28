@@ -16,7 +16,7 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
 
 | | 상태 |
 |---|---|
-| 훅 8개 | **동작 확인.** 각 훅마다 "반응해야 하는 입력 / 무시해야 하는 입력" 한 쌍으로 테스트하고, 훅을 no-op 으로 만들면 빨간불이 나는 것까지 확인했다 |
+| 훅 9개 | **동작 확인.** 각 훅마다 "반응해야 하는 입력 / 무시해야 하는 입력" 한 쌍으로 테스트하고, 훅을 no-op 으로 만들면 빨간불이 나는 것까지 확인했다. **정정 (2026-09-28)**: `lint-on-save` 는 결과를 stderr(exit 0)로 냈는데, 그 채널은 Claude 에게 전달되지 않는다 — 테스트도 stderr 를 봐서 통과했다. 지금은 `additionalContext` 로 보내고, 실제 세션에서 모델에게 도달하는 것을 확인했다. 9번째 `bash-write-check` 도 실제 세션에서 Bash 편집을 감지해 알리는 것을 확인했다 |
 | `.claude/scripts/verify-save`, `verify-task` | **동작 확인.** 저장 게이트는 **읽기 전용**이다 — 파일을 고치지 않고 보고만 한다 |
 | 규칙·스킬 문서의 일관성 | **테스트로 고정.** 모델 등급↔슬러그 일치, 섹션 포인터 해소, 임계값 단일 정의, 항상-로드 예산 |
 | `checkpoint.py` | **동작 확인** (펜스·rename·범위·원자적 쓰기 회귀 테스트) |
@@ -601,6 +601,7 @@ uv run ruff check .
 |--------|----------|------|
 | `agent-router.py` | 사용자 입력 | deep-reasoning / agy 라우팅 제안 |
 | `lint-on-save.py` | 파일 저장 | `.claude/scripts/verify-save` 에 경로를 넘기고 출력을 그대로 전달. **도구 이름을 하나도 모른다** — 무엇을 검사하는지는 스크립트가 정한다. 티어가 없으면 세션당 한 번만 알린다 |
+| `bash-write-check.py` | Bash 전·후 | Bash 로 쓴 파일(`sed -i`, 리다이렉션, heredoc)은 위 훅을 거치지 않는다. 명령 전 시각을 표시하고, 뒤에 그 이후 수정된 파일에 `verify-save` 를 돌려 알린다(최대 5개, 빌드·로그 디렉터리 제외, git 명령 제외). 편집 명령이면 "Edit/Write 를 쓰라"를 덧붙인다. mtime 기반이라 `cp -p` 처럼 시각을 보존하는 쓰기와 너무 큰 트리는 놓친다(후자는 세션당 한 번 알린다) |
 | `suggest-deep-reasoning-before-write.py` | 파일 쓰기 전 | 심층 추론 리뷰 제안. 크기 규칙(500자)은 **소스 파일에만** 적용된다 — 긴 문서는 설계 결정이 아니다. 경로가 설계처럼 보이면(`DESIGN.md`, `core/`, `schema`) 내용과 무관하게 발동 |
 | `suggest-deep-reasoning-after-plan.py` | Plan 태스크 후 | 계획 리뷰 제안 |
 | `suggest-antigravity-research.py` | 웹 검색/페치 전 | agy 리서치 제안 |

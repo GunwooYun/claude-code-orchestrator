@@ -20,32 +20,20 @@ History, so the same bugs are not reintroduced:
     neither
   - a later one discarded the script's output whenever it exited 0, which hides
     tools that warn on success and made the model report "clean"
+  - every version up to 2026-09-28 reported on stderr with exit 0. The hooks
+    reference says that stderr "goes to the debug log only ... and Claude never
+    sees it", so no save-tier result ever reached the model. Reports now go out
+    as JSON `additionalContext`, the channel Claude receives.
 """
 
 import json
 import os
-import subprocess
 import sys
 
-SCRIPTS_DIR = os.path.join(".claude", "scripts")
-TIER = "save"
+from _savecheck import SCRIPTS_DIR, TIER, check, report, resolve_script
+
 MAX_PATH_LENGTH = 4096
-
-# Must stay below the hook's own timeout in .claude/settings.json, or the
-# harness kills us first and the message below is never seen. The save tier is
-# specified in seconds, so this is a backstop, not a budget.
-TIMEOUT_SECONDS = 25
-
-# An extensionless executable first (the portable default), then forms that need
-# no execute bit or shebang — which is what Windows checkouts have.
-INTERPRETERS: tuple[tuple[str, list[str]], ...] = (
-    ("", []),
-    (".py", [sys.executable]),
-    (".sh", ["sh"]),
-    (".ps1", ["pwsh", "-File"]),
-    (".cmd", ["cmd", "/c"]),
-    (".bat", ["cmd", "/c"]),
-)
+EVENT = "PostToolUse"
 
 
 def read_payload() -> dict:
@@ -68,26 +56,6 @@ def get_file_path(payload: dict) -> str | None:
     if not file_path or len(file_path) > MAX_PATH_LENGTH or ".." in file_path:
         return None
     return file_path
-
-
-def resolve_script(project_dir: str) -> tuple[list[str], str] | None:
-    """
-    Find the project's verify-save script.
-
-    Returns (argv prefix, relative path) or None when no tier script exists.
-    An extensionless file must be executable; a file with a known extension is
-    run through its interpreter, so it needs neither an execute bit nor a
-    shebang.
-    """
-    for suffix, prefix in INTERPRETERS:
-        rel = os.path.join(SCRIPTS_DIR, f"verify-{TIER}{suffix}")
-        path = os.path.join(project_dir, rel)
-        if not os.path.isfile(path):
-            continue
-        if not prefix and not os.access(path, os.X_OK):
-            continue
-        return [*prefix, path], rel
-    return None
 
 
 def notice_path(project_dir: str) -> str:
@@ -114,11 +82,11 @@ def warn_missing_once(project_dir: str) -> None:
             handle.write("reported\n")
     except OSError:
         pass  # cannot track it; better to repeat the notice than to lose it
-    print(
+    report(
+        EVENT,
         f"[lint-on-save] no {SCRIPTS_DIR}/verify-{TIER} in this project — "
         "the save-tier check is not configured. This is fine if checks run at a "
         "slower tier; see .claude/scripts/README.md. (reported once per session)",
-        file=sys.stderr,
     )
 
 
@@ -134,43 +102,9 @@ def main() -> None:
         return
     argv, rel = resolved
 
-    try:
-        result = subprocess.run(
-            [*argv, file_path],
-            cwd=project_dir,
-            capture_output=True,
-            text=True,
-            timeout=TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired:
-        print(
-            f"[lint-on-save] {rel} timed out after {TIMEOUT_SECONDS}s — "
-            "the save tier is meant to take seconds.",
-            file=sys.stderr,
-        )
-        return
-    except OSError as exc:
-        print(f"[lint-on-save] could not run {rel}: {exc}", file=sys.stderr)
-        return
-
-    output = f"{result.stdout}{result.stderr}".strip()
-    rel_path = (
-        os.path.relpath(file_path, project_dir)
-        if file_path.startswith(project_dir)
-        else file_path
-    )
-
-    if result.returncode == 0:
-        # Contract: output on success is informational (warnings, progress). It
-        # is passed through rather than discarded — swallowing it is how a
-        # warning becomes a false "clean".
-        if output:
-            print(f"[lint-on-save] {rel_path} (passed with notes):", file=sys.stderr)
-            print(output, file=sys.stderr)
-        return
-
-    print(f"[lint-on-save] {rel_path}:", file=sys.stderr)
-    print(output or f"{rel} exited {result.returncode} with no output", file=sys.stderr)
+    message = check(argv, rel, file_path, project_dir, "lint-on-save")
+    if message:
+        report(EVENT, message)
 
 
 if __name__ == "__main__":

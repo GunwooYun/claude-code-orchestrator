@@ -60,6 +60,13 @@ PAYLOADS: dict[str, dict] = {
         "tool_input": {"command": "uv run pytest -q"},
         "tool_response": {"stdout": "41 passed in 0.05s\n", "stderr": ""},
     },
+    "PreToolUse-Bash": {
+        "hook_event_name": "PreToolUse",
+        "session_id": "test-session",
+        "tool_use_id": "toolu_contract",
+        "tool_name": "Bash",
+        "tool_input": {"command": "sed -i s/a/b/ example.py"},
+    },
     "PostToolUse-Edit": {
         "hook_event_name": "PostToolUse",
         "session_id": "test-session",
@@ -86,6 +93,7 @@ HOOK_PAYLOADS: dict[str, tuple[str, ...]] = {
     "post-test-analysis.py": ("PostToolUse-Bash",),
     "log-cli-tools.py": ("PostToolUse-Bash",),
     "lint-on-save.py": ("PostToolUse-Edit",),
+    "bash-write-check.py": ("PreToolUse-Bash", "PostToolUse-Bash"),
     "post-implementation-review.py": ("PostToolUse-Edit",),
 }
 

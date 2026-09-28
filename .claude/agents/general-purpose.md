@@ -119,6 +119,9 @@ stderr, report that to the orchestrator.
 - Make reasonable assumptions when details are unclear
 - Report results, not questions
 - **Call agy directly when needed** (don't escalate back)
+- **Edit files with Edit/Write, not Bash.** `sed -i`, redirection, heredocs and
+  `write_text` skip the save check that runs at edit time; the bash-write-check
+  hook catches them late, as a safety net
 
 ### Efficiency
 - Use parallel tool calls when possible
