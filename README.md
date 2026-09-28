@@ -426,7 +426,7 @@ git clone --depth 1 https://github.com/GunwooYun/claude-code-orchestrator.git .s
 | `.claude/rules/dev-environment.md` | 규칙이 uv 명령을 강요함 | pip·Docker·black/isort/flake8·pytest-django 기준으로 재작성, 보안 민감 디렉토리 명시 |
 | `.claude/scripts/verify-*` | 없으면 해당 티어가 설정되지 않은 것 | `/initproject` Step 5가 작성. 훅과 스킬은 이 이름만 알고 내용은 모른다 |
 | `.claude/rules/testing.md` | `uv run pytest` 표기 | 실제 테스트 명령으로 |
-| `.claude/settings.json` `permissions.allow` | 프로젝트 도구 명령 자동 허용 | `Bash(isort:*)`, `Bash(flake8:*)`, `Bash(docker compose:*)` 추가 |
+| `.claude/settings.json` `permissions.allow` | 프로젝트 도구 명령 자동 허용 | `Bash(isort:*)`, `Bash(flake8:*)` 추가. `docker compose` 는 **allow 가 아니라 `ask` 에 이미 있다** — 라이브 컨테이너를 확인 없이 건드리지 않게 |
 
 스택이 템플릿과 같은 Python/uv 프로젝트면 이 단계는 통째로 건너뛴다.
 
@@ -535,7 +535,7 @@ cd ../<project>-review && claude
 | `scripts/verify-*` | 이 프로젝트의 실제 검증 명령으로 작성 (훅은 손대지 않는다) |
 | `hooks/agent-router.py` 트리거 목록 | 팀이 자주 쓰는 표현 추가, 과잉 매칭 단어("문서" 등) 조정 |
 | `agents/deep-reasoning.md` `model:` | 세션 모델과 다른 리뷰 모델을 쓰고 싶을 때만 |
-| `settings.json` `permissions.allow` | 프로젝트 도구 명령(`docker`, `npm` 등) 추가 |
+| `settings.json` `permissions.allow` | 프로젝트 도구 명령을 좁게 추가(`Bash(npm run test:*)` 처럼). `docker`·`curl`·`kill`·`git push` 는 템플릿이 `ask` 에 둔다 — allow 로 옮기지 않는다 |
 | `.agents/rules/AGENTS.md` | agy에게 줄 프로젝트 설명·금기 사항 |
 
 ### 8. 자주 밟는 함정

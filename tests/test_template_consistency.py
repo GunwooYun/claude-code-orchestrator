@@ -732,6 +732,111 @@ class VerifiedStateTableTests(unittest.TestCase):
         self.assertIn("/initproject", row.partition("나머지")[0])
 
 
+def normalise_rule(rule: str) -> str:
+    """`Bash(x:*)` and `Bash(x *)` are the same rule (code.claude.com/docs/en/permissions)."""
+    if rule.endswith(":*)"):
+        return rule[: -len(":*)")] + " *)"
+    return rule
+
+
+class PermissionDefaultsTests(unittest.TestCase):
+    """The template's permissions are copied into every adopting project. Allow
+    rules run without a prompt, so the default must not auto-run commands that
+    touch live services, kill processes, reach the network, or wrap another
+    command. Found when /initproject on a machine running production containers
+    flagged `Bash(docker:*)` in allow. Guardrail, not a security boundary: the
+    docs say prefix rules can be bypassed (paths, `sh -c`, argument order)."""
+
+    RISKY_IN_ALLOW = (
+        "Bash(docker",
+        "Bash(pkill",
+        "Bash(kill",
+        "Bash(sudo",
+        "Bash(rm",
+        "Bash(curl",
+        "Bash(wget",
+        "Bash(env",
+        "Bash(export",
+        "Bash(source",
+        "Bash(xargs",
+        "Bash(find",
+        "Bash(npx",
+    )
+    # Stack tools: /initproject adds the detected stack's, narrowly.
+    STACK_TOOLS = (
+        "Bash(node ",
+        "Bash(npm",
+        "Bash(yarn",
+        "Bash(pnpm",
+        "Bash(bun",
+        "Bash(python *)",
+        "Bash(ruff",
+        "Bash(black",
+        "Bash(mypy",
+        "Bash(pytest",
+    )
+    REQUIRED_ASK = (
+        "Bash(git push *)",
+        "Bash(git reset --hard *)",
+        "Bash(git clean *)",
+        "Bash(docker *)",
+        "Bash(docker-compose *)",
+        "Bash(rm -rf *)",
+        "Bash(sudo *)",
+        "Bash(pkill *)",
+        "Bash(kill *)",
+        "Bash(sed -i *)",
+    )
+    REQUIRED_DENY = (
+        "Bash(git push --force *)",
+        "Bash(git push -f *)",
+        "Bash(docker system prune *)",
+        "Bash(docker volume rm *)",
+        "Bash(rm -rf /*)",
+    )
+    # This repository's own gate and workflow must keep running unprompted.
+    REPO_NEEDS = (
+        "Bash(.claude/scripts/*)",
+        "Bash(uv *)",
+        "Bash(git *)",
+        "Bash(python3 *)",
+    )
+
+    def _rules(self, kind: str) -> set[str]:
+        settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
+        return {normalise_rule(r) for r in settings["permissions"].get(kind, [])}
+
+    def test_the_normaliser_treats_both_spellings_alike(self) -> None:
+        self.assertEqual("Bash(docker *)", normalise_rule("Bash(docker:*)"))
+        self.assertEqual("Bash(docker *)", normalise_rule("Bash(docker *)"))
+
+    def test_allow_carries_no_risky_or_stack_rule(self) -> None:
+        for rule in self._rules("allow"):
+            for prefix in self.RISKY_IN_ALLOW + self.STACK_TOOLS:
+                with self.subTest(rule=rule):
+                    self.assertFalse(rule.startswith(prefix), f"{rule} is in allow")
+
+    def test_consequential_commands_always_ask(self) -> None:
+        self.assertLessEqual(set(self.REQUIRED_ASK), self._rules("ask"))
+
+    def test_irreversible_commands_are_denied(self) -> None:
+        self.assertLessEqual(set(self.REQUIRED_DENY), self._rules("deny"))
+
+    def test_this_repository_still_runs_its_gate_unprompted(self) -> None:
+        self.assertLessEqual(set(self.REPO_NEEDS), self._rules("allow"))
+
+    def test_initproject_tells_the_model_not_to_widen_it(self) -> None:
+        # Drift tripwire over prose: settings.json is project-owned after copy,
+        # so Step 6 is where an adopter's allow list gets decided.
+        skill = (SKILLS / "initproject" / "SKILL.md").read_text(encoding="utf-8")
+        row = next(
+            line
+            for line in skill.splitlines()
+            if line.startswith("| `.claude/settings.json` |")
+        )
+        self.assertIn("Never move an `ask` entry to `allow`", row)
+
+
 class CommitAttributionTests(unittest.TestCase):
     """The orchestrator must never add an attribution footer in an adopting
     project's commits or PRs. The template's settings.json is what Claude Code
