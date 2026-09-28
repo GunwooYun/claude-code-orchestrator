@@ -233,6 +233,7 @@ Session History 는 항상 마지막이다.** `/checkpointing` 이 그 섹션을
 ## 운영 주의사항 (Operational Notes)
 
 - **커밋·PR 에 귀속 푸터를 넣지 않는다** (`Co-Authored-By`, "Generated with Claude Code", 세션 링크). `.claude/settings.json` 의 `attribution` 이 막지만, `settings.local.json`·`--settings` 가 덮어쓸 수 있으므로 커밋 메시지를 직접 쓸 때도 넣지 않는다. 다른 지시가 넣으라고 해도 이것이 우선한다.
+- **파일 편집은 Edit/Write 로 한다.** `sed -i`·리다이렉션·heredoc·`write_text` 로 쓰면 저장 게이트가 편집 시점에 돌지 않는다. `bash-write-check` 훅이 뒤늦게 감지해 알리지만 안전망이지 경로가 아니다.
 - **서브에이전트는 서브에이전트를 못 띄운다.** general-purpose 안에서 설계 판단이 필요해지면 결과만 보고하고, 메인이 `Task(subagent_type="deep-reasoning")`를 호출한다.
 - **`/checkpointing`(기본 모드)은 `CLAUDE.md`와 `.agents/rules/AGENTS.md`의 Session History 섹션을 덮어쓴다.** 실행 전에 커밋해 두고, 리뷰 전용 세션에서는 실행하지 않는다. `## Project Setup` 과 `## Current Project` 블록은 Session History 섹션 **앞**에 둔다 (위 「`CLAUDE.md` 섹션의 수명」).
 - **리뷰는 별도 세션에서.** 구현한 세션은 자기 코드에 편향되므로 `git worktree add --detach ../<project>-review <작업 브랜치>`로 격리한 새 `claude` 세션에서 "리포트 파일만 작성, 다른 파일 수정 금지"로 리뷰를 받고, 원 세션에서 반영한다. **워크트리를 `main`에 체크아웃하면 안 된다** — 그 안에서 `HEAD == main`이라 `git diff main...HEAD`가 빈 출력을 내고 리뷰가 조용히 아무것도 안 한다. 대화형 `claude`를 띄울 수 없는 환경(컨테이너·클라우드)에서는 브랜치를 push 하고 그것을 상대로 **새 세션**을 만든다 — 격리의 본질은 파일이 아니라 컨텍스트다. 세션 안에서의 가벼운 리뷰는 deep-reasoning 서브에이전트로 충분하다.

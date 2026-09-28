@@ -86,7 +86,9 @@ def read_text_files(paths) -> dict[Path, str]:
 class HookRegistrationTests(unittest.TestCase):
     def test_every_hook_on_disk_is_registered(self) -> None:
         registered = SETTINGS.read_text(encoding="utf-8")
-        for hook in sorted(HOOKS.glob("*.py")):
+        # `_`-prefixed modules are shared code imported by hooks, not hooks —
+        # the same rule the hook test modules apply in hook_files().
+        for hook in sorted(p for p in HOOKS.glob("*.py") if not p.name.startswith("_")):
             self.assertIn(
                 hook.name,
                 registered,
@@ -128,6 +130,11 @@ class HookRegistrationTests(unittest.TestCase):
 
         for name, limit in registered.items():
             source = (HOOKS / name).read_text(encoding="utf-8")
+            # A hook that imports the shared runner inherits its timeout; reading
+            # only the hook file let that limit escape this check (it moved
+            # there and the loop below silently found nothing).
+            if "from _savecheck import" in source:
+                source += (HOOKS / "_savecheck.py").read_text(encoding="utf-8")
             for match in re.finditer(r"TIMEOUT_SECONDS\s*=\s*(\d+)", source):
                 with self.subTest(hook=name):
                     self.assertLess(
