@@ -20,6 +20,10 @@ History, so the same bugs are not reintroduced:
     neither
   - a later one discarded the script's output whenever it exited 0, which hides
     tools that warn on success and made the model report "clean"
+  - every version up to 2026-09-28 reported on stderr with exit 0. The hooks
+    reference says that stderr "goes to the debug log only ... and Claude never
+    sees it", so no save-tier result ever reached the model. Reports now go out
+    as JSON `additionalContext`, the channel Claude receives.
 """
 
 import json
@@ -46,6 +50,20 @@ INTERPRETERS: tuple[tuple[str, list[str]], ...] = (
     (".cmd", ["cmd", "/c"]),
     (".bat", ["cmd", "/c"]),
 )
+
+
+def report(message: str) -> None:
+    """Hand a message to Claude. Plain stderr with exit 0 is never shown to it."""
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PostToolUse",
+                    "additionalContext": message,
+                }
+            }
+        )
+    )
 
 
 def read_payload() -> dict:
@@ -114,11 +132,10 @@ def warn_missing_once(project_dir: str) -> None:
             handle.write("reported\n")
     except OSError:
         pass  # cannot track it; better to repeat the notice than to lose it
-    print(
+    report(
         f"[lint-on-save] no {SCRIPTS_DIR}/verify-{TIER} in this project — "
         "the save-tier check is not configured. This is fine if checks run at a "
-        "slower tier; see .claude/scripts/README.md. (reported once per session)",
-        file=sys.stderr,
+        "slower tier; see .claude/scripts/README.md. (reported once per session)"
     )
 
 
@@ -143,14 +160,13 @@ def main() -> None:
             timeout=TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
-        print(
+        report(
             f"[lint-on-save] {rel} timed out after {TIMEOUT_SECONDS}s — "
-            "the save tier is meant to take seconds.",
-            file=sys.stderr,
+            "the save tier is meant to take seconds."
         )
         return
     except OSError as exc:
-        print(f"[lint-on-save] could not run {rel}: {exc}", file=sys.stderr)
+        report(f"[lint-on-save] could not run {rel}: {exc}")
         return
 
     output = f"{result.stdout}{result.stderr}".strip()
@@ -165,12 +181,13 @@ def main() -> None:
         # is passed through rather than discarded — swallowing it is how a
         # warning becomes a false "clean".
         if output:
-            print(f"[lint-on-save] {rel_path} (passed with notes):", file=sys.stderr)
-            print(output, file=sys.stderr)
+            report(f"[lint-on-save] {rel_path} (passed with notes):\n{output}")
         return
 
-    print(f"[lint-on-save] {rel_path}:", file=sys.stderr)
-    print(output or f"{rel} exited {result.returncode} with no output", file=sys.stderr)
+    report(
+        f"[lint-on-save] {rel_path}:\n"
+        + (output or f"{rel} exited {result.returncode} with no output")
+    )
 
 
 if __name__ == "__main__":

@@ -408,9 +408,18 @@ class LogCliToolsTests(unittest.TestCase):
 class LintOnSaveTests(unittest.TestCase):
     """
     The full chain: stdin payload -> file path -> the project's verify-save
-    script -> its output relayed to stderr. A stub script stands in for the
+    script -> its output relayed to CLAUDE. A stub script stands in for the
     project's real one, which is what the contract in .claude/scripts/README.md
     promises is possible.
+
+    Corrected 2026-09-28, recorded rather than changed silently: these tests
+    used to assert on stderr, and the hook wrote there with exit 0. The hooks
+    reference (code.claude.com/docs/en/hooks) says stderr from a hook that exits
+    0 "goes to the debug log only ... and Claude never sees it". So every
+    assertion passed while the model saw nothing — observed in this repo's own
+    session, where Edit-written test files failed `ruff format --check` three
+    times and the failure surfaced only at verify-task. The assertions now read
+    `additionalContext`, the channel Claude actually receives.
     """
 
     def setUp(self) -> None:
@@ -441,39 +450,42 @@ class LintOnSaveTests(unittest.TestCase):
             cwd=self.project,
         )
 
-    def test_a_failing_check_is_reported_with_its_output(self) -> None:
+    def test_a_failing_check_reaches_claude_with_its_output(self) -> None:
         self.write_verify_save('#!/bin/sh\necho "BOOM: bad indent"\nexit 1\n')
         result = self.edit()
-        self.assertIn("[lint-on-save]", result.stderr)
-        self.assertIn("BOOM: bad indent", result.stderr)
+        seen = context(result)
+        self.assertIn("[lint-on-save]", seen)
+        self.assertIn("BOOM: bad indent", seen)
         self.assertEqual(0, result.returncode, "a PostToolUse hook must exit 0")
 
     def test_the_edited_path_is_passed_to_the_script(self) -> None:
         self.write_verify_save('#!/bin/sh\necho "got:$1"\nexit 1\n')
-        self.assertIn(f"got:{self.edited}", self.edit().stderr)
+        self.assertIn(f"got:{self.edited}", context(self.edit()))
 
     def test_output_on_success_is_relayed_not_swallowed(self) -> None:
         self.write_verify_save('#!/bin/sh\necho "warning: deprecated call"\nexit 0\n')
-        result = self.edit()
-        self.assertIn("passed with notes", result.stderr)
-        self.assertIn("warning: deprecated call", result.stderr)
+        seen = context(self.edit())
+        self.assertIn("passed with notes", seen)
+        self.assertIn("warning: deprecated call", seen)
 
     def test_a_silent_pass_says_nothing(self) -> None:
         self.write_verify_save("#!/bin/sh\nexit 0\n")
-        self.assertEqual("", self.edit().stderr.strip())
+        result = self.edit()
+        self.assertEqual("", result.stdout.strip())
+        self.assertEqual("", result.stderr.strip())
 
     def test_a_missing_tier_is_reported_once_per_session(self) -> None:
         first = self.edit()
-        self.assertIn("not configured", first.stderr)
+        self.assertIn("not configured", context(first))
         second = self.edit()
         self.assertEqual(
-            "", second.stderr.strip(), "the notice repeated on the next save"
+            "", second.stdout.strip(), "the notice repeated on the next save"
         )
 
     def test_a_path_that_does_not_exist_is_ignored(self) -> None:
         self.write_verify_save('#!/bin/sh\necho "should not run"\nexit 1\n')
         result = self.edit(file_path=str(self.project / "gone.py"))
-        self.assertEqual("", result.stderr.strip())
+        self.assertEqual("", result.stdout.strip())
 
 
 class PostImplementationReviewTests(unittest.TestCase):
