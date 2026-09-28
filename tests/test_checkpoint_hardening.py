@@ -5,7 +5,7 @@ Written before the fixes, per `.claude/rules/testing.md` principle 1 — each te
 here failed against the original implementation, which is what makes it a
 verification rather than a description of current behaviour.
 
-Scenario IDs match the hardening notes in `.claude/docs/DESIGN.md`:
+Scenario IDs match the hardening notes in `docs/DESIGN.md`:
 
   C1  the section regex ended only at `^## `, so an intervening H1 or thematic
       break was swallowed and destroyed on rewrite

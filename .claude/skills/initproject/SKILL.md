@@ -252,6 +252,11 @@ the bug this step exists to prevent.
    components → data flow), the Libraries table with versions, any decision
    made in this session (e.g. lint settings) with today's date, and open
    questions you could not resolve (test invocation, CI, etc.) as TODO items.
+   The file ships as an empty skeleton; keep its headings. Any entry already
+   there that describes this template (it names `/initproject`, `/feature`,
+   `/lens-review`, `checkpoint.py` or the hooks) is a leftover from a copy made
+   before 2026-09-28: tell the user and delete it before filling — it would
+   otherwise be read as this project's design.
 
 ## Step 8 — Smoke test and report
 

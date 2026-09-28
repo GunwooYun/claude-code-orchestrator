@@ -53,6 +53,7 @@ SOURCES = (
     REPO / ".claude" / "agents",
     REPO / ".claude" / "scripts" / "README.md",
     REPO / ".claude" / "docs" / "DESIGN.md",
+    REPO / "docs" / "DESIGN.md",
 )
 
 # Optional by design, so absence is not a defect. Kept as an explicit short list
@@ -628,6 +629,53 @@ class ScriptContractTests(unittest.TestCase):
                 text,
                 f"verify-save invokes {slower}: saving a file must not start a build",
             )
+
+
+class ShippedDesignSkeletonTests(unittest.TestCase):
+    """`.claude/docs/DESIGN.md` is copied into every adopting project and read by
+    deep-reasoning as THAT project's design. It must be an empty skeleton; the
+    template's own record lives in `docs/DESIGN.md`, which Quick Start does not
+    copy. Found on the first interactive /initproject run: the adopter's file
+    still carried this template's Key Decisions."""
+
+    SKELETON = REPO / ".claude" / "docs" / "DESIGN.md"
+    RECORD = REPO / "docs" / "DESIGN.md"
+    HEADINGS = [
+        "# Project Design Document",
+        "## Overview",
+        "## Architecture",
+        "## Implementation Plan",
+        "### Patterns & Approaches",
+        "### Libraries & Roles",
+        "### Key Decisions",
+        "## TODO",
+        "## Open Questions",
+        "## Changelog",
+    ]
+
+    def _lines(self) -> list[str]:
+        text = self.SKELETON.read_text(encoding="utf-8")
+        text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+        text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+        return [line.strip() for line in text.splitlines() if line.strip()]
+
+    def test_the_skeleton_keeps_the_headings_skills_write_into(self) -> None:
+        headings = [line for line in self._lines() if line.startswith("#")]
+        self.assertEqual(self.HEADINGS, headings)
+
+    def test_the_skeleton_carries_no_content(self) -> None:
+        for line in self._lines():
+            if line.startswith("#") or line.startswith(">"):
+                continue
+            if re.fullmatch(r"\|[-\s|]*\|", line):  # separator or empty row
+                continue
+            if re.fullmatch(r"\|(\s*[A-Z][\w &]*\s*\|)+", line):  # header row
+                continue
+            self.fail(f"the shipped skeleton carries content: {line!r}")
+
+    def test_the_template_keeps_its_own_record(self) -> None:
+        text = self.RECORD.read_text(encoding="utf-8")
+        self.assertIn("deep-reasoning pins `model: fable`", text)
 
 
 class CommitAttributionTests(unittest.TestCase):
