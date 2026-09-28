@@ -142,6 +142,10 @@ def should_suggest_deep_reasoning(
 def main() -> None:
     try:
         data = json.load(sys.stdin)
+        # Inside a subagent (agent_id is set only there) the reminder cannot be
+        # acted on: subagents cannot spawn deep-reasoning.
+        if data.get("agent_id"):
+            sys.exit(0)
         tool_input = data.get("tool_input", {})
         file_path = tool_input.get("file_path", "")
         content = tool_input.get("content", "") or tool_input.get("new_string", "")

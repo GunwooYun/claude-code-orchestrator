@@ -26,6 +26,11 @@ in order; skip a step when it does not apply and say so in the final report.
   and that Claude Code asks for approval on each of them. In a non-interactive
   run those writes were refused even with `--permission-mode acceptEdits`, while
   `CLAUDE.md` and `.gitignore` went through — so a headless run stops short.
+- **This skill needs a person.** Steps 2 and 3 ask questions. A headless run
+  (`claude -p`) stopped at Step 2 after doing Steps 1–3 and still exited as
+  `success`; an interactive run completed all eight steps (2026-09-28). Headless
+  runs are not supported. If nobody can answer, stop and say so; do not guess
+  the answers.
 
 ## Step 1 — Detect the stack
 
@@ -120,8 +125,9 @@ take the answer as final and move on.
 
 Replace the H1 (`# Claude Code Orchestrator`) with `# <project name>`, in place.
 This file is now the project's only always-loaded context and should not open by
-naming the template. Keep exactly one H1; the template's own sections below it
-stay as they are.
+naming the template. Replace the bold tagline under it
+(`**멀티 에이전트 협업 프레임워크**`) with the one-sentence overview from Step 2.
+Keep exactly one H1; the template's own sections below them stay as they are.
 
 Replace the body of `## 기술 스택(Tech Stack)` with the detected stack: language
 and framework versions, package manager, quality tools with versions, how the
@@ -216,7 +222,8 @@ in this template checks the contract without assuming any language; copy it.
 |---|---|
 | `.claude/rules/dev-environment.md` | Rewrite for the real toolchain: layout table, package manager, how to run, formatter/linter/type-checker table with versions and exact invocations, test commands, pre-commit checklist in the project's commit convention. Add a security-posture section if the domain is sensitive. |
 | `.claude/hooks/lint-on-save.py` | **Usually nothing.** It names no tool — it runs `.claude/scripts/verify-save` (Step 5) and reports what that returns. Edit it only to change hook behaviour itself, not the toolchain. Remove its registration from `settings.json` if the user chose no save-tier check. |
-| `.claude/rules/testing.md` | Principles are stack-agnostic; leave them. Only the short `## 명령` section names this template's own tools — point it at the project's. Tier commands live in `.claude/scripts/`, not here. |
+| `.claude/rules/language.md` | Its defaults (English identifiers and comments, Korean for the user) stay. If the codebase already follows a different convention (e.g. Korean comments, a commit-message language), add a short `Project override` paragraph that names what the code already does and where — do not rewrite the defaults. |
+| `.claude/rules/testing.md` | Principles are stack-agnostic; leave them. The examples are not: `## 테스트 작성` (AAA, names, mocks, `conftest.py` fixtures, the edge-case list's `None`) and `## 명령` are Python — rewrite them in the project's language and test runner. Tier commands live in `.claude/scripts/`, not here. |
 | `.claude/skills/tdd/SKILL.md`, `.claude/skills/simplify/SKILL.md` | These carry `uv run pytest` in code blocks and were previously missed by this step, so they kept telling the model to run pytest after setup. Leave the placeholders (`{TEST_ONE}`, `{TEST_ALL}`, …) and make sure `CLAUDE.md` → `공통 명령어` holds the real commands; only edit the skills if a placeholder is still wrong for this stack. For a stack with no unit tests (e.g. Yocto recipes), say so in `tdd/SKILL.md` and name what replaces Red-Green-Refactor. |
 | `.claude/settings.json` | `Bash(.claude/scripts/*)` is already allowed. Add `Bash(<tool>:*)` only for tools the model runs directly outside the scripts. |
 | Rules that do not apply | Suggest removal (e.g. `testing.md` for a repo without tests) — do not delete without confirmation. |
@@ -228,7 +235,7 @@ into the lint hook.
 Then prove nothing still names the template's default toolchain:
 
 ```bash
-grep -rn 'uv run\|ruff\|\bty\b\|pytest' .claude/rules .claude/skills CLAUDE.md \
+grep -rn 'uv run\|ruff\|\bty\b\|pytest\|conftest\|def test_\|unittest' .claude/rules .claude/skills CLAUDE.md \
   | grep -v initproject/
 ```
 

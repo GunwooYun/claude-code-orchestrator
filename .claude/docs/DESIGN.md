@@ -285,17 +285,15 @@ Dropped after review:
       verification plan's scenario IDs, and `/lens-review`'s verification-adequacy
       lens. Both are judgement, not enforcement. **Standing limitation**, not a
       task — do not expect this one to close.
-- [ ] **`/initproject` has not been run to completion interactively.** Correction
-      (2026-09-28): this item used to say nothing had run on a real project. A
-      first real run did happen, headless, and stopped at Step 2 (one
-      AskUserQuestion, nobody to answer) after Steps 1–3 — then exited as
-      `success`. Its report is `skill-test-initproject.md` on branch
-      `claude/skilltest-initproject`; findings B–I from it are closed (b94c2fb,
-      a0edc2d, a736da0, c6fa880). Open: run it once in an interactive session.
-      If it completes, document "headless runs are not supported"; if it
-      stalls, give each Step 2/3 question a no-human default and report its use.
-      Whether "commit the template or not" may have a default at all is the
-      user's call, not the skill's.
+- [x] **`/initproject` interactive completion — resolved 2026-09-28.** Run
+      interactively on a Node/TS project (npm workspaces), it completed Steps
+      1–8: two AskUserQuestion calls, no refused writes, verify-save/verify-task
+      written and proven to fail (re-checked independently from outside that
+      session). So the headless stop is not a bug to fix with defaults: the
+      skill and README now say headless runs are not supported. The run's own
+      findings — tagline left under the H1, `language.md` missing from Step 6,
+      Python examples surviving the drift grep, the before-write reminder
+      firing inside a subagent — are closed in the same change.
 - [ ] The skills README lists as never run (`/feature` first) still have not. Method: hand one to a
       session with no context and make it quote the sentence it got stuck on.
 - [ ] Loop/graph orchestration on top of `/feature` — the user's option, not yet
