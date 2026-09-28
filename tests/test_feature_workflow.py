@@ -3,8 +3,9 @@ Structural checks on the /feature skill, the prose that actually executes.
 
 Mostly not a phrase-presence module: the checks below compare two structures
 inside or across files and fail when they disagree, so they survive rewording
-and catch the defect they were written for. The exception is
-`TierVocabularyTests`, whose two assertions ARE substring matches on prose; like
+and catch the defect they were written for. The exceptions are
+`TierVocabularyTests` and `TodoToolTests`, whose assertions ARE substring
+matches on prose; like
 every such assertion in this repo those are DRIFT TRIPWIRES, not behavioural
 coverage — they fail when a pinned phrase disappears and pass for any text that
 still contains it.
@@ -240,6 +241,18 @@ class TierVocabularyTests(unittest.TestCase):
             text(),
             "the skill must point at the rule that owns the tier definitions",
         )
+
+
+class TodoToolTests(unittest.TestCase):
+    """
+    Phase 4 says the loop reads the todo list, but on the first real /feature run
+    (2026-09-28) the ten paired tasks lived only in chat — zero TodoWrite calls.
+    The pairing held that time; nothing made it hold. Drift tripwire over prose.
+    """
+
+    def test_phase_4_registers_the_tasks_with_the_todo_tool(self) -> None:
+        phase4 = text().split("## Phase 4: Task Creation", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("TodoWrite", phase4)
 
 
 if __name__ == "__main__":

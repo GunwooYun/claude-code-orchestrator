@@ -6,12 +6,45 @@ This hook analyzes the file being modified and suggests deep-reasoning consultat
 for design decisions, complex implementations, or architectural changes.
 """
 
+import hashlib
 import json
+import os
 import sys
 
 # Input validation constants
 MAX_PATH_LENGTH = 4096
 MAX_CONTENT_LENGTH = 1_000_000
+
+# Where the once-per-file-per-session record lives (gitignored with the logs).
+REMINDED_DIR = os.path.join(".claude", "logs", "design-reminded")
+
+
+def already_reminded(session_id: object, file_path: str) -> bool:
+    """
+    Record this file for this session; True when it was recorded before.
+
+    The first real /feature run got this reminder 9 times after its design
+    review had already run, and repeating a notice trains people to ignore hook
+    output. Without a session id there is nothing to scope by, so nothing is
+    suppressed. A record that cannot be written also suppresses nothing.
+    """
+    if not isinstance(session_id, str) or not session_id:
+        return False
+    safe = "".join(c for c in session_id if c.isalnum() or c in "-_")[:64]
+    project_dir = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
+    record = os.path.join(project_dir, REMINDED_DIR, safe)
+    key = hashlib.sha256(file_path.encode("utf-8")).hexdigest()[:16]
+    try:
+        if os.path.exists(record):
+            with open(record, encoding="utf-8") as handle:
+                if key in handle.read().split():
+                    return True
+        os.makedirs(os.path.dirname(record), exist_ok=True)
+        with open(record, "a", encoding="utf-8") as handle:
+            handle.write(key + "\n")
+    except OSError:
+        return False
+    return False
 
 
 def validate_input(file_path: str, content: str) -> bool:
@@ -121,7 +154,8 @@ def should_suggest_deep_reasoning(
     if content:
         # New file with significant content
         if len(content) > 500:
-            return True, "Creating new file with significant content"
+            # Edit's new_string counts too, so this is not only new files.
+            return True, "Large write to a source file (over 500 characters)"
 
         # Check for design patterns in content
         for indicator in DESIGN_INDICATORS:
@@ -156,7 +190,7 @@ def main() -> None:
 
         should_suggest, reason = should_suggest_deep_reasoning(file_path, content)
 
-        if should_suggest:
+        if should_suggest and not already_reminded(data.get("session_id"), file_path):
             # Return additional context to Claude
             output = {
                 "hookSpecificOutput": {
