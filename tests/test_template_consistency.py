@@ -678,6 +678,60 @@ class ShippedDesignSkeletonTests(unittest.TestCase):
         self.assertIn("deep-reasoning pins `model: fable`", text)
 
 
+class DesignRecordFormatTests(unittest.TestCase):
+    """Every skill that writes DESIGN.md must write the rows the shipped skeleton
+    has headers for. /update-design used `#### Title (Date)` blocks and
+    `### {Date}` changelog headings while the skeleton has tables."""
+
+    WRITERS = ("design-tracker", "update-design")
+
+    def _skeleton_headers(self) -> list[str]:
+        text = (REPO / ".claude" / "docs" / "DESIGN.md").read_text(encoding="utf-8")
+        return [
+            line
+            for line in text.splitlines()
+            if line.startswith("| Decision |") or line.startswith("| Date |")
+        ]
+
+    def test_the_skeleton_has_both_tables(self) -> None:
+        self.assertEqual(2, len(self._skeleton_headers()))
+
+    def test_each_writer_uses_the_skeleton_tables(self) -> None:
+        for name in self.WRITERS:
+            text = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            with self.subTest(skill=name):
+                for header in self._skeleton_headers():
+                    self.assertIn(header, text)
+                self.assertNotIn("#### {Decision Title}", text)
+                self.assertNotIn("### {Date}", text)
+
+
+class VerifiedStateTableTests(unittest.TestCase):
+    """README's verified-state table is the single source of what has run. Its
+    never-run count must follow the skill directories. Drift tripwire."""
+
+    def test_the_never_run_count_matches_the_skills_on_disk(self) -> None:
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        row = next(
+            line for line in readme.splitlines() if line.startswith("| 스킬 실행 |")
+        )
+        before, _, _ = row.partition("나머지")
+        ran = set(re.findall(r"`/([a-z-]+)`", before))
+        count = re.search(r"나머지 (\d+)개", row)
+        self.assertIsNotNone(count, "the row no longer states a count")
+        assert count is not None
+        skills = {p.name for p in SKILLS.iterdir() if (p / "SKILL.md").is_file()}
+        self.assertLessEqual(ran, skills, "a skill named as run does not exist")
+        self.assertEqual(len(skills) - len(ran), int(count.group(1)))
+
+    def test_initproject_is_recorded_as_run(self) -> None:
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        row = next(
+            line for line in readme.splitlines() if line.startswith("| 스킬 실행 |")
+        )
+        self.assertIn("/initproject", row.partition("나머지")[0])
+
+
 class CommitAttributionTests(unittest.TestCase):
     """The orchestrator must never add an attribution footer in an adopting
     project's commits or PRs. The template's settings.json is what Claude Code

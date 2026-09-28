@@ -42,6 +42,31 @@ This skill manages the project's design documentation (`.claude/docs/DESIGN.md`)
 | Things to implement later | TODO |
 | Unresolved questions | Open Questions |
 
+## Record Format
+
+Write rows into the tables the file already has (`.claude/docs/DESIGN.md` ships
+with them). Do not add headings of your own — the skeleton's headings are what
+every other skill reads.
+
+Key Decisions — one row per decision:
+
+```markdown
+| Decision | Rationale | Alternatives Considered | Date |
+|----------|-----------|------------------------|------|
+| {What was decided} | {Why this option; what made it necessary} | {What was rejected, and why} | {YYYY-MM-DD} |
+```
+
+Changelog — one row per update:
+
+```markdown
+| Date | Changes |
+|------|---------|
+| {YYYY-MM-DD} | {Brief description of what was recorded} |
+```
+
+If the file still has an empty placeholder row (`| | | | |`), replace it with
+the first real row.
+
 ## Output Format
 
 When recording, confirm in Korean:

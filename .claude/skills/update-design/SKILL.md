@@ -30,30 +30,30 @@ Record/update project design and implementation decisions in `.claude/docs/DESIG
 | Future work | TODO |
 | Unresolved issues | Open Questions |
 
-## Update Format
+## Record Format
 
-When updating, add to the appropriate section:
+Write rows into the tables the file already has (`.claude/docs/DESIGN.md` ships
+with them). Do not add headings of your own — the skeleton's headings are what
+every other skill reads.
 
-```markdown
-### Key Decisions
-
-#### {Decision Title} ({Date})
-
-**Context**: {Why this decision was needed}
-**Decision**: {What was decided}
-**Rationale**: {Why this option was chosen}
-```
-
-## Changelog Entry
-
-Always add to Changelog:
+Key Decisions — one row per decision:
 
 ```markdown
-## Changelog
-
-### {Date}
-- {Brief description of what was recorded}
+| Decision | Rationale | Alternatives Considered | Date |
+|----------|-----------|------------------------|------|
+| {What was decided} | {Why this option; what made it necessary} | {What was rejected, and why} | {YYYY-MM-DD} |
 ```
+
+Changelog — one row per update:
+
+```markdown
+| Date | Changes |
+|------|---------|
+| {YYYY-MM-DD} | {Brief description of what was recorded} |
+```
+
+If the file still has an empty placeholder row (`| | | | |`), replace it with
+the first real row.
 
 ## Language
 
