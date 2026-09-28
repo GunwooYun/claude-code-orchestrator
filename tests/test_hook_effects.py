@@ -177,6 +177,47 @@ class SuggestBeforeWriteTests(unittest.TestCase):
         emitted = self.edit("/tmp/project/core/schema.py")
         self.assertIn("[Design Review Reminder]", emitted)
 
+    def edit_in_session(self, file_path: str, session: str) -> str:
+        project = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, project, True)
+        self.project = getattr(self, "project", project)
+        return context(
+            run(
+                self.HOOK,
+                {
+                    "hook_event_name": "PreToolUse",
+                    "session_id": session,
+                    "tool_name": "Edit",
+                    "tool_input": {"file_path": file_path, "new_string": "x = 1\n"},
+                },
+                env={"CLAUDE_PROJECT_DIR": self.project},
+            )
+        )
+
+    def test_the_same_file_is_reminded_once_per_session(self) -> None:
+        """
+        The first real /feature run got this reminder 9 times in the main session
+        after its design review had already run; this repo's own session got it
+        on every edit of the same test file. Once per file per session is enough
+        for the model to have seen it.
+        """
+        first = self.edit_in_session("/tmp/project/core/schema.py", "s1")
+        second = self.edit_in_session("/tmp/project/core/schema.py", "s1")
+        self.assertIn("[Design Review Reminder]", first)
+        self.assertEqual("", second, "reminded twice for the same file")
+
+    def test_another_file_or_session_is_still_reminded(self) -> None:
+        self.edit_in_session("/tmp/project/core/schema.py", "s1")
+        other_file = self.edit_in_session("/tmp/project/core/models.py", "s1")
+        other_session = self.edit_in_session("/tmp/project/core/schema.py", "s2")
+        self.assertIn("[Design Review Reminder]", other_file)
+        self.assertIn("[Design Review Reminder]", other_session)
+
+    def test_a_large_edit_is_not_called_a_new_file(self) -> None:
+        emitted = self.edit("/tmp/project/app/handler.py", "y = 2\n" * 120)
+        self.assertIn("[Design Review Reminder]", emitted)
+        self.assertNotIn("Creating new file", emitted)
+
     def test_inside_a_subagent_the_same_edit_stays_silent(self) -> None:
         """
         A subagent cannot spawn deep-reasoning, so the reminder is noise there:
