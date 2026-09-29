@@ -83,12 +83,25 @@ SECRET_PATTERNS = [
     re.compile(r"gh[pousr]_[A-Za-z0-9]{36,}"),
     re.compile(r"sk-[A-Za-z0-9_-]{20,}"),
 ]
-# A secret-named identifier assigned a QUOTED literal of 12+ characters. Only the
-# literal is replaced. The earlier form redacted anything after `token =`, which
-# erased the code a reviewer quotes as evidence — `token = request.headers...`
-# lost the finding it supported (separate-session review, F3).
-NAMED_LITERAL = re.compile(
-    r"(?i)(\b(?:api[_-]?key|token|secret|password)\b['\"]?\s*[:=]\s*)(['\"])([^'\"\s]{12,})\2"
+# A secret-named identifier (`password`, `DB_PASSWORD`, `access_token`,
+# `SECRET_KEY`, `api-key` — the keyword as a whole snake_case word, any
+# underscore prefix or suffix) assigned a value. Only the value is replaced.
+#   quoted:   8+ characters, spaces allowed   password = "correct horse battery"
+#   unquoted: 12+ token characters, no `.` `(` `[` — `.env`, YAML, shell forms
+#             API_KEY=abcdefghijklmnop / POSTGRES_PASSWORD: supersecret123
+# Code stays: `token = request.headers.get("X")` (`.` and `(`), `API_KEY =
+# os.environ["API_KEY"]` (`.`), `tokenizer = "bert-base"` (not a whole word).
+# History: the first form redacted anything after `token =` and erased the code a
+# reviewer quotes as evidence (review F3); the second took only quoted literals
+# after a bare keyword and let `.env`/YAML lines and `SECRET_KEY` through (round
+# 2, N2). `tests/test_isolated_review.py::RedactionTests` pins both directions.
+SECRET_NAME = (
+    r"(?:[A-Za-z0-9]+_)*(?:api[_-]?key|token|secret|password)(?:_[A-Za-z0-9]+)*"
+)
+NAMED_VALUE = re.compile(
+    r"(?i)(?<![A-Za-z0-9_])(" + SECRET_NAME + r"['\"]?\s*[:=]\s*)"
+    r"(?:(['\"])([^'\"\n]{8,})\2"
+    r"|([^\s'\"`()\[\]{}<>,;.]{12,})(?=[\s,;`'\")\]}]|$))"
 )
 
 EXIT = {"COMPLETE": 0, "FAILED": 1, "REFUSED": 2, "INCOMPLETE": 3, "INVALID": 4}
@@ -487,10 +500,15 @@ def redact(text: str) -> tuple[str, int]:
     for pattern in SECRET_PATTERNS:
         text, n = pattern.subn("[REDACTED]", text)
         count += n
-    text, n = NAMED_LITERAL.subn(
-        lambda m: f"{m.group(1)}{m.group(2)}[REDACTED]{m.group(2)}", text
-    )
+    text, n = NAMED_VALUE.subn(_mask_named_value, text)
     return text, count + n
+
+
+def _mask_named_value(match: re.Match[str]) -> str:
+    prefix, quote = match.group(1), match.group(2)
+    if quote is None:
+        return f"{prefix}[REDACTED]"
+    return f"{prefix}{quote}[REDACTED]{quote}"
 
 
 def redact_value(value: object) -> tuple[object, int]:
@@ -505,11 +523,29 @@ def redact_value(value: object) -> tuple[object, int]:
     return value, 0
 
 
-def redact_transcripts(log_dir: Path) -> int:
+def redact_transcripts(log_dir: Path) -> tuple[int, list[str]]:
+    """
+    (redactions, problems). Never raises: this runs after the review was paid
+    for, and a crash here lost the report exactly as F1 did (round-2 review N1).
+    A failure is reported as a reason instead, so the header says the transcript
+    may still hold unredacted text.
+    """
+    try:
+        return _redact_transcript_files(log_dir), []
+    except (OSError, UnicodeError) as exc:
+        return 0, [
+            f"transcript redaction failed: {type(exc).__name__}: {exc} — "
+            f"{LOG_REL} may hold unredacted text"
+        ]
+
+
+def _redact_transcript_files(log_dir: Path) -> int:
     """
     The report was scanned but the transcript kept the raw result (review F3).
     Redact string values inside each JSON line, so the escaping of the JSON does
     not hide a secret from the patterns; non-JSON lines are redacted as text.
+    The files are rewritten, so the transcript is no longer byte-for-byte the
+    CLI's output (field-report parses it as JSON, which survives).
     """
     total = 0
     if not log_dir.is_dir():
@@ -526,7 +562,13 @@ def redact_transcripts(log_dir: Path) -> int:
                 cleaned_line, n = redact(line)
                 out.append(cleaned_line)
             total += n
-        path.write_text("\n".join(out) + ("\n" if out else ""), encoding="utf-8")
+        # backslashreplace: a lone surrogate (`\ud83d` in the CLI's JSON) is not
+        # encodable as UTF-8; written as its escape it stays valid JSON.
+        path.write_text(
+            "\n".join(out) + ("\n" if out else ""),
+            encoding="utf-8",
+            errors="backslashreplace",
+        )
     return total
 
 
@@ -653,7 +695,8 @@ def main(argv: list[str]) -> int:
             for path in sorted(work.rglob("*"), reverse=True):
                 path.unlink() if path.is_file() else path.rmdir()
             work.rmdir()
-    transcript_redactions = redact_transcripts(log_dir)
+    transcript_redactions, problems = redact_transcripts(log_dir)
+    reasons += problems
     if snapshot(root) != before:
         verdict = "INVALID"
         reasons.insert(
@@ -662,6 +705,10 @@ def main(argv: list[str]) -> int:
         )
 
     text, redactions = redact(text)
+    # A lone surrogate in the result (JSON `\ud83d`) cannot be written as UTF-8:
+    # the report and stdout would raise after the review ran (round-2 review
+    # N1). Keep it as its escape instead.
+    text = text.encode("utf-8", errors="backslashreplace").decode("utf-8")
     header = [
         f"# Isolated review — {verdict}",
         "",

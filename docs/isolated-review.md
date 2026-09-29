@@ -96,7 +96,17 @@ Verdict — sections present is not coverage:
 
 Also: large diffs go to an ignored file the reviewer pages through, not all on
 stdin, with a hard cap above which the script refuses ("split the branch");
-`timeout -k`; a secret scan before writing the report.
+`timeout -k`; a secret scan before writing the report. **What the scan catches**
+(round-2 review N2): known key shapes (AWS, GitHub, `sk-`, PEM), and a value
+assigned to a secret-named identifier — the keyword as a whole snake_case word
+with any prefix/suffix (`password`, `DB_PASSWORD`, `access_token`, `SECRET_KEY`,
+`api-key`), quoted (8+ chars) or unquoted (12+ token chars, so `.env`, YAML and
+shell forms). Code a reviewer quotes as evidence (`token = request.headers...`)
+is kept. camelCase names (`accessToken`), URLs with embedded passwords and
+bearer tokens are **not** covered. The same scan rewrites the transcript
+(`.claude/logs/isolated-review/<run>/`), so it is no longer byte-for-byte the
+CLI's output; if that rewrite fails, the report says so in a reason line rather
+than being lost (round-2 review N1).
 
 Rejected: `--max-turns` (M16).
 

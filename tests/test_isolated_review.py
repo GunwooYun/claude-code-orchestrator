@@ -16,6 +16,8 @@ and recorded in the design document.
 
 from __future__ import annotations
 
+import importlib.machinery
+import importlib.util
 import json
 import os
 import shutil
@@ -24,10 +26,24 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from types import ModuleType
 
 REPO = Path(__file__).parent.parent
 SKILL = REPO / ".claude" / "skills" / "isolated-review"
 SCRIPT_REL = ".claude/skills/isolated-review/run-review"
+
+
+def load_script() -> ModuleType:
+    """Import run-review (no .py suffix) for unit tests of its pure functions."""
+    loader = importlib.machinery.SourceFileLoader(
+        "run_review", str(SKILL / "run-review")
+    )
+    spec = importlib.util.spec_from_loader("run_review", loader)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
 
 EXIT_COMPLETE, EXIT_FAILED, EXIT_REFUSED, EXIT_INCOMPLETE, EXIT_INVALID = 0, 1, 2, 3, 4
 
@@ -127,6 +143,9 @@ if scenario == "generic_secret":
     body = body.replace("None found.",
         "- `src/auth.py:12` — token = request.headers.get(\"X\") is never validated — high\n"
         "- `src/cfg.py:3` — password = \"hunter2hunter2hunter2\" is hard-coded — high")
+if scenario == "surrogate":
+    # A lone surrogate, as JSON.stringify writes one: not encodable as UTF-8.
+    body += "\ud83d"
 if scenario == "empty_result":
     body = ""
 model = "claude-opus-5-5" if scenario in ("wrong_model", "wrong_model_no_read") else "claude-fable-5-1"
@@ -571,6 +590,95 @@ class SeparateSessionReviewFindingTests(IsolatedReviewCase):
             self.skipTest("a system-wide claude is on /usr/bin")
         self.assertEqual(EXIT_REFUSED, result.returncode)
         self.assertIn("claude is not on PATH", result.stderr)
+
+
+class RedactionTests(unittest.TestCase):
+    """
+    Round-2 review N2: the second regex kept quoted code but let `.env`/YAML
+    lines and prefixed names (`SECRET_KEY`) through. Both directions are pinned
+    here, on `redact()` directly, so a change to either side goes red.
+    """
+
+    KEEP = (
+        'token = request.headers.get("X") is never validated',
+        'API_KEY = os.environ["API_KEY"] is fine',
+        "the secret: parameter of load_config() is unused",
+        'token = "x" * 20',
+        'tokenizer = "bert-base-uncased"',
+        "secret_key = settings.SECRET_KEY",
+        "password_hash = hashlib.sha256",
+        "token: str = Field(default=None)",
+        "MAX_TOKENS = 100000",
+    )
+    REDACT = (
+        ('password = "hunter2hunter2hunter2"', "hunter2"),
+        ('"api_key": "sk_live_abcdefghijklmnop"', "sk_live"),
+        ("password: hunter2hunter2hunter2   # yaml", "hunter2"),
+        ("API_KEY=abcdefghijklmnopqrstuvwxyz", "abcdefghijkl"),
+        ("export TOKEN=ghx_abcdefghijklmnopqrstuvwxyz", "ghx_"),
+        ("POSTGRES_PASSWORD: supersecretpassword123", "supersecret"),
+        ('SECRET_KEY = "django-insecure-abcdefghijklmnop"', "django-insecure"),
+        ('DB_PASSWORD = "hunter2hunter2hunter2"', "hunter2"),
+        ('access_token = "abcdefghijklmnopqrstuvwxyz"', "abcdefghijkl"),
+        ('password = "correct horse battery staple"', "correct horse"),
+        ("`API_KEY=abcdefghijklmnopqrstuvwxyz`", "abcdefghijkl"),
+        ("X-API-Key: abcdefghijklmnopqrstuvwxyz", "abcdefghijkl"),
+    )
+
+    def setUp(self) -> None:
+        self.script = load_script()
+
+    def test_code_a_reviewer_quotes_as_evidence_is_kept(self) -> None:
+        for line in self.KEEP:
+            with self.subTest(line=line):
+                self.assertEqual((line, 0), self.script.redact(line))
+
+    def test_secret_values_are_redacted_in_every_common_form(self) -> None:
+        for line, value in self.REDACT:
+            with self.subTest(line=line):
+                out, n = self.script.redact(line)
+                self.assertEqual(1, n, out)
+                self.assertNotIn(value, out)
+                self.assertIn("[REDACTED]", out)
+                # Only the value goes: the name and the `=`/`:` stay as evidence.
+                self.assertTrue(out.startswith(line.split("=")[0].split(":")[0]), out)
+
+    def test_transcript_redaction_never_raises(self) -> None:
+        """Round-2 review N1: this runs after the review was paid for."""
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("root ignores directory permissions")
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        log_dir = Path(tmp.name)
+        (log_dir / "review.jsonl").write_text('{"type":"result","result":"ok"}\n')
+        os.chmod(log_dir / "review.jsonl", 0o444)
+        os.chmod(log_dir, 0o555)
+        self.addCleanup(os.chmod, log_dir, 0o755)
+        n, problems = self.script.redact_transcripts(log_dir)
+        self.assertEqual(0, n)
+        self.assertEqual(1, len(problems), problems)
+        self.assertIn("transcript redaction failed", problems[0])
+        self.assertIn("unredacted", problems[0])
+
+    def test_a_lone_surrogate_in_the_transcript_is_written_as_its_escape(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / "review.jsonl"
+        path.write_text('{"type":"assistant","text":"a\\ud83db"}\n', encoding="utf-8")
+        self.assertEqual((0, []), self.script.redact_transcripts(Path(tmp.name)))
+        event = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual("a\ud83db", event["text"], "the line no longer round-trips")
+
+
+class CrashSafetyTests(IsolatedReviewCase):
+    def test_a_lone_surrogate_in_the_result_still_yields_a_report(self) -> None:
+        # Round-2 review N1: before the fix this died with UnicodeEncodeError
+        # after the review ran — exit 1, empty stdout, no report.
+        box = self.sandbox()
+        result = box.run(scenario="surrogate")
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertEqual(1, len(box.reports()), result.stderr)
+        self.assertEqual(EXIT_COMPLETE, result.returncode, result.stdout)
 
 
 class FieldReportTests(IsolatedReviewCase):
