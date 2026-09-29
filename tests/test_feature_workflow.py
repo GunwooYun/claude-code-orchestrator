@@ -90,10 +90,10 @@ class WorkflowStructureTests(unittest.TestCase):
         )
 
     def test_the_sections_follow_the_diagram_order(self) -> None:
-        lines = [
-            (step, first_heading_line(step))
+        lines: list[tuple[str, int]] = [
+            (step, line)
             for step in diagram_steps()
-            if first_heading_line(step) is not None
+            if (line := first_heading_line(step)) is not None
         ]
         out_of_order = [
             f"{lines[i][0]} (line {lines[i][1]}) comes after "
@@ -253,6 +253,16 @@ class TodoToolTests(unittest.TestCase):
     def test_phase_4_registers_the_tasks_with_the_todo_tool(self) -> None:
         phase4 = text().split("## Phase 4: Task Creation", 1)[1].split("\n## ", 1)[0]
         self.assertIn("TodoWrite", phase4)
+
+    def test_phase_4_says_what_to_do_without_a_todo_tool(self) -> None:
+        """
+        The second real run (2026-09-29, an Immich fork) searched for
+        TodoWrite/TaskCreate and found neither — some harnesses do not ship
+        one. The instruction was unfollowable there; the run improvised a
+        paired checklist in its plan document. The skill now names that route.
+        """
+        phase4 = text().split("## Phase 4: Task Creation", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("todo 도구가 없으면", phase4)
 
 
 if __name__ == "__main__":
