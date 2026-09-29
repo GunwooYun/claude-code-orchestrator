@@ -542,6 +542,7 @@ cd ../<project>-review && claude
 
 - **2026-09-28 이전에 복사한 프로젝트의 `.claude/docs/DESIGN.md` 에는 이 템플릿 자신의 설계 기록이 섞여 있다.** deep-reasoning 은 그것을 그 프로젝트의 설계로 읽는다. 파일을 덮어쓰지 말고(프로젝트 소유다), 이 템플릿을 설명하는 항목 — `/initproject`·`/feature`·`/lens-review`·`checkpoint.py`·훅을 다루는 Key Decisions 행, TODO, Open Questions, Changelog — 을 지우고 프로젝트가 추가한 것만 남긴다.
 - **적용이 끝난 프로젝트에 템플릿을 다시 복사하면 맞춤화가 전부 원본으로 덮어써진다.** 복사는 프로젝트당 **한 번**이다. 이후 템플릿 개선을 가져오려면 파일 단위로 골라 복사한다 — 템플릿 소유(그대로 덮어써도 되는 것): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`(전부 — 훅은 더 이상 스택을 모른다), `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`, `rules/security.md`, `rules/language.md`. **프로젝트 소유(덮어쓰지 말 것)**: `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
+  **단, "템플릿 소유"는 기본값이지 보장이 아니다.** 실제 채택 프로젝트(2026-09-28)는 `rules/coding-principles.md`·`rules/security.md` 를 전면 재작성했고 `hooks/lint-on-save.py` 를 모노레포용으로 고쳐 두었다 — 그대로 덮어쓰면 그 내용이 사라진다. 덮어쓰기 전에 **그 파일이 템플릿의 어느 과거 버전과 바이트 단위로 같은지** 확인한다(`git -C <템플릿> log --format=%h -- <경로>` 의 각 리비전을 `git show <rev>:<경로>` 로 비교). 같으면 순수한 버전 차이라 덮어써도 되고, 어느 것과도 다르면 프로젝트가 고친 것이니 병합한다. `.claude/` 가 gitignore 대상이면 되돌릴 방법이 없으므로 먼저 통째로 백업한다.
 
 - 훅 파일명 변경 후 `settings.json` 미동기화 → PreToolUse 오류로 편집 전면 차단. 같은 커밋에서 함께 바꾼다.
 - `/checkpointing` 기본 모드가 `CLAUDE.md`·`AGENTS.md`를 덮어쓴다. 실행 전 커밋해 둔다.

@@ -621,6 +621,37 @@ class BashWriteCheckTests(unittest.TestCase):
         self.touch(".claude/logs/cli-tools.jsonl")
         self.assertEqual("", self.call("PostToolUse", "npm run build > build/log.txt"))
 
+    def test_package_stores_and_framework_caches_are_not_scanned(self) -> None:
+        """
+        A real adopting repo (a pnpm monorepo) held 68,466 of its 73,737 files in
+        `.pnpm-store`, so every walk hit the 50k-entry budget and the hook went
+        inert for the session. Stores and caches are never the model's edits.
+        """
+        self.call("PreToolUse", "pnpm install > install.log")
+        for store in (
+            ".pnpm-store",
+            ".yarn",
+            ".gradle",
+            ".dart_tool",
+            "Pods",
+            ".svelte-kit",
+            ".next",
+            ".turbo",
+        ):
+            self.touch(f"{store}/pkg/index.py")
+        self.assertEqual("", self.call("PostToolUse", "pnpm install > install.log"))
+
+    def test_discarding_output_to_dev_null_is_not_a_write(self) -> None:
+        # Seen in this repo's own session: `ruff format x.py >/dev/null` drew the
+        # "use Edit/Write" nudge although nothing was redirected into a file.
+        self.gate.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        old = time.time() - 60
+        os.utime(self.gate, (old, old))
+        command = "uv run ruff format a.py >/dev/null 2>&1"
+        self.call("PreToolUse", command)
+        self.touch("a.py")
+        self.assertEqual("", self.call("PostToolUse", command))
+
     def test_a_post_without_its_pre_says_nothing(self) -> None:
         self.touch("a.py")
         self.assertEqual(

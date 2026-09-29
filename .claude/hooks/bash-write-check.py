@@ -59,6 +59,22 @@ PRUNED_NAMES = frozenset(
         "out",
         "coverage",
         "htmlcov",
+        # Package stores and framework caches. A pnpm monorepo kept 68,466 of
+        # its 73,737 files in .pnpm-store, which blew the walk budget on every
+        # call and left the hook inert.
+        ".pnpm-store",
+        ".yarn",
+        ".gradle",
+        ".m2",
+        ".dart_tool",
+        ".pub-cache",
+        "Pods",
+        ".svelte-kit",
+        ".next",
+        ".nuxt",
+        ".turbo",
+        ".parcel-cache",
+        ".terraform",
     }
 )
 PRUNED_PATHS = (
@@ -68,7 +84,7 @@ PRUNED_PATHS = (
 
 # Only for the nudge line; detection does not depend on it.
 WRITE_PATTERN = re.compile(
-    r"\bsed\s+(-\w*\s+)*-i|(^|[^0-9&<>])>>?\s*[\w./~-]|\btee\b|write_text|"
+    r"\bsed\s+(-\w*\s+)*-i|(^|[^0-9&<>])>>?\s*(?!/dev/null\b)[\w./~-]|\btee\b|write_text|"
     r"open\([^)]*['\"][wa]\+?['\"]"
 )
 GATE_SCRIPT = re.compile(r"^\.claude[/\\]scripts[/\\]verify-")
