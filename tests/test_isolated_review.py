@@ -110,6 +110,10 @@ if scenario == "missing_section":
     body = body.replace("## Not reviewed\nNothing outside the diff.\n", "")
 if scenario == "secret":
     body = body.replace("None found.", "Leaked: AKIAABCDEFGHIJKLMNOP in config.")
+if scenario == "findings":
+    body = body.replace("None found.",
+        "- `src/work.py:2` — FINDING-CANARY-TEXT returns the wrong page — high\n"
+        "- `src/work.py:1` — second finding text — low")
 if scenario == "empty_result":
     body = ""
 model = "claude-opus-5-5" if scenario == "wrong_model" else "claude-fable-5-1"
@@ -442,6 +446,88 @@ class VerdictTests(IsolatedReviewCase):
         self.assertNotIn("AKIAABCDEFGHIJKLMNOP", report.read_text())
         self.assertNotIn("AKIAABCDEFGHIJKLMNOP", result.stdout)
         self.assertIn("REDACTED", report.read_text())
+
+
+class FieldReportTests(IsolatedReviewCase):
+    """
+    field-report turns local runs into a report the user can send from
+    repositories this template's developers cannot see. It must carry facts and
+    blanks for human judgement — never review text, code or secrets.
+    """
+
+    def field_report(
+        self, box: Sandbox, *args: str
+    ) -> subprocess.CompletedProcess[str]:
+        env = dict(os.environ)
+        env["PATH"] = f"{box.bin}{os.pathsep}{env['PATH']}"
+        return subprocess.run(
+            [str(box.root / ".claude/skills/isolated-review/field-report"), *args],
+            cwd=box.root,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+
+    def test_it_reports_the_facts_of_each_run(self) -> None:
+        box = self.sandbox()
+        box.run(scenario="findings")
+        out = self.field_report(box)
+        self.assertEqual(0, out.returncode, out.stderr)
+        text = out.stdout
+        for fact in (
+            "COMPLETE",
+            "claude-fable-5-1",
+            "$1.23",
+            "Glob, Grep, Read",
+            "1/0/1",
+        ):
+            self.assertIn(fact, text)
+
+    def test_it_never_carries_review_text_code_or_secrets(self) -> None:
+        box = self.sandbox()
+        box.run(scenario="findings")
+        box.run(scenario="secret")
+        text = self.field_report(box).stdout
+        self.assertNotIn("FINDING-CANARY-TEXT", text)
+        self.assertNotIn("second finding text", text)
+        self.assertNotIn("def work", text)
+        self.assertNotIn("AKIA", text)
+        self.assertNotIn("REDACTED", text, "not even the redacted review body")
+
+    def test_paths_are_hidden_unless_asked_for(self) -> None:
+        box = self.sandbox(changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"})
+        box.run(scenario="coverage_no_read")
+        hidden = self.field_report(box).stdout
+        self.assertIn("INCOMPLETE", hidden)
+        self.assertNotIn("src/a.py", hidden)
+        self.assertIn("<path>", hidden)
+        shown = self.field_report(box, "--include-paths").stdout
+        self.assertIn("src/a.py", shown)
+
+    def test_refusals_are_recorded_and_counted(self) -> None:
+        box = self.sandbox()
+        (box.root / "tracked.txt").write_text("dirty\n", encoding="utf-8")
+        box.run()
+        log = box.root / ".claude/logs/isolated-review/refusals.jsonl"
+        self.assertTrue(log.exists(), "run-review did not record the refusal")
+        self.assertIn("clean", log.read_text())
+        text = self.field_report(box).stdout
+        self.assertIn("refusals: 1", text)
+
+    def test_it_leaves_blanks_for_the_human_verdict_per_finding(self) -> None:
+        box = self.sandbox()
+        box.run(scenario="findings")
+        text = self.field_report(box).stdout
+        self.assertIn("| F1 | high |", text)
+        self.assertIn("| F2 | low |", text)
+        self.assertIn("Missed issues", text)
+
+    def test_no_runs_is_said_plainly(self) -> None:
+        box = self.sandbox()
+        out = self.field_report(box)
+        self.assertEqual(0, out.returncode)
+        self.assertIn("no isolated-review runs", out.stdout)
 
 
 class SkillShapeTests(unittest.TestCase):

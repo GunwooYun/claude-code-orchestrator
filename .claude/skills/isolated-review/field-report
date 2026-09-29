@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""
+field-report — summarise this project's /isolated-review runs for the template's
+developers, who cannot see this repository.
+
+Usage: field-report [--include-paths]
+Output: Markdown on stdout — facts per run, and blanks for the person to fill in.
+
+What it reads: the report headers in .claude/docs/reviews/ and the transcripts in
+.claude/logs/isolated-review/. What it NEVER emits: review text, code, diffs,
+file contents or anything that looks like a secret — only counts, verdicts,
+costs, timings and the tool set the reviewer actually had. File paths are
+replaced by <path> unless --include-paths is given; decide that per repository.
+
+Sending the report is sending it to an outside party. Read it before you do.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import platform
+import re
+import subprocess
+import time
+from pathlib import Path
+
+REPORT_REL = ".claude/docs/reviews"
+LOG_REL = ".claude/logs/isolated-review"
+STACK_MARKERS = {
+    "package.json": "node",
+    "pyproject.toml": "python",
+    "requirements.txt": "python",
+    "go.mod": "go",
+    "Cargo.toml": "rust",
+    "pom.xml": "jvm",
+    "build.gradle": "jvm",
+    "build.gradle.kts": "jvm",
+    "Gemfile": "ruby",
+    "pubspec.yaml": "dart",
+    "CMakeLists.txt": "c/c++",
+    "Makefile": "make",
+    "Dockerfile": "docker",
+}
+PATH_TOKEN = re.compile(r"(?:[\w.-]+/)+[\w.-]+|[\w-]+\.[A-Za-z0-9]{1,6}\b")
+CONFIDENCE = re.compile(r"[—-]\s*(high|medium|low)\s*\.?\s*$", re.IGNORECASE)
+
+
+def root_dir() -> Path:
+    out = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
+    )
+    return Path(out.stdout.strip()) if out.returncode == 0 else Path.cwd()
+
+
+def claude_version() -> str:
+    try:
+        out = subprocess.run(
+            ["claude", "--version"], capture_output=True, text=True, timeout=20
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "unknown"
+    return out.stdout.strip().split(" ")[0] or "unknown"
+
+
+def stack(root: Path) -> str:
+    found = sorted(
+        {name for marker, name in STACK_MARKERS.items() if (root / marker).exists()}
+    )
+    return ", ".join(found) or "unknown"
+
+
+def hide_paths(text: str, include_paths: bool) -> str:
+    return text if include_paths else PATH_TOKEN.sub("<path>", text)
+
+
+def parse_report(path: Path) -> dict:
+    """Header facts, plus finding confidences — the finding text is not kept."""
+    text = path.read_text(encoding="utf-8")
+    header, _, body = text.partition("\n---\n")
+    run: dict = {"file": path.name, "reasons": [], "confidences": []}
+    first = header.splitlines()[0] if header else ""
+    run["verdict"] = first.rsplit("—", 1)[-1].strip() or "unknown"
+    stamp = re.search(r"(\d{8})-(\d{6})\.md$", path.name)
+    run["date"] = (
+        f"{stamp.group(1)[:4]}-{stamp.group(1)[4:6]}-{stamp.group(1)[6:]}"
+        if stamp
+        else "?"
+    )
+    for line in header.splitlines():
+        if line.startswith("- reason: "):
+            run["reasons"].append(line.removeprefix("- reason: "))
+        elif m := re.match(r"- changed: (\d+) files, (\d+) lines, diff (\w+)", line):
+            run["files"], run["lines"], run["mode"] = m.group(1), m.group(2), m.group(3)
+        elif m := re.match(r"- model: (.*?)  cost: \$([\d.]+)  time: (\d+)s", line):
+            run["model"], run["cost"], run["seconds"] = (
+                m.group(1),
+                m.group(2),
+                m.group(3),
+            )
+        elif m := re.match(r"- transcript: (\S+)", line):
+            run["transcript"] = m.group(1)
+    findings = (
+        body.split("## Findings", 1)[-1].split("\n## ", 1)[0]
+        if "## Findings" in body
+        else ""
+    )
+    for line in findings.splitlines():
+        if line.lstrip().startswith("- "):
+            m = CONFIDENCE.search(line)
+            run["confidences"].append(m.group(1).lower() if m else "?")
+    return run
+
+
+def parse_transcript(root: Path, rel: str | None) -> dict:
+    facts = {"tools": "?", "slash": "?", "reads": 0, "tool_calls": 0, "probe": "?"}
+    if not rel:
+        return facts
+    base = root / rel
+    review, probe = base / "review.jsonl", base / "probe.jsonl"
+    for kind, path in (("review", review), ("probe", probe)):
+        if not path.exists():
+            continue
+        read_files: set[str] = set()
+        denials = None
+        for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            if event.get("type") == "system" and event.get("subtype") == "init":
+                if kind == "review":
+                    facts["tools"] = ", ".join(sorted(event.get("tools") or []))
+                    facts["slash"] = str(len(event.get("slash_commands") or []))
+            elif event.get("type") == "assistant" and kind == "review":
+                for block in event.get("message", {}).get("content", []):
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        facts["tool_calls"] += 1
+                        if block.get("name") == "Read":
+                            read_files.add(str(block.get("input", {}).get("file_path")))
+            elif event.get("type") == "result":
+                denials = len(event.get("permission_denials") or [])
+        if kind == "review":
+            facts["reads"] = len(read_files)
+        elif denials is not None:
+            facts["probe"] = "passed" if denials >= 2 else f"{denials} denial(s)"
+    return facts
+
+
+def refusals(root: Path, include_paths: bool) -> list[str]:
+    path = root / LOG_REL / "refusals.jsonl"
+    if not path.exists():
+        return []
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        out.append(
+            f"{entry.get('time', '?')}: {hide_paths(entry.get('reason', ''), include_paths)}"
+        )
+    return out
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="field-report")
+    parser.add_argument("--include-paths", action="store_true")
+    args = parser.parse_args()
+    root = root_dir()
+    reports = sorted((root / REPORT_REL).glob("*.md"))
+    runs = [parse_report(p) for p in reports]
+    refused = refusals(root, args.include_paths)
+
+    print("# Field report — /isolated-review\n")
+    print(
+        f"generated {time.strftime('%Y-%m-%d')} · Claude Code {claude_version()} · "
+        f"{platform.system()} {platform.release()} · stack: {stack(root)}"
+    )
+    counts = {
+        v: sum(1 for r in runs if r["verdict"] == v)
+        for v in ("COMPLETE", "INCOMPLETE", "FAILED", "INVALID")
+    }
+    print(
+        f"runs: {len(runs)} ({', '.join(f'{k} {v}' for k, v in counts.items())}) · "
+        f"refusals: {len(refused)} · paths {'shown' if args.include_paths else 'hidden'}\n"
+    )
+    if not runs and not refused:
+        print("There are no isolated-review runs in this repository yet.")
+        return 0
+
+    print("## Runs\n")
+    print(
+        "| # | date | verdict | files | lines | diff | model | cost | time | tools granted | slash | probe | files read | tool calls | findings h/m/l |"
+    )
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    for i, run in enumerate(runs, 1):
+        t = parse_transcript(root, run.get("transcript"))
+        conf = run["confidences"]
+        hml = f"{conf.count('high')}/{conf.count('medium')}/{conf.count('low')}"
+        print(
+            f"| {i} | {run['date']} | {run['verdict']} | {run.get('files', '?')} | "
+            f"{run.get('lines', '?')} | {run.get('mode', '?')} | {run.get('model', '?')} | "
+            f"${run.get('cost', '?')} | {run.get('seconds', '?')}s | {t['tools']} | {t['slash']} | "
+            f"{t['probe']} | {t['reads']} | {t['tool_calls']} | {hml} |"
+        )
+    reasons = [(i, r) for i, run in enumerate(runs, 1) for r in run["reasons"]]
+    if reasons:
+        print("\n### Reasons (runs that were not COMPLETE)\n")
+        for i, reason in reasons:
+            print(f"- #{i}: {hide_paths(reason, args.include_paths)}")
+    if refused:
+        print("\n### Refusals\n")
+        for entry in refused:
+            print(f"- {entry}")
+
+    print("\n## Your judgement — no code, no file contents, no secrets\n")
+    print(
+        "Open each local report in .claude/docs/reviews/ and judge its findings there.\n"
+    )
+    for i, run in enumerate(runs, 1):
+        print(f"### Run #{i} ({run['date']}, {run['verdict']})\n")
+        if run["confidences"]:
+            print(
+                "| finding | confidence | real / false / unsure | one-line summary (no code) |"
+            )
+            print("|---|---|---|---|")
+            for j, conf in enumerate(run["confidences"], 1):
+                print(f"| F{j} | {conf} |  |  |")
+        else:
+            print("No findings reported.")
+        print(
+            "\n- Missed issues (found later, or by a person-opened review of the same change):"
+        )
+        print("- Compared with a person-opened (A2) review? What differed:")
+        print("- Useful? (one line):")
+        print("- Friction or odd behaviour:\n")
+    print("## Template-wide observations (optional)\n")
+    print(
+        "- /initproject:\n- /feature:\n- hooks, gates, permissions:\n- anything else:"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

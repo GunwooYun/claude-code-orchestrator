@@ -346,6 +346,8 @@ Confluence 페이지, Jira 티켓 본문, 저장소 준거 문서, 구현 계획
 
 격리는 지시가 아니라 **도구 집합**으로 한다: 허용 목록(`--allowedTools`)은 제한이 아니라서 실측에서 리뷰어가 파일을 썼다. 그래서 `--restricted`·MCP 차단·슬래시 명령 차단을 쓰고, 매 실행의 시작 이벤트로 실제 도구 목록을 확인하며, 같은 설정의 값싼 프로브가 두 번의 금지된 읽기를 거부당해야 리뷰가 시작된다. 구현자가 쓴 `CLAUDE.md` 는 읽지 못하고 검증 계획만 "구현자의 주장"으로 전달된다. 되묻기가 필요하면 사람이 여는 세션(Phase 6 A2)을 쓴다. 설계와 실측 전체: `docs/isolated-review.md`.
 
+**실사용 검증 중이다.** 여러 저장소에서 몇 번 쓴 뒤 `.claude/skills/isolated-review/field-report` 로 리포트 초안을 만들고(판정·비용·도구 목록·발견 개수만 — 리뷰 본문·코드·비밀값은 넣지 않는다), 발견마다 진짜/오탐/모름과 놓친 문제를 적어 템플릿 개발 쪽에 전한다. 작성법: `.claude/docs/templates/field-report.md`.
+
 ### `/research-lib`, `/update-lib-docs` — 라이브러리 제약 문서
 
 `/research-lib <lib>`는 라이브러리 조사 결과를 `.claude/docs/libraries/<lib>.md`에 저장하고, `/update-lib-docs`는 기존 문서를 최신화한다. deep-reasoning 코드 리뷰와 agy 리서치가 이 문서를 제약 조건으로 참조한다.

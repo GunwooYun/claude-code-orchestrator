@@ -79,6 +79,17 @@ reviewers are denied both, so a second round cannot anchor on the first.
 - Model pinned to Fable; ceilings $20 / 45 min; no `--bare` (it drops OAuth
   login and CLAUDE.md).
 
+## Field reports
+
+This skill is being validated on real work in repositories its developers cannot
+see. After a few runs, the user sends a field report:
+`.claude/skills/isolated-review/field-report` drafts it (facts only — verdicts,
+costs, tool set, finding counts; never review text, code or secrets; paths
+hidden unless `--include-paths`), and the person adds a real / false / unsure
+verdict per finding and anything the review missed. How to fill it in:
+`.claude/docs/templates/field-report.md`. REFUSED runs write no report, so
+`run-review` records them in `.claude/logs/isolated-review/refusals.jsonl`.
+
 ## Limits
 
 - One report, no follow-up questions.

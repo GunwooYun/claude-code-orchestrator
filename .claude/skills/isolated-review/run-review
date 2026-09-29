@@ -469,6 +469,21 @@ def write_report(root: Path, branch: str, header: list[str], body: str) -> Path:
     return path
 
 
+def record_refusal(root: Path, reason: str) -> None:
+    """
+    Refusals write no report, so field-report would never see them. How often
+    the preconditions stop a review is part of judging whether it is usable.
+    """
+    try:
+        path = root / LOG_REL / "refusals.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        entry = {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "reason": reason}
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError:
+        pass  # recording must never change the verdict
+
+
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     root = Path(git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
@@ -498,6 +513,7 @@ def main(argv: list[str]) -> int:
             raise Refused("claude is not on PATH")
     except Refused as exc:
         print(f"run-review: REFUSED — {exc}", file=sys.stderr)
+        record_refusal(root, str(exc))
         return EXIT["REFUSED"]
 
     run_id = f"{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}"
