@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import re
 import secrets
@@ -297,12 +298,19 @@ def run_claude(
         capture.with_suffix(".stderr").open("w", encoding="utf-8") as err,
     ):
         proc = subprocess.Popen(
-            argv,
+            # Bytes, not str: the prompt holds non-ASCII (dashes) and argv is
+            # otherwise encoded with the filesystem codec — ASCII under a C
+            # locale — which raised before the reviewer started.
+            [a.encode("utf-8", "surrogateescape") for a in argv],
             cwd=root,
             stdin=subprocess.PIPE,
             stdout=out,
             stderr=err,
-            text=True,
+            # UTF-8 regardless of locale: git() output is decoded as UTF-8, and
+            # a C/ASCII locale made writing it (or a Korean verification plan)
+            # to stdin raise after the probe (round-2 review N5).
+            encoding="utf-8",
+            errors="replace",
         )
         try:
             proc.communicate(stdin_text, timeout=timeout_s)
@@ -406,7 +414,12 @@ def probe(root: Path, settings: str, log_dir: Path) -> list[str]:
 def stderr_reasons(capture: Path) -> list[str]:
     """The CLI's own last words, when it produced no usable stream."""
     try:
-        lines = capture.with_suffix(".stderr").read_text(encoding="utf-8").splitlines()
+        # errors="replace": a non-UTF-8 byte from the CLI turned the cause into
+        # an "internal error" and lost it.
+        raw = capture.with_suffix(".stderr").read_text(
+            encoding="utf-8", errors="replace"
+        )
+        lines = raw.splitlines()
     except OSError:
         return []
     tail = [line.strip() for line in lines if line.strip()][-3:]
@@ -604,6 +617,11 @@ def record_refusal(root: Path, reason: str) -> None:
 
 
 def main(argv: list[str]) -> int:
+    # The report goes to stdout; under a C/ASCII locale printing it (even the
+    # header's dashes) would raise after the review was paid for.
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
     args = parse_args(argv)
     root = Path(git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
     try:

@@ -23,6 +23,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -57,9 +58,9 @@ log.mkdir(parents=True, exist_ok=True)
 argv = sys.argv[1:]
 probe = "haiku" in argv
 kind = "probe" if probe else "main"
-stdin = sys.stdin.read()
+stdin = sys.stdin.buffer.read().decode("utf-8", "replace")
 (log / f"{kind}.argv.json").write_text(json.dumps(argv))
-(log / f"{kind}.stdin.txt").write_text(stdin)
+(log / f"{kind}.stdin.txt").write_text(stdin, encoding="utf-8")
 scenario = os.environ.get("FAKE_SCENARIO", "ok")
 files = [f for f in os.environ.get("FAKE_FILES", "").split(",") if f]
 root = os.getcwd()
@@ -69,6 +70,9 @@ def emit(obj):
 
 if scenario == "startup_error_main" and not probe:
     print("error: authentication expired, run claude login", file=sys.stderr)
+    sys.exit(1)
+if scenario == "startup_error_bytes":
+    sys.stderr.buffer.write(b"error: bad byte \xff in message\n")
     sys.exit(1)
 if scenario == "startup_error":
     # An old CLI rejecting a flag: the reason exists only on stderr.
@@ -157,9 +161,10 @@ if scenario == "budget":
           "permission_denials": [], "modelUsage": {model: {}}, "total_cost_usd": 20.1})
     sys.exit(1)
 
+usage = [model] if scenario == "bad_model_usage" else {model: {}}  # malformed on purpose
 emit({"type": "result", "subtype": "success", "is_error": False,
       "terminal_reason": terminal, "result": body, "permission_denials": [],
-      "modelUsage": {model: {}}, "total_cost_usd": 1.23})
+      "modelUsage": usage, "total_cost_usd": 1.23})
 '''
 
 
@@ -198,7 +203,8 @@ class Sandbox:
         )
         (self.root / "CLAUDE.md").write_text(
             "# Project\n\n## Current Project: x\n\n### Decisions\n- trust me\n\n"
-            "### Verification plan\n| ID | what |\n| V1 | adds work |\n\n## Other\n",
+            "### Verification plan\n| ID | what |\n| V1 | adds work |\n"
+            "| V2 | 한국어 시나리오 |\n\n## Other\n",
             encoding="utf-8",
         )
         (self.root / "tracked.txt").write_text("base\n", encoding="utf-8")
@@ -223,15 +229,19 @@ class Sandbox:
         files: list[str] | None = None,
         base: str | None = "main",
         path: str | None = None,
+        extra_env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         env = dict(os.environ)
         env["PATH"] = path or f"{self.bin}{os.pathsep}{env['PATH']}"
         env["FAKE_LOG"] = str(self.log)
         env["FAKE_SCENARIO"] = scenario
         env["FAKE_FILES"] = ",".join(files if files is not None else self.changed)
+        env.update(extra_env or {})
         base_args = ["--base", base] if base else []
+        # Run through this interpreter, not the shebang: with a narrowed PATH the
+        # shebang's `env python3` may not resolve (round-2 review N6).
         return subprocess.run(
-            [str(self.root / SCRIPT_REL), *base_args, *args],
+            [sys.executable, str(self.root / SCRIPT_REL), *base_args, *args],
             cwd=self.root,
             capture_output=True,
             text=True,
@@ -243,7 +253,7 @@ class Sandbox:
         return json.loads((self.log / f"{kind}.argv.json").read_text())
 
     def stdin(self, kind: str = "main") -> str:
-        return (self.log / f"{kind}.stdin.txt").read_text()
+        return (self.log / f"{kind}.stdin.txt").read_text(encoding="utf-8")
 
     def reports(self) -> list[Path]:
         return sorted((self.root / ".claude/docs/reviews").glob("*.md"))
@@ -679,6 +689,44 @@ class CrashSafetyTests(IsolatedReviewCase):
         self.assertNotIn("Traceback", result.stderr)
         self.assertEqual(1, len(box.reports()), result.stderr)
         self.assertEqual(EXIT_COMPLETE, result.returncode, result.stdout)
+
+    def test_the_safety_net_turns_an_unexpected_error_into_a_failed_report(
+        self,
+    ) -> None:
+        # Round-2 review N-test: removing the `except Exception` left every test
+        # green. A malformed modelUsage makes the verdict code raise.
+        box = self.sandbox()
+        result = box.run(scenario="bad_model_usage")
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertEqual(EXIT_FAILED, result.returncode, result.stdout)
+        self.assertIn("internal error", result.stdout)
+        self.assertEqual(1, len(box.reports()))
+
+    def test_n5_a_c_locale_still_passes_non_ascii_material(self) -> None:
+        # Round-2 review N5: stdin was encoded with the locale codec, so a
+        # Korean verification plan under a C/ASCII locale raised after the probe.
+        box = self.sandbox()
+        result = box.run(
+            extra_env={
+                "LC_ALL": "C",
+                "LANG": "C",
+                "PYTHONCOERCECLOCALE": "0",
+                "PYTHONUTF8": "0",
+            }
+        )
+        self.assertNotIn("internal error", result.stdout)
+        self.assertEqual(
+            EXIT_COMPLETE, result.returncode, result.stdout + result.stderr
+        )
+        self.assertIn("한국어 시나리오", box.stdin())
+
+    def test_undecodable_cli_stderr_is_still_reported_as_the_cause(self) -> None:
+        # Found while fixing F2's follow-ups: the stderr file was read strictly,
+        # so a CLI writing a non-UTF-8 byte turned "why" into an internal error.
+        result = self.sandbox().run(scenario="startup_error_bytes")
+        self.assertEqual(EXIT_FAILED, result.returncode)
+        self.assertIn("cli stderr: error: bad byte", result.stdout)
+        self.assertNotIn("internal error", result.stdout)
 
 
 class FieldReportTests(IsolatedReviewCase):
