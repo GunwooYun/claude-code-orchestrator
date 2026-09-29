@@ -51,10 +51,19 @@ root = os.getcwd()
 def emit(obj):
     print(json.dumps(obj), flush=True)
 
+if scenario == "startup_error_main" and not probe:
+    print("error: authentication expired, run claude login", file=sys.stderr)
+    sys.exit(1)
+if scenario == "startup_error":
+    # An old CLI rejecting a flag: the reason exists only on stderr.
+    print("error: unknown option '--restricted'", file=sys.stderr)
+    sys.exit(1)
+
 tools = ["Glob", "Grep", "Read"]
 if scenario == "init_bash" and not probe:
     tools = ["Bash", "Glob", "Grep", "Read"]
-emit({"type": "system", "subtype": "init", "tools": tools, "slash_commands": [],
+slash = ["/loop"] if scenario == "init_slash" and not probe else []
+emit({"type": "system", "subtype": "init", "tools": tools, "slash_commands": slash,
       "model": "claude-haiku-4-5" if probe else "claude-fable-5-1"})
 
 if probe:
@@ -96,7 +105,7 @@ if scenario == "modify_tree":
     Path("tracked.txt").write_text("changed during review\n")
 
 read_files = files
-if scenario == "coverage_no_read":
+if scenario in ("coverage_no_read", "wrong_model_no_read"):
     read_files = files[1:]
 for f in read_files:
     emit({"type": "assistant", "message": {"content": [
@@ -114,9 +123,14 @@ if scenario == "findings":
     body = body.replace("None found.",
         "- `src/work.py:2` — FINDING-CANARY-TEXT returns the wrong page — high\n"
         "- `src/work.py:1` — second finding text — low")
+if scenario == "generic_secret":
+    body = body.replace("None found.",
+        "- `src/auth.py:12` — token = request.headers.get(\"X\") is never validated — high\n"
+        "- `src/cfg.py:3` — password = \"hunter2hunter2hunter2\" is hard-coded — high")
 if scenario == "empty_result":
     body = ""
-model = "claude-opus-5-5" if scenario == "wrong_model" else "claude-fable-5-1"
+model = "claude-opus-5-5" if scenario in ("wrong_model", "wrong_model_no_read") else "claude-fable-5-1"
+terminal = "max_turns" if scenario == "not_completed" else "completed"
 
 if scenario == "budget":
     emit({"type": "result", "subtype": "error_max_budget_usd", "is_error": True,
@@ -125,7 +139,7 @@ if scenario == "budget":
     sys.exit(1)
 
 emit({"type": "result", "subtype": "success", "is_error": False,
-      "terminal_reason": "completed", "result": body, "permission_denials": [],
+      "terminal_reason": terminal, "result": body, "permission_denials": [],
       "modelUsage": {model: {}}, "total_cost_usd": 1.23})
 '''
 
@@ -159,7 +173,8 @@ class Sandbox:
             encoding="utf-8",
         )
         (self.root / ".gitignore").write_text(
-            ".claude/logs/\n.claude/docs/reviews/\n.claude/isolated-review/\n",
+            ".claude/logs/\n.claude/docs/reviews/\n.claude/isolated-review/\n"
+            ".claude/settings.local.json\n",
             encoding="utf-8",
         )
         (self.root / "CLAUDE.md").write_text(
@@ -183,15 +198,21 @@ class Sandbox:
         self._tmp.cleanup()
 
     def run(
-        self, *args: str, scenario: str = "ok", files: list[str] | None = None
+        self,
+        *args: str,
+        scenario: str = "ok",
+        files: list[str] | None = None,
+        base: str | None = "main",
+        path: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         env = dict(os.environ)
-        env["PATH"] = f"{self.bin}{os.pathsep}{env['PATH']}"
+        env["PATH"] = path or f"{self.bin}{os.pathsep}{env['PATH']}"
         env["FAKE_LOG"] = str(self.log)
         env["FAKE_SCENARIO"] = scenario
         env["FAKE_FILES"] = ",".join(files if files is not None else self.changed)
+        base_args = ["--base", base] if base else []
         return subprocess.run(
-            [str(self.root / SCRIPT_REL), "--base", "main", *args],
+            [str(self.root / SCRIPT_REL), *base_args, *args],
             cwd=self.root,
             capture_output=True,
             text=True,
@@ -446,6 +467,110 @@ class VerdictTests(IsolatedReviewCase):
         self.assertNotIn("AKIAABCDEFGHIJKLMNOP", report.read_text())
         self.assertNotIn("AKIAABCDEFGHIJKLMNOP", result.stdout)
         self.assertIn("REDACTED", report.read_text())
+
+
+class SeparateSessionReviewFindingTests(IsolatedReviewCase):
+    """
+    From the person-opened (A2) review of this skill, 2026-09-29. Each test
+    names the finding it pins; every one of them was red before its fix.
+    """
+
+    def test_f1_a_non_utf8_file_does_not_crash_and_still_reports(self) -> None:
+        box = self.sandbox(changed={"src/ok.py": "x = 1\n"})
+        (box.root / "src/legacy.py").write_bytes(b"# caf\xe9 \xff\xfe\n")
+        git(box.root, "add", "-A")
+        git(box.root, "commit", "-qm", "legacy encoding")
+        result = box.run(files=["src/ok.py", "src/legacy.py"])
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertEqual(1, len(box.reports()), "no report was written")
+        # Found by mutation: with the decoding fix removed, the crash safety net
+        # still wrote a FAILED report and this test passed. The requirement is
+        # that the review actually runs on such a branch.
+        self.assertNotIn("internal error", result.stdout)
+        self.assertTrue((box.log / "main.argv.json").exists(), "the review never ran")
+        self.assertEqual(EXIT_COMPLETE, result.returncode, result.stdout)
+
+    def test_f2_the_cli_s_own_error_reaches_the_report(self) -> None:
+        result = self.sandbox().run(scenario="startup_error")
+        self.assertEqual(EXIT_FAILED, result.returncode)
+        self.assertIn("unknown option", result.stdout)
+
+    def test_f2_a_review_that_dies_at_start_says_why(self) -> None:
+        # The probe passes here; only the review run fails on start-up. The
+        # test above never reaches the review, so this path needs its own.
+        box = self.sandbox()
+        result = box.run(scenario="startup_error_main")
+        self.assertEqual(EXIT_FAILED, result.returncode)
+        self.assertIn("authentication expired", result.stdout)
+        self.assertTrue((box.log / "main.argv.json").exists())
+
+    def test_f3_quoted_code_survives_but_a_literal_secret_does_not(self) -> None:
+        box = self.sandbox()
+        box.run(scenario="generic_secret")
+        [report] = box.reports()
+        text = report.read_text()
+        self.assertIn('token = request.headers.get("X")', text)
+        self.assertNotIn("hunter2hunter2hunter2", text)
+        self.assertIn("REDACTED", text)
+
+    def test_f3_the_transcript_is_redacted_too(self) -> None:
+        box = self.sandbox()
+        box.run(scenario="secret")
+        transcripts = list((box.root / ".claude/logs/isolated-review").rglob("*.jsonl"))
+        self.assertTrue(transcripts)
+        for path in transcripts:
+            self.assertNotIn("AKIAABCDEFGHIJKLMNOP", path.read_text(), path.name)
+
+    def test_f7_renamed_files_are_listed_by_their_plain_new_path(self) -> None:
+        box = self.sandbox(changed={"src/a.py": "a = 1\n"})
+        base = git(box.root, "rev-parse", "HEAD").strip()
+        git(box.root, "mv", "src/a.py", "src/b.py")
+        git(box.root, "commit", "-qm", "rename")
+        result = box.run(base=base, files=["src/b.py"])
+        changed = box.stdin().split("## Changed files", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("src/b.py", changed)
+        self.assertNotIn("=>", changed, "git's {a => b} rename form is not a path")
+        self.assertEqual(EXIT_COMPLETE, result.returncode, result.stdout)
+
+    def test_available_slash_commands_fail_the_run(self) -> None:
+        result = self.sandbox().run(scenario="init_slash")
+        self.assertEqual(EXIT_FAILED, result.returncode)
+        self.assertIn("slash", result.stdout)
+
+    def test_a_run_that_did_not_complete_fails_on_that_alone(self) -> None:
+        result = self.sandbox().run(scenario="not_completed")
+        self.assertEqual(EXIT_FAILED, result.returncode)
+        self.assertIn("terminal_reason", result.stdout)
+
+    def test_failed_outranks_incomplete(self) -> None:
+        box = self.sandbox(changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"})
+        result = box.run(scenario="wrong_model_no_read")
+        self.assertEqual(EXIT_FAILED, result.returncode)
+        self.assertIn("pinned model", result.stdout)
+
+    def test_without_base_and_origin_head_it_refuses(self) -> None:
+        result = self.sandbox().run(base=None)
+        self.assertEqual(EXIT_REFUSED, result.returncode)
+        self.assertIn("origin/HEAD", result.stderr)
+
+    def test_local_settings_read_denies_are_forwarded(self) -> None:
+        box = self.sandbox()
+        (box.root / ".claude/settings.local.json").write_text(
+            json.dumps({"permissions": {"deny": ["Read(./local-only/**)"]}}),
+            encoding="utf-8",
+        )
+        box.run()
+        argv = box.argv()
+        deny = json.loads(argv[argv.index("--settings") + 1])["permissions"]["deny"]
+        self.assertIn("Read(./local-only/**)", deny)
+
+    def test_a_missing_claude_is_refused_before_anything_runs(self) -> None:
+        box = self.sandbox()
+        result = box.run(path="/usr/bin:/bin")
+        if shutil.which("claude", path="/usr/bin:/bin"):
+            self.skipTest("a system-wide claude is on /usr/bin")
+        self.assertEqual(EXIT_REFUSED, result.returncode)
+        self.assertIn("claude is not on PATH", result.stderr)
 
 
 class FieldReportTests(IsolatedReviewCase):
