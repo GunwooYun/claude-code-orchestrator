@@ -56,6 +56,11 @@ logs/
 # Checkpoints (session-specific, may contain sensitive info)
 .claude/checkpoints/
 
+# /isolated-review: reports stay out of git (user decision, docs/isolated-review.md);
+# the work dir holds the probe canary and large diffs only for the run.
+.claude/docs/reviews/
+.claude/isolated-review/
+
 # Jupyter
 .ipynb_checkpoints/
 

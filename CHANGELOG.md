@@ -12,8 +12,8 @@ project changed, back up a gitignored `.claude/` first).
 
 ## [0.1.0] - 2026-09-30
 
-First versioned release. Everything merged to `main` up to PR #8. Copies taken
-before this release have no `.claude/ORCHESTRATOR_VERSION`.
+First versioned release. Everything merged up to PR #10. Copies taken before
+this release have no `.claude/ORCHESTRATOR_VERSION`.
 
 ### Added
 - `/initproject` (per project) and `/feature` (per unit of work), replacing
@@ -25,7 +25,12 @@ before this release have no `.claude/ORCHESTRATOR_VERSION`.
   `/lens-review`, `/doc-write`, `/jira-setup`, `/ticket` (#1).
 - `bash-write-check` hook: runs the save gate on files written through Bash
   (#5).
-- `/orchestrator-version` and this changelog.
+- `/orchestrator-version` and this changelog (#9).
+- `/isolated-review`: `/feature` Phase 6's default review, run by a separate
+  read-only `claude -p` session (Read/Grep/Glob only, isolation probed before
+  every run, secrets redacted, report kept out of git), and `field-report` to
+  summarise its runs without code or review text (#10). Tested with the real CLI
+  on a seeded test repository only, not yet on a real work branch.
 
 ### Changed
 - `.claude/docs/DESIGN.md` ships as an empty skeleton; the template's own
