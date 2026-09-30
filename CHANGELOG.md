@@ -17,7 +17,8 @@ Merged to `develop`, not yet released. A release renames this heading.
 ### Fixed
 - `bash-write-check` no longer reports files git rewrote when git runs next to
   read-only commands (`cd x && git rebase …`, `… | tail`); a writing command
-  or a redirection in the same line is still checked.
+  or a redirection in the same line is still checked. `cut`, `tr` and `jq`
+  count as read-only too; `sort` and `uniq` do not (both can write a file).
 - `/isolated-review`: a second report in the same second is written as
   `<name>-2.md` instead of overwriting the first; `field-report` reads its
   date.

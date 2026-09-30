@@ -670,6 +670,10 @@ class BashWriteCheckTests(unittest.TestCase):
             "cd /tmp/x && git fetch -q && git checkout -q --detach origin/b && git status --short",
             "git add README.md && GIT_EDITOR=true git rebase --continue 2>&1 | tail -3",
             "git rebase origin/develop 2>&1 | tail -3; git diff --name-only --diff-filter=U",
+            # Seen after the fix above: `| cut` was not on the list.
+            "git switch -q develop && git merge -q --ff-only origin/develop && git branch -vv | cut -c1-80",
+            "git log --format=%s | tr a-z A-Z",
+            "git log -1 --format=%s | jq -R .",
         ):
             with self.subTest(command=command):
                 self.call("PreToolUse", command)
@@ -681,6 +685,9 @@ class BashWriteCheckTests(unittest.TestCase):
             "git checkout -- a.py && cp b.py a.py",
             "cd . && echo y > a.py && git add a.py",
             "git stash && sed -i s/1/2/ a.py",
+            # Not on the list on purpose: both can write a file themselves.
+            "git log --format=%s | sort -o a.py",
+            "git log --format=%s | uniq - a.py",
         ):
             with self.subTest(command=command):
                 self.call("PreToolUse", command)
