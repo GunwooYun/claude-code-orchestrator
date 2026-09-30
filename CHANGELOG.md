@@ -10,6 +10,18 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [Unreleased]
+
+Merged to `develop`, not yet released. A release renames this heading.
+
+### Fixed
+- `bash-write-check` no longer reports files git rewrote when git runs next to
+  read-only commands (`cd x && git rebase …`, `… | tail`); a writing command
+  or a redirection in the same line is still checked.
+- `/isolated-review`: a second report in the same second is written as
+  `<name>-2.md` instead of overwriting the first; `field-report` reads its
+  date.
+
 ## [0.1.0] - 2026-09-30
 
 First versioned release. Everything merged up to PR #10. Copies taken before

@@ -64,6 +64,16 @@ class VersionRecordTests(unittest.TestCase):
         self.assertEqual(sorted(keys, reverse=True), keys)
         self.assertEqual(len(set(keys)), len(keys))
 
+    def test_unreleased_is_at_most_one_section_above_every_release(self) -> None:
+        # A release renames it; one left below a version entry would be read as
+        # part of that release by /orchestrator-version.
+        text = CHANGELOG.read_text(encoding="utf-8")
+        unreleased = [m.start() for m in re.finditer(r"^## \[Unreleased\]", text, re.M)]
+        self.assertLessEqual(len(unreleased), 1)
+        first_release = re.search(r"^## \[\d+\.\d+\.\d+\]", text, re.M)
+        if unreleased and first_release:
+            self.assertLess(unreleased[0], first_release.start())
+
     def test_quick_start_clones_the_release_branch(self) -> None:
         # Drift tripwire over prose. The default branch is `develop` (work in
         # progress); a bare `git clone` would hand adopters unreleased changes.
