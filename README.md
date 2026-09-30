@@ -20,7 +20,7 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
 | `.claude/scripts/verify-save`, `verify-task` | **동작 확인.** 저장 게이트는 **읽기 전용**이다 — 파일을 고치지 않고 보고만 한다 |
 | 규칙·스킬 문서의 일관성 | **테스트로 고정.** 모델 등급↔슬러그 일치, 섹션 포인터 해소, 임계값 단일 정의, 항상-로드 예산 |
 | `checkpoint.py` | **동작 확인** (펜스·rename·범위·원자적 쓰기 회귀 테스트) |
-| 스킬 실행 | `/lens-review` 와 `/deep-reasoning` 은 **실제로 돌았고 진짜 결함을 찾았다**(이 저장소의 `docs/DESIGN.md` 에 "Found by `/lens-review`" 로 남아 있다). `/initproject` 는 **Node/TS 프로젝트에서 대화형으로 8단계를 완주했다**(2026-09-28) — 생성된 검증 스크립트가 실제로 실패하는 것까지 세션 밖에서 확인했고, 드러난 결함 다섯 개는 고쳤다. 헤드리스(`claude -p`)는 지원하지 않는다. **나머지 13개는 한 번도 안 돌렸다** — `/feature` 포함. 테스트는 스킬의 *문서*가 일관되는지만 본다 |
+| 스킬 실행 | `/lens-review` 와 `/deep-reasoning` 은 **실제로 돌았고 진짜 결함을 찾았다**(이 저장소의 `docs/DESIGN.md` 에 "Found by `/lens-review`" 로 남아 있다). `/initproject` 는 **Node/TS 프로젝트에서 대화형으로 8단계를 완주했다**(2026-09-28) — 생성된 검증 스크립트가 실제로 실패하는 것까지 세션 밖에서 확인했고, 드러난 결함 다섯 개는 고쳤다. 헤드리스(`claude -p`)는 지원하지 않는다. **나머지 14개는 한 번도 안 돌렸다** — `/feature` 포함. 테스트는 스킬의 *문서*가 일관되는지만 본다 |
 | agy 연동 | **미확인.** 이 저장소를 만든 컨테이너에 agy 가 없었다. 모델 정책·soft-deny 실동작은 문서상 설계다 |
 | Jira·Confluence | 커넥터로 **측정한 사실**에 기반하지만(프로젝트 141개, cloudId 중복 등), 스킬 실행은 미확인 |
 | Windows | **미확인.** `verify-*` 해석기 목록은 배려하지만 훅 등록(`python3`)은 아니다 |
@@ -34,8 +34,10 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
 기존 프로젝트의 루트로 실행:
 
 ```bash
-git clone --depth 1 https://github.com/GunwooYun/claude-code-orchestrator.git .starter && cp -r .starter/.claude .starter/.agents .starter/CLAUDE.md . && rm -rf .starter && claude
+git clone --depth 1 --branch main https://github.com/GunwooYun/claude-code-orchestrator.git .starter && cp -r .starter/.claude .starter/.agents .starter/CLAUDE.md . && rm -rf .starter && claude
 ```
+
+`--branch main` 은 **릴리스만** 받는다는 뜻이다. 기본 브랜치는 `develop`(아직 릴리스되지 않은 작업)이라, 이 옵션을 빼면 검증 중인 변경이 딸려 온다. 받은 버전은 `.claude/ORCHESTRATOR_VERSION` 에 남고 `/orchestrator-version` 으로 확인한다 — 변경 내역은 `CHANGELOG.md`.
 
 `tests/` 는 일부러 복사하지 않는다 — 대부분 이 저장소 자신을 검사하는 테스트다.
 검증 계약을 스택 무관하게 확인하는 `tests/test_verify_scripts.py` 하나만 쓸모가
@@ -403,7 +405,7 @@ verify-full          무제한    CI 또는 사람만
 
 ```bash
 cd <your-project>
-git clone --depth 1 https://github.com/GunwooYun/claude-code-orchestrator.git .starter \
+git clone --depth 1 --branch main https://github.com/GunwooYun/claude-code-orchestrator.git .starter \
   && cp -r .starter/.claude .starter/.agents .starter/CLAUDE.md . && rm -rf .starter
 ```
 
@@ -569,6 +571,17 @@ cd ../<project>-review && claude
 | **poethepoet** | 태스크 러너 |
 
 > 이 저장소는 순수 Python 이라 `ty` 로 통일되어 있다(`pyproject.toml`, `poe typecheck`, `verify-save`). **타입체커는 템플릿이 정하지 않는다** — `/initproject` 가 스택을 보고 고른다. 측정된 주의사항은 `.claude/skills/initproject/references/known-pitfalls.md` 에 있다(요약: 디스크립터로 속성 타입을 바꾸는 프레임워크에서는 `ty` 가 정상 코드를 오탐하므로 플러그인을 지원하는 체커를 쓴다).
+
+### 브랜치와 릴리스
+
+| 브랜치 | 뜻 | 누가 받는가 |
+|---|---|---|
+| `develop` (기본) | 통합 — 기능 PR 은 여기로 | 이 저장소를 개발하는 사람 |
+| `main` | 릴리스만. 커밋마다 태그 `vX.Y.Z` | Quick Start (`--branch main`) |
+
+- **릴리스**: `develop` 에서 `.claude/ORCHESTRATOR_VERSION` 과 `CHANGELOG.md` 맨 위 항목을 같은 버전으로 올린다(둘이 다르면 `tests/test_versioning.py` 가 실패한다) → `develop` 을 `main` 으로 PR·머지 → `main` 에 태그 `vX.Y.Z` 를 달고 push.
+- **급한 수정**: `main` 에서 고쳐 패치 버전으로 릴리스하고, 같은 커밋을 `develop` 에 되돌려 머지한다.
+- 버전은 실사용 검증이 끝나지 않은 기능이 남아 있는 동안 `0.x` 로 둔다.
 
 ### Commands
 

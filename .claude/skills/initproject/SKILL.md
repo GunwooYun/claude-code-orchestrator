@@ -129,6 +129,11 @@ naming the template. Replace the bold tagline under it
 (`**멀티 에이전트 협업 프레임워크**`) with the one-sentence overview from Step 2.
 Keep exactly one H1; the template's own sections below them stay as they are.
 
+In `## Project Setup`, record which template release this project adopted:
+`Orchestrator: v<contents of .claude/ORCHESTRATOR_VERSION>, adopted <today>`. If
+that file is missing the copy predates versioning — write `unknown (pre-0.1.0
+copy)`. A later upgrade starts from this line (`/orchestrator-version`).
+
 Replace the body of `## 기술 스택(Tech Stack)` with the detected stack: language
 and framework versions, package manager, quality tools with versions, how the
 project runs (container vs local), a `공통 명령어` block with the **real**
