@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""
+check — which claude-code-orchestrator release this project's copy came from.
+
+Usage: check [--check-latest]
+  (no flag)       the installed version, from .claude/ORCHESTRATOR_VERSION.
+                  No network.
+  --check-latest  also the newest release upstream and the changelog entries
+                  since the installed one. Needs network to GitHub; if that
+                  fails (company proxies block it often) it says so and exits 0.
+
+Environment (for forks and tests):
+  ORCHESTRATOR_UPSTREAM       git URL or path of the template repository
+  ORCHESTRATOR_CHANGELOG_URL  URL of its CHANGELOG.md (file:// works)
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import subprocess
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+DEFAULT_UPSTREAM = "https://github.com/GunwooYun/claude-code-orchestrator.git"
+DEFAULT_CHANGELOG = "https://raw.githubusercontent.com/GunwooYun/claude-code-orchestrator/main/CHANGELOG.md"
+TIMEOUT_S = 15
+TAG = re.compile(r"refs/tags/v(\d+)\.(\d+)\.(\d+)$")
+ENTRY = re.compile(r"^## \[(\d+)\.(\d+)\.(\d+)\]", re.MULTILINE)
+
+# .claude/skills/orchestrator-version/check -> .claude/
+CLAUDE_DIR = Path(__file__).resolve().parents[2]
+
+
+def installed() -> tuple[int, int, int] | None:
+    try:
+        text = (CLAUDE_DIR / "ORCHESTRATOR_VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", text)
+    return (int(m[1]), int(m[2]), int(m[3])) if m else None
+
+
+def fmt(version: tuple[int, int, int]) -> str:
+    return ".".join(str(p) for p in version)
+
+
+def latest_release(upstream: str) -> tuple[int, int, int]:
+    """Highest vX.Y.Z tag, compared numerically. Raises RuntimeError on failure."""
+    try:
+        out = subprocess.run(
+            ["git", "ls-remote", "--tags", "--refs", upstream],
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT_S,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"cannot reach {upstream}: {exc}") from exc
+    if out.returncode != 0:
+        raise RuntimeError(f"cannot reach {upstream}: {out.stderr.strip()[:200]}")
+    versions = [
+        (int(m[1]), int(m[2]), int(m[3]))
+        for line in out.stdout.splitlines()
+        if (m := TAG.search(line.split("\t")[-1]))
+    ]
+    if not versions:
+        raise RuntimeError(f"no vX.Y.Z release tags at {upstream}")
+    return max(versions)
+
+
+def newer_entries(changelog_url: str, since: tuple[int, int, int] | None) -> str:
+    """Changelog sections newer than `since` (all of them when unknown)."""
+    with urllib.request.urlopen(changelog_url, timeout=TIMEOUT_S) as response:
+        text = response.read().decode("utf-8", errors="replace")
+    starts = list(ENTRY.finditer(text))
+    kept = []
+    for i, m in enumerate(starts):
+        version = (int(m[1]), int(m[2]), int(m[3]))
+        end = starts[i + 1].start() if i + 1 < len(starts) else len(text)
+        if since is None or version > since:
+            kept.append(text[m.start() : end].rstrip())
+    return "\n\n".join(kept)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="check")
+    parser.add_argument("--check-latest", action="store_true")
+    args = parser.parse_args()
+
+    have = installed()
+    if have is None:
+        print(
+            "installed: unknown — this copy has no .claude/ORCHESTRATOR_VERSION, so it "
+            "predates versioning (before v0.1.0) or the file was removed"
+        )
+    else:
+        print(f"installed: {fmt(have)}")
+
+    if not args.check_latest:
+        print("latest: not checked — run with --check-latest (needs network to GitHub)")
+        return 0
+
+    upstream = os.environ.get("ORCHESTRATOR_UPSTREAM", DEFAULT_UPSTREAM)
+    try:
+        newest = latest_release(upstream)
+    except RuntimeError as exc:
+        print(f"latest: unavailable ({exc})")
+        return 0
+    print(f"latest: {fmt(newest)}")
+    if have is not None and have >= newest:
+        print("status: up to date")
+        return 0
+    print(
+        "status: a newer release exists — upgrade by the README procedure, not by copying over"
+    )
+    changelog = os.environ.get("ORCHESTRATOR_CHANGELOG_URL", DEFAULT_CHANGELOG)
+    try:
+        entries = newer_entries(changelog, have)
+    except (OSError, urllib.error.URLError, ValueError) as exc:
+        print(f"changes: unavailable ({exc})")
+        return 0
+    print("\nchanges since the installed version:\n")
+    print(entries or "(no changelog entries found)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

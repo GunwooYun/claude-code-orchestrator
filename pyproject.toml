@@ -60,9 +60,11 @@ addopts = "-v --tb=short"
 # ============================================================
 [tool.poe.tasks]
 # Read-only checks: these are the gate, so they must be able to fail.
-lint = "ruff check ."
-format-check = "ruff format --check ."
-typecheck = "ty check .claude/hooks .claude/skills/checkpointing/checkpoint.py"
+# Extensionless Python scripts are named explicitly: a directory scan skips
+# them (tests/test_isolated_review.py checks this list stays complete).
+lint = "ruff check . .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check"
+format-check = "ruff format --check . .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check"
+typecheck = "ty check .claude/hooks .claude/skills/checkpointing/checkpoint.py .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check"
 test = "pytest"
 all = ["lint", "format-check", "typecheck", "test"]
 

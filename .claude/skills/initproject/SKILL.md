@@ -50,7 +50,10 @@ default branch, commit convention.
 2. **Repository policy** — commit `.claude/ .agents/ CLAUDE.md` to the repo, or
    keep them local-only? If local-only, append them to `.git/info/exclude`.
    If committed, make sure `.gitignore` covers `.claude/logs/`,
-   `.claude/checkpoints/`, `.claude/settings.local.json`.
+   `.claude/checkpoints/`, `.claude/settings.local.json`, and — for
+   `/isolated-review` — `.claude/docs/reviews/` and `.claude/isolated-review/`.
+   Its reports and transcripts quote the code under review; a committed report
+   also lets a later reviewer read the earlier verdict.
 3. **Verification** — what command tells this project it is healthy, and how
    long does it take? Collect enough to write Step 5's scripts: the fast
    per-file check, the gate, anything slower, and where each runs (locally, in a
@@ -71,10 +74,13 @@ and ask whether to keep it or change it.
 | `deep-reasoning` | `.claude/agents/deep-reasoning.md` → `model:` | `fable` | Deep reasoning on a cheaper tier than the main session; pinned so an Opus main session does not silently make it Opus |
 | `general-purpose` | `.claude/agents/general-purpose.md` → `model:` | `sonnet` | Thin wrapper around agy and file work — the tokens should go to agy, not to this agent |
 | agy research | `--model` per call | see the Model Policy in `.claude/rules/antigravity-delegation.md` | Gemini tiers T1–T4, pinned per call |
+| `/isolated-review` reviewer | `.claude/skills/isolated-review/run-review` → `MODEL` | `fable` | **Not reassignable.** Its neutrality was measured on Fable. Tell the user: without Fable access this skill always ends FAILED, and Phase 6 uses a person-opened (A2) review instead |
 
 Procedure:
 
-1. `grep -n '^model:' .claude/agents/*.md` and report the real values.
+1. `grep -n '^model:' .claude/agents/*.md` and report the real values, plus
+   `grep -n '^MODEL = ' .claude/skills/isolated-review/run-review` (reported,
+   not offered for change).
 2. Ask the user (one AskUserQuestion): keep this matrix, or reassign? Offer the
    trade-off — a cheaper `deep-reasoning` saves tokens but weakens design review;
    raising `general-purpose` above `sonnet` mostly burns tokens on wrapping agy.
@@ -128,6 +134,11 @@ This file is now the project's only always-loaded context and should not open by
 naming the template. Replace the bold tagline under it
 (`**멀티 에이전트 협업 프레임워크**`) with the one-sentence overview from Step 2.
 Keep exactly one H1; the template's own sections below them stay as they are.
+
+In `## Project Setup`, record which template release this project adopted:
+`Orchestrator: v<contents of .claude/ORCHESTRATOR_VERSION>, adopted <today>`. If
+that file is missing the copy predates versioning — write `unknown (pre-0.1.0
+copy)`. A later upgrade starts from this line (`/orchestrator-version`).
 
 Replace the body of `## 기술 스택(Tech Stack)` with the detected stack: language
 and framework versions, package manager, quality tools with versions, how the
