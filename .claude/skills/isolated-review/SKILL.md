@@ -69,7 +69,8 @@ security boundary or a public interface, also ask the user for an A2 review.
 | 2 | REFUSED | A precondition failed; nothing ran |
 
 Reports are written to `.claude/docs/reviews/<branch>-<time>.md`
-(`detached-<time>.md` on a detached HEAD) and the reviewer's transcript to
+(`detached-<time>.md` on a detached HEAD; `-2`, `-3` appended when a report
+with that name already exists) and the reviewer's transcript to
 `.claude/logs/isolated-review/<run>/`. Keep both out of git. Later reviewers are
 denied both, so a second round cannot anchor on the first.
 

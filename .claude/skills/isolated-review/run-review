@@ -785,10 +785,20 @@ def write_report(root: Path, branch: str, header: list[str], body: str) -> Path:
     stamp = time.strftime("%Y%m%d-%H%M%S")
     # `rev-parse --abbrev-ref HEAD` says "HEAD" when detached.
     safe = "detached" if branch == "HEAD" else re.sub(r"[^A-Za-z0-9._-]+", "-", branch)
-    path = root / REPORT_REL / f"{safe}-{stamp}.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(header) + "\n\n---\n\n" + body + "\n", encoding="utf-8")
-    return path
+    folder = root / REPORT_REL
+    folder.mkdir(parents=True, exist_ok=True)
+    text = "\n".join(header) + "\n\n---\n\n" + body + "\n"
+    # Exclusive create: two runs ending in the same second wrote one file and
+    # the first report was lost. The second becomes `<name>-2.md`.
+    for n in range(1, 1000):
+        path = folder / (f"{safe}-{stamp}.md" if n == 1 else f"{safe}-{stamp}-{n}.md")
+        try:
+            with path.open("x", encoding="utf-8") as handle:
+                handle.write(text)
+            return path
+        except FileExistsError:
+            continue
+    raise OSError(f"no free report name for {safe}-{stamp}")
 
 
 def record_refusal(root: Path, reason: str) -> None:

@@ -23,6 +23,7 @@ import time
 import unittest
 from pathlib import Path
 from types import ModuleType
+from unittest import mock
 
 from test_isolated_review import (
     EXIT_COMPLETE,
@@ -650,6 +651,28 @@ class RoundFiveTests(IsolatedReviewCase):
         ).stdout
         row = next(line for line in out.splitlines() if line.startswith("| 1 |"))
         self.assertNotEqual("passed", row.split("|")[12].strip(), row)
+
+
+class ReportNameTests(unittest.TestCase):
+    """Two runs ending in the same second wrote the same file; the first was lost."""
+
+    def test_a_second_report_in_the_same_second_does_not_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with mock.patch.object(RR.time, "strftime", return_value="20260930-120000"):
+                first = RR.write_report(root, "feat", ["# first"], "one")
+                second = RR.write_report(root, "feat", ["# second"], "two")
+            self.assertNotEqual(first, second)
+            self.assertIn("one", first.read_text(encoding="utf-8"))
+            self.assertIn("two", second.read_text(encoding="utf-8"))
+
+    def test_field_report_reads_the_date_of_a_numbered_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "feat-20260930-120000-2.md"
+            report.write_text("# Isolated review — COMPLETE\n", encoding="utf-8")
+            self.assertEqual(
+                "2026-09-30", load_field_report().parse_report(report)["date"]
+            )
 
 
 if __name__ == "__main__":

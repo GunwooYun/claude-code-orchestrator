@@ -177,7 +177,8 @@ def parse_report(path: Path) -> dict:
     run: dict = {"file": path.name, "reasons": [], "confidences": []}
     first = header.splitlines()[0] if header else ""
     run["verdict"] = first.rsplit("—", 1)[-1].strip() or "unknown"
-    stamp = re.search(r"(\d{8})-(\d{6})\.md$", path.name)
+    # `-2`, `-3`: a second report in the same second (run-review write_report).
+    stamp = re.search(r"(\d{8})-(\d{6})(?:-\d+)?\.md$", path.name)
     run["date"] = (
         f"{stamp.group(1)[:4]}-{stamp.group(1)[4:6]}-{stamp.group(1)[6:]}"
         if stamp
