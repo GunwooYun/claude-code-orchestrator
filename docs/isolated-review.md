@@ -75,7 +75,8 @@ Isolation — asserted by argv is not enough (M4):
 - **Pre-flight probe** with the final argv on Haiku before every run: the tool
   list must be exactly Read/Grep/Glob and two reads must be refused; otherwise
   abort. **Correction (review F6):** the two reads are a canary inside the repo
-  under a probe-only deny rule, and a temp file outside the working directory
+  under a deny rule that exists for the probe (it is in the fixed list, so the
+  review run carries it too — round-3 wording fix), and a temp file outside the working directory
   (not `~`). So the probe proves that `--settings` deny rules apply and that
   reads outside the working directory are refused — **not** that this project's
   own secret patterns (`.env`, the project's Read denies) are refused. Those
@@ -100,16 +101,43 @@ Verdict — sections present is not coverage:
 Also: large diffs go to an ignored file the reviewer pages through, not all on
 stdin, with a hard cap above which the script refuses ("split the branch");
 `timeout -k`; a secret scan before writing the report. **What the scan catches**
-(round-2 review N2): known key shapes (AWS, GitHub, `sk-`, PEM), and a value
-assigned to a secret-named identifier — the keyword as a whole snake_case word
-with any prefix/suffix (`password`, `DB_PASSWORD`, `access_token`, `SECRET_KEY`,
-`api-key`), quoted (8+ chars) or unquoted (12+ token chars, so `.env`, YAML and
-shell forms). Code a reviewer quotes as evidence (`token = request.headers...`)
-is kept. camelCase names (`accessToken`), URLs with embedded passwords and
-bearer tokens are **not** covered. The same scan rewrites the transcript
+(round-2 review N2, narrowed after round 3):
+- known key shapes (AWS, GitHub, `sk-`, PEM);
+- the `.env`/shell form — an UPPER_SNAKE name containing `API_KEY`, `APIKEY`,
+  `TOKEN`, `SECRET` or `PASSWORD`, `=` with no spaces, optional `export`, and a
+  value of 12+ non-space characters, dots included (`TOKEN=<JWT>`,
+  `export PASSWORD=Pa.ssw0rd.long12`; round-3 F3);
+- a value assigned to a secret-named identifier — the keyword as a whole
+  snake_case word with any prefix/suffix (`password`, `DB_PASSWORD`,
+  `access_token`, `SECRET_KEY`, `api-key`) — quoted (8+ chars), or unquoted
+  (12+ token chars) **only when the value contains a digit or the name has an
+  uppercase letter**. That rule keeps a reviewer's prose (`token: authentication
+  happens later`) and constant or function names (`api_key = DEFAULT_API_KEY`,
+  `secret = load_secret_from_vault`) intact (round-3 F4).
+
+Each secret is counted once, however many rules match it (round-3 F8).
+Code a reviewer quotes as evidence (`token = request.headers...`) is kept.
+
+**Not covered** — these pass through unredacted:
+- a letters-only or dotted unquoted value after a lowercase name
+  (`password: hunter2.hunter2.x` cannot be told apart from
+  `password_hash = hashlib.sha256`);
+- a `.env` value shorter than 12 characters (`DB_PASSWORD=hunter2`);
+- a quoted value containing the other quote character (an apostrophe inside `"..."`);
+- camelCase names (`accessToken`) and names where the keyword is not a whole
+  word (`csrftoken`);
+- URLs with embedded passwords, and bearer tokens.
+
+The same scan rewrites the transcript
 (`.claude/logs/isolated-review/<run>/`), so it is no longer byte-for-byte the
-CLI's output; if that rewrite fails, the report says so in a reason line rather
-than being lost (round-2 review N1).
+CLI's output. JSON Lines are split on `\n` only — `splitlines()` also splits on
+U+2028/U+2029/U+0085, which the CLI emits raw inside strings, and that cut
+events in half so their secrets were never seen (round-3 F1; `run-review` and
+`field-report` both). If the rewrite fails, the report says so in a reason line
+rather than being lost (round-2 review N1). Reasons pass through the same scan
+(round-3 F5). An undecodable byte on stdout, an unreadable file in the snapshot
+and an unwritable report no longer lose the review (round-3 F6/F7): the review
+is printed even when the report cannot be written.
 
 Rejected: `--max-turns` (M16).
 

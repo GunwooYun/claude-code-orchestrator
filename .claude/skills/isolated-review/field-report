@@ -123,7 +123,9 @@ def parse_transcript(root: Path, rel: str | None) -> dict:
             continue
         read_files: set[str] = set()
         denials = None
-        for line in path.read_text(encoding="utf-8").splitlines():
+        # "\n" only: splitlines() also splits on U+2028 inside JSON strings.
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for line in text.split("\n"):
             try:
                 event = json.loads(line)
             except ValueError:
@@ -152,7 +154,7 @@ def refusals(root: Path, include_paths: bool) -> list[str]:
     if not path.exists():
         return []
     out = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8", errors="replace").split("\n"):
         try:
             entry = json.loads(line)
         except ValueError:

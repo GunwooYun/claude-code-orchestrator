@@ -104,6 +104,20 @@ NAMED_VALUE = re.compile(
     r"(?:(['\"])([^'\"\n]{8,})\2"
     r"|([^\s'\"`()\[\]{}<>,;.]{12,})(?=[\s,;`'\")\]}]|$))"
 )
+# The .env / shell form: an UPPER_SNAKE secret name, `=` with no spaces. Here the
+# value may hold dots — JWTs and dotted passwords live in .env files (round-3
+# review F3) — because code does not look like this; `API_KEY = os.environ[...]`
+# has spaces.
+ENV_ASSIGN = re.compile(
+    r"(?<![A-Za-z0-9_])((?:export\s+)?(?:[A-Z0-9]+_)*(?:API_?KEY|TOKEN|SECRET|PASSWORD)"
+    r"(?:_[A-Z0-9]+)*=)([^\s'\"`]{12,})"
+)
+# An unquoted value after a lower-case name is redacted only if it holds a digit.
+# Without that rule a reviewer's prose went: `token: authentication happens
+# later` lost "authentication" (round-3 review F4); so did `api_key =
+# DEFAULT_API_KEY`. Not covered, on purpose: letters-only values after a
+# lower-case name (`password: correcthorsebattery`), dotted values after a
+# lower-case name (indistinguishable from `password_hash = hashlib.sha256`).
 
 EXIT = {"COMPLETE": 0, "FAILED": 1, "REFUSED": 2, "INCOMPLETE": 3, "INVALID": 4}
 
@@ -293,6 +307,8 @@ def run_claude(
     expired login) says why only on stderr (separate-session review, F2).
     """
     capture.parent.mkdir(parents=True, exist_ok=True)
+    # Two plain `with`s, not the parenthesised form (Python 3.10+): adopting
+    # projects run this with whatever python3 they have (round-3 review F8).
     with (
         capture.open("w", encoding="utf-8") as out,
         capture.with_suffix(".stderr").open("w", encoding="utf-8") as err,
@@ -325,10 +341,22 @@ def run_claude(
     return True
 
 
+def jsonl_lines(text: str) -> list[str]:
+    """
+    Split JSON Lines on "\\n" only. str.splitlines() also splits on U+2028,
+    U+2029 and U+0085, which JSON.stringify leaves raw inside strings: a result
+    event holding one became two non-JSON halves (round-3 review F1).
+    """
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
 def parse_stream(capture: Path) -> dict:
     parsed: dict = {"init": None, "tool_uses": [], "result": None}
     try:
-        lines = capture.read_text(encoding="utf-8").splitlines()
+        lines = jsonl_lines(capture.read_text(encoding="utf-8", errors="replace"))
     except OSError:
         return parsed
     for line in lines:
@@ -390,7 +418,11 @@ def probe(root: Path, settings: str, log_dir: Path) -> list[str]:
             PROBE_TIMEOUT_S,
         )
         parsed = parse_stream(capture)
-        text = capture.read_text(encoding="utf-8") if capture.exists() else ""
+        text = (
+            capture.read_text(encoding="utf-8", errors="replace")
+            if capture.exists()
+            else ""
+        )
     finally:
         inside.unlink(missing_ok=True)
         outside.unlink(missing_ok=True)
@@ -504,22 +536,50 @@ def snapshot(root: Path) -> str:
         if excluded(rel) or "__pycache__" in rel or not path.is_file():
             continue
         digest.update(rel.encode())
-        digest.update(path.read_bytes())
+        try:
+            digest.update(path.read_bytes())
+        except OSError:
+            # Vanished or unreadable between the listing and the read. The name
+            # still counts; raising here ran outside the safety net and lost
+            # the report (round-3 review F7).
+            digest.update(b"<unreadable>")
     return digest.hexdigest()
 
 
 def redact(text: str) -> tuple[str, int]:
+    """
+    Named values first, then known key shapes: a key inside a named value is
+    replaced once and counted once (round-3 review F8 counted it twice).
+    """
     count = 0
+
+    def env(match: re.Match[str]) -> str:
+        nonlocal count
+        count += 1
+        return f"{match.group(1)}[REDACTED]"
+
+    def named(match: re.Match[str]) -> str:
+        nonlocal count
+        masked = _mask_named_value(match)
+        if masked != match.group(0):
+            count += 1
+        return masked
+
+    text = ENV_ASSIGN.sub(env, text)
+    text = NAMED_VALUE.sub(named, text)
     for pattern in SECRET_PATTERNS:
         text, n = pattern.subn("[REDACTED]", text)
         count += n
-    text, n = NAMED_VALUE.subn(_mask_named_value, text)
-    return text, count + n
+    return text, count
 
 
 def _mask_named_value(match: re.Match[str]) -> str:
     prefix, quote = match.group(1), match.group(2)
     if quote is None:
+        value = match.group(4)
+        name_has_upper = any(c.isupper() for c in prefix)
+        if not name_has_upper and not any(c.isdigit() for c in value):
+            return match.group(0)  # prose or a constant name, not a secret
         return f"{prefix}[REDACTED]"
     return f"{prefix}{quote}[REDACTED]{quote}"
 
@@ -567,7 +627,7 @@ def _redact_transcript_files(log_dir: Path) -> int:
         if not path.is_file():
             continue
         out = []
-        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        for line in jsonl_lines(path.read_text(encoding="utf-8", errors="replace")):
             try:
                 cleaned, n = redact_value(json.loads(line))
                 out.append(json.dumps(cleaned, ensure_ascii=False))
@@ -587,8 +647,11 @@ def _redact_transcript_files(log_dir: Path) -> int:
 
 def script_hash() -> str:
     digest = hashlib.sha256()
-    for name in ("run-review", "prompt.md"):
-        digest.update((SKILL_DIR / name).read_bytes())
+    try:
+        for name in ("run-review", "prompt.md"):
+            digest.update((SKILL_DIR / name).read_bytes())
+    except OSError:
+        return "unreadable"
     return digest.hexdigest()[:12]
 
 
@@ -727,6 +790,14 @@ def main(argv: list[str]) -> int:
     # the report and stdout would raise after the review ran (round-2 review
     # N1). Keep it as its escape instead.
     text = text.encode("utf-8", errors="backslashreplace").decode("utf-8")
+    # Reasons carry CLI text too (an `errors` entry, stderr): redact them like
+    # the body (round-3 review F5).
+    cleaned: list[str] = []
+    for reason in reasons:
+        reason, n = redact(reason)
+        cleaned.append(reason.encode("utf-8", "backslashreplace").decode("utf-8"))
+        redactions += n
+    reasons = cleaned
     header = [
         f"# Isolated review — {verdict}",
         "",
@@ -740,9 +811,14 @@ def main(argv: list[str]) -> int:
         f"- secrets redacted: {redactions} in this report, {transcript_redactions} in the transcript",
         f"- transcript: {LOG_REL}/{run_id}/",
     ]
-    report = write_report(root, branch, header, text or "(no review text)")
+    try:
+        report = write_report(root, branch, header, text or "(no review text)")
+        where = str(report.relative_to(root))
+    except OSError as exc:
+        # The review is paid for; stdout still carries it (round-3 review F7).
+        where = f"the report could not be written ({type(exc).__name__}: {exc}) — the review is below only"
     print("\n".join(header))
-    print(f"- report: {report.relative_to(root)}\n\n---\n")
+    print(f"- report: {where}\n\n---\n")
     print(text or "(no review text)")
     return EXIT[verdict]
 

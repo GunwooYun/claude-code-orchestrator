@@ -86,6 +86,11 @@ slash = ["/loop"] if scenario == "init_slash" and not probe else []
 emit({"type": "system", "subtype": "init", "tools": tools, "slash_commands": slash,
       "model": "claude-haiku-4-5" if probe else "claude-fable-5-1"})
 
+if probe and scenario == "stdout_bad_byte":
+    sys.stdout.flush()
+    sys.stdout.buffer.write(b'{"type": "assistant", "message": {"content": [{"type": "text", "text": "caf\xe9"}]}}\n')
+    sys.stdout.buffer.flush()
+
 if probe:
     prompt = argv[argv.index("-p") + 1]
     paths = [w.rstrip(".,") for w in prompt.split() if w.startswith("/")]
@@ -155,11 +160,26 @@ if scenario == "empty_result":
 model = "claude-opus-5-5" if scenario in ("wrong_model", "wrong_model_no_read") else "claude-fable-5-1"
 terminal = "max_turns" if scenario == "not_completed" else "completed"
 
-if scenario == "budget":
+if scenario in ("budget", "budget_secret"):
+    error = "Reached maximum budget ($20)"
+    if scenario == "budget_secret":
+        error += " with key AKIAABCDEFGHIJKLMNOP"
     emit({"type": "result", "subtype": "error_max_budget_usd", "is_error": True,
-          "terminal_reason": "budget_exhausted", "errors": ["Reached maximum budget ($20)"],
+          "terminal_reason": "budget_exhausted", "errors": [error],
           "permission_denials": [], "modelUsage": {model: {}}, "total_cost_usd": 20.1})
     sys.exit(1)
+if scenario == "raw_u2028":
+    # JSON.stringify leaves U+2028 unescaped; Python's splitlines() splits on it.
+    body = body.replace("None found.", "None found. Checked twice.")
+    print(json.dumps({"type": "result", "subtype": "success", "is_error": False,
+                      "terminal_reason": "completed", "result": body,
+                      "permission_denials": [], "modelUsage": {model: {}},
+                      "total_cost_usd": 1.23}, ensure_ascii=False), flush=True)
+    sys.exit(0)
+if scenario == "stdout_bad_byte":
+    sys.stdout.flush()
+    sys.stdout.buffer.write(b'{"type": "assistant", "message": {"content": [{"type": "text", "text": "caf\xe9"}]}}\n')
+    sys.stdout.buffer.flush()
 
 usage = [model] if scenario == "bad_model_usage" else {model: {}}  # malformed on purpose
 emit({"type": "result", "subtype": "success", "is_error": False,
@@ -500,8 +520,14 @@ class VerdictTests(IsolatedReviewCase):
 
 class SeparateSessionReviewFindingTests(IsolatedReviewCase):
     """
-    From the person-opened (A2) review of this skill, 2026-09-29. Each test
-    names the finding it pins; every one of them was red before its fix.
+    From the person-opened (A2) review of this skill, 2026-09-29.
+
+    Correction (round-3 review F2): this docstring used to say every test here
+    "was red before its fix". Only the five F-numbered finding tests were (F1,
+    F2 x2, F3 x2, F7). The other six — slash commands, terminal_reason alone,
+    FAILED over INCOMPLETE, no --base, settings.local.json, missing claude —
+    add coverage for checks the script already had; they passed when written
+    and were proven able to fail by mutation instead.
     """
 
     def test_f1_a_non_utf8_file_does_not_crash_and_still_reports(self) -> None:
@@ -619,6 +645,16 @@ class RedactionTests(unittest.TestCase):
         "password_hash = hashlib.sha256",
         "token: str = Field(default=None)",
         "MAX_TOKENS = 100000",
+        # Round-3 review F4: a reviewer's prose after `token:`/`password:`.
+        "token: authentication happens later in the flow",
+        "- `src/x.py:3` — password: configuration is read twice — low",
+        "api_key = DEFAULT_API_KEY",
+        "secret = load_secret_from_vault",
+        # Round-3 test gap: the LEFT word boundary. Not a whole-word name.
+        'csrftoken = "abcdefghijklmnop"',
+        'accessToken = "abcdefghijklmnop"',
+        # The same left boundary in the .env form.
+        "CSRFTOKEN=abcdefghijklmnop12",
     )
     REDACT = (
         ('password = "hunter2hunter2hunter2"', "hunter2"),
@@ -633,7 +669,60 @@ class RedactionTests(unittest.TestCase):
         ('password = "correct horse battery staple"', "correct horse"),
         ("`API_KEY=abcdefghijklmnopqrstuvwxyz`", "abcdefghijkl"),
         ("X-API-Key: abcdefghijklmnopqrstuvwxyz", "abcdefghijkl"),
+        # Round-3 review F3: dotted values in the .env / shell form.
+        (
+            "TOKEN=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.SflKxwRJSMeKKF2QT4",
+            "eyJhbGci",
+        ),
+        ("export PASSWORD=Pa.ssw0rd.long12", "Pa.ssw0rd"),
     )
+
+    def test_a_value_matching_two_patterns_is_counted_once(self) -> None:
+        # Round-3 review F8: the header count was inflated.
+        out, n = self.script.redact('api_key = "sk-abcdefghijklmnopqrstuvwxyz"')
+        self.assertEqual(1, n, out)
+        self.assertNotIn("sk-abc", out)
+
+    def test_a_json_escaped_quoted_secret_is_redacted_in_the_transcript(self) -> None:
+        # Round-3 test gap: in raw JSON the quotes are `\\"`, which the text
+        # patterns do not see — only redacting decoded JSON values catches it.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / "review.jsonl"
+        event = {"type": "user", "content": 'password = "hunter2hunter2hunter2"'}
+        path.write_text(json.dumps(event) + "\n", encoding="utf-8")
+        n, problems = self.script.redact_transcripts(Path(tmp.name))
+        self.assertEqual((1, []), (n, problems))
+        self.assertNotIn("hunter2hunter2", path.read_text(encoding="utf-8"))
+
+    def test_a_raw_line_separator_does_not_split_a_transcript_event(self) -> None:
+        # Round-3 review F1: str.splitlines() splits on U+2028/U+2029/U+0085,
+        # which JSON.stringify leaves raw. The event broke into two non-JSON
+        # lines and its escaped secret survived.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / "review.jsonl"
+        event = {"type": "user", "content": 'a password = "hunter2hunter2hunter2"'}
+        path.write_text(json.dumps(event, ensure_ascii=False) + "\n", encoding="utf-8")
+        n, _ = self.script.redact_transcripts(Path(tmp.name))
+        lines = path.read_text(encoding="utf-8").split("\n")
+        self.assertEqual(1, n)
+        self.assertEqual(2, len(lines), "one event line plus the final newline")
+        self.assertIn(" ", json.loads(lines[0])["content"])
+        self.assertNotIn("hunter2hunter2", lines[0])
+
+    def test_snapshot_survives_an_unreadable_file(self) -> None:
+        # Round-3 review F7: snapshot() ran outside the safety net; a file that
+        # vanished or could not be read between rglob and read raised.
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("root reads anything")
+        box = Sandbox()
+        self.addCleanup(box.cleanup)
+        locked = box.root / ".claude/locked.txt"
+        locked.write_text("x", encoding="utf-8")
+        os.chmod(locked, 0)
+        self.addCleanup(os.chmod, locked, 0o644)
+        self.assertEqual(64, len(self.script.snapshot(box.root)))
 
     def setUp(self) -> None:
         self.script = load_script()
@@ -728,6 +817,39 @@ class CrashSafetyTests(IsolatedReviewCase):
         self.assertIn("cli stderr: error: bad byte", result.stdout)
         self.assertNotIn("internal error", result.stdout)
 
+    def test_f1_a_raw_line_separator_in_the_result_still_completes(self) -> None:
+        # Round-3 review F1: parse_stream split the result event on U+2028 and
+        # a finished, paid-for review became "no result event" FAILED.
+        result = self.sandbox().run(scenario="raw_u2028")
+        self.assertEqual(EXIT_COMPLETE, result.returncode, result.stdout)
+        self.assertIn("Checked twice.", result.stdout)
+
+    def test_f5_a_secret_in_a_reason_is_redacted(self) -> None:
+        box = self.sandbox()
+        result = box.run(scenario="budget_secret")
+        [report] = box.reports()
+        self.assertNotIn("AKIAABCDEFGHIJKLMNOP", report.read_text())
+        self.assertNotIn("AKIAABCDEFGHIJKLMNOP", result.stdout)
+        self.assertIn("[REDACTED]", report.read_text())
+
+    def test_f6_an_undecodable_byte_on_stdout_does_not_lose_the_review(self) -> None:
+        # The byte is in the probe's output and the review's, so both reads and
+        # the transcript rewrite must decode leniently.
+        result = self.sandbox().run(scenario="stdout_bad_byte")
+        self.assertNotIn("internal error", result.stdout)
+        self.assertNotIn("transcript redaction failed", result.stdout)
+        self.assertEqual(EXIT_COMPLETE, result.returncode, result.stdout)
+
+    def test_f7_an_unwritable_report_still_prints_the_review(self) -> None:
+        box = self.sandbox()
+        reports = box.root / ".claude/docs/reviews"
+        reports.parent.mkdir(parents=True, exist_ok=True)
+        reports.write_text("not a directory", encoding="utf-8")
+        result = box.run()
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertIn("## Findings", result.stdout)
+        self.assertIn("report could not be written", result.stdout)
+
 
 class FieldReportTests(IsolatedReviewCase):
     """
@@ -803,6 +925,33 @@ class FieldReportTests(IsolatedReviewCase):
         self.assertIn("| F1 | high |", text)
         self.assertIn("| F2 | low |", text)
         self.assertIn("Missed issues", text)
+
+    def test_a_raw_line_separator_in_a_transcript_event_is_still_counted(self) -> None:
+        # Round-3 review F1, third site: field-report split transcripts with
+        # splitlines() too, and dropped an event holding U+2028 as non-JSON.
+        box = self.sandbox()
+        box.run()
+        [transcript] = list(
+            (box.root / ".claude/logs/isolated-review").rglob("review.jsonl")
+        )
+        event = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Read",
+                        "input": {"file_path": "/x/a b.py"},
+                    }
+                ]
+            },
+        }
+        with transcript.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+        before = len(box.changed)  # the fake reads each changed file once
+        text = self.field_report(box).stdout
+        row = next(line for line in text.splitlines() if line.startswith("| 1 |"))
+        self.assertEqual(str(before + 1), row.split("|")[14].strip(), row)
 
     def test_no_runs_is_said_plainly(self) -> None:
         box = self.sandbox()
