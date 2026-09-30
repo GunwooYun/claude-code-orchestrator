@@ -60,6 +60,7 @@ probe = "haiku" in argv
 kind = "probe" if probe else "main"
 stdin = sys.stdin.buffer.read().decode("utf-8", "replace")
 (log / f"{kind}.argv.json").write_text(json.dumps(argv))
+(log / f"{kind}.pid").write_text(str(os.getpid()))
 (log / f"{kind}.stdin.txt").write_text(stdin, encoding="utf-8")
 scenario = os.environ.get("FAKE_SCENARIO", "ok")
 files = [f for f in os.environ.get("FAKE_FILES", "").split(",") if f]
@@ -94,6 +95,10 @@ if probe and scenario == "stdout_bad_byte":
 if probe:
     prompt = argv[argv.index("-p") + 1]
     paths = [w.rstrip(".,") for w in prompt.split() if w.startswith("/")]
+    # Measured shape (2.1.284): each denial names the tool and its input.
+    denied_paths = [paths[0], paths[0]] if scenario == "probe_same_twice" else paths
+    denials = [{"tool_name": "Read", "tool_use_id": "t", "tool_input": {"file_path": p}}
+               for p in denied_paths]
     if scenario in ("probe_echo", "probe_leak_content"):
         # Like the real CLI: the requested paths appear in tool_use inputs.
         for p in paths:
@@ -104,7 +109,6 @@ if probe:
                 content = Path(p).read_text()
             emit({"type": "user", "message": {"content": [
                 {"type": "tool_result", "is_error": scenario == "probe_echo", "content": content}]}})
-        denials = [{"tool_name": "Read"}] * 2
         emit({"type": "result", "subtype": "success", "is_error": False,
               "terminal_reason": "completed", "result": "I cannot access " + " and ".join(paths),
               "permission_denials": denials, "modelUsage": {"claude-haiku-4-5": {}},
@@ -118,28 +122,47 @@ if probe:
     else:
         emit({"type": "result", "subtype": "success", "is_error": False,
               "terminal_reason": "completed", "result": "both reads were denied",
-              "permission_denials": [{"tool_name": "Read"}, {"tool_name": "Read"}],
+              "permission_denials": denials,
               "modelUsage": {"claude-haiku-4-5": {}}, "total_cost_usd": 0.004})
     sys.exit(0)
 
 if scenario == "sleep":
-    time.sleep(30)
+    # Longer than any test waits: a reviewer that is not stopped must show up
+    # as a hung test, not end on its own in time to pass.
+    time.sleep(300)
 if scenario == "no_result":
     sys.exit(0)  # a crash that still exits 0: init printed, no result event
 if scenario == "modify_tree":
     Path("tracked.txt").write_text("changed during review\n")
+if scenario == "lock_work":
+    # Makes the script's own clean-up of its work directory fail (EPERM).
+    for d in Path(root, ".claude/isolated-review").iterdir():
+        if d.name != "probe":
+            d.chmod(0o500)
 
 read_files = files
 if scenario in ("coverage_no_read", "wrong_model_no_read"):
     read_files = files[1:]
 for f in read_files:
-    emit({"type": "assistant", "message": {"content": [
-        {"type": "tool_use", "name": "Read", "input": {"file_path": f"{root}/{f}"}}]}})
+    if scenario == "grep_only":
+        use = {"type": "tool_use", "name": "Grep", "input": {"pattern": "x", "path": f"{root}/{f}"}}
+    elif scenario == "read_dot_path":
+        use = {"type": "tool_use", "name": "Read", "input": {"file_path": f"{root}/./{f}"}}
+    else:
+        use = {"type": "tool_use", "name": "Read", "input": {"file_path": f"{root}/{f}"}}
+    emit({"type": "assistant", "message": {"content": [use]}})
 
 coverage = files if scenario != "coverage_missing" else files[1:]
+if scenario == "coverage_last_only":
+    coverage = files[-1:]
 body = "## Findings\nNone found.\n\n## Tests\nEach changed behaviour has a test that fails when broken.\n\n"
+if scenario == "quoted_heading":
+    body = body.replace("None found.",
+        "- `prompt.md:3` — the `## Coverage` heading is matched loosely — low")
 body += "## Coverage\n" + "\n".join(f"- {f}: read in full" for f in coverage) + "\n\n"
 body += "## Not reviewed\nNothing outside the diff.\n"
+if scenario == "tests_heading_inline":
+    body = body.replace("## Tests\n", "The `## Tests` part: ")
 if scenario == "missing_section":
     body = body.replace("## Not reviewed\nNothing outside the diff.\n", "")
 if scenario == "secret":
@@ -197,7 +220,13 @@ def git(cwd: Path, *args: str) -> str:
 class Sandbox:
     """A throwaway repo: `main` with the skill committed, `feat` one commit ahead."""
 
-    def __init__(self, changed: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        changed: dict[str, str] | None = None,
+        base_files: dict[str, str] | None = None,
+        deleted: list[str] | None = None,
+        renamed: dict[str, str] | None = None,
+    ) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.root = Path(self._tmp.name) / "repo"
         self.bin = Path(self._tmp.name) / "bin"
@@ -228,10 +257,21 @@ class Sandbox:
             encoding="utf-8",
         )
         (self.root / "tracked.txt").write_text("base\n", encoding="utf-8")
+        for rel, text in (base_files or {}).items():
+            path = self.root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
         git(self.root, "add", "-A")
         git(self.root, "commit", "-q", "-m", "base")
         git(self.root, "switch", "-q", "-c", "feat")
-        self.changed = changed or {"src/work.py": "def work():\n    return 1\n"}
+        for rel in deleted or []:
+            git(self.root, "rm", "-q", rel)
+        for old, new in (renamed or {}).items():
+            git(self.root, "mv", old, new)
+        default = (
+            {} if deleted or renamed else {"src/work.py": "def work():\n    return 1\n"}
+        )
+        self.changed = default if changed is None else changed
         for rel, text in self.changed.items():
             path = self.root / rel
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -240,6 +280,10 @@ class Sandbox:
         git(self.root, "commit", "-q", "-m", "work")
 
     def cleanup(self) -> None:
+        # A scenario may leave a directory read-only (lock_work).
+        for path in Path(self._tmp.name).rglob("*"):
+            if path.is_dir() and not path.is_symlink():
+                path.chmod(0o700)
         self._tmp.cleanup()
 
     def run(
@@ -250,6 +294,7 @@ class Sandbox:
         base: str | None = "main",
         path: str | None = None,
         extra_env: dict[str, str] | None = None,
+        python: str = sys.executable,
     ) -> subprocess.CompletedProcess[str]:
         env = dict(os.environ)
         env["PATH"] = path or f"{self.bin}{os.pathsep}{env['PATH']}"
@@ -261,7 +306,7 @@ class Sandbox:
         # Run through this interpreter, not the shebang: with a narrowed PATH the
         # shebang's `env python3` may not resolve (round-2 review N6).
         return subprocess.run(
-            [sys.executable, str(self.root / SCRIPT_REL), *base_args, *args],
+            [python, str(self.root / SCRIPT_REL), *base_args, *args],
             cwd=self.root,
             capture_output=True,
             text=True,

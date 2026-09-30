@@ -32,15 +32,23 @@ security boundary or a public interface, also ask the user for an A2 review.
    branch does not change `.claude/skills/isolated-review/` itself; at most 3000
    changed lines. If refused, tell the user the reason verbatim. Do not work
    around it (do not commit "just to make it clean" without asking).
-2. **Ask the user once**: "격리 리뷰를 실행할까요? Fable 모델, 최대 $20, 최대 45분입니다."
-   They may already be reviewing by hand.
+2. **Ask the user once**: "격리 리뷰를 실행할까요? 기준 브랜치 `<base>`, Fable 모델,
+   최대 $20, 최대 45분입니다." They may already be reviewing by hand, and they
+   can correct the base.
 3. **Run it in the background** — it can take up to 45 minutes, longer than the
    Bash tool's foreground limit:
    ```
    Bash(command=".claude/skills/isolated-review/run-review --base <base>",
         run_in_background=true)
    ```
-   `--base` defaults to `origin/HEAD`. Pass the branch this work merges into.
+   **Always pass `--base <the branch this work merges into>`** — the PR's
+   target. The default, `origin/HEAD`, is the remote's default branch, which is
+   wrong wherever work merges into another branch (e.g. `develop`): the review
+   then covers already-merged work or hits the line cap. If you do not know the
+   target, ask the user in the same question as step 2. The base is not read
+   from `CLAUDE.md` on purpose: that file is written by the implementing
+   session, and it must not set the review's scope. The report header records
+   the base used.
    `--budget` and `--timeout` can only LOWER the ceilings. There is no way to
    add instructions for the reviewer, by design.
 4. **While it runs, do not edit files and do not commit.** A tree that changes
@@ -55,14 +63,25 @@ security boundary or a public interface, also ask the user for an A2 review.
 | Exit | Verdict | Meaning |
 |---|---|---|
 | 0 | COMPLETE | The reviewer finished, isolation was confirmed, and every changed file was listed and actually read. **Not an approval.** |
-| 3 | INCOMPLETE | A changed file was listed in Coverage but never read. Treat unread files as unreviewed |
+| 3 | INCOMPLETE | A changed file was listed in Coverage but never read — treat unread files as unreviewed. Or the branch changes the project's `Read(...)` denies, which are forwarded to the reviewer: the change under review set what its reviewer could not see (the header lists the rules added and removed) |
 | 1 | FAILED | Isolation not confirmed, probe failed, budget/timeout, wrong model, missing section, or a changed file missing from Coverage |
 | 4 | INVALID | The tree changed during the run. The report is kept but describes a moving target — rerun |
 | 2 | REFUSED | A precondition failed; nothing ran |
 
-Reports are written to `.claude/docs/reviews/<branch>-<time>.md` (keep out of git)
-and the reviewer's transcript to `.claude/logs/isolated-review/<run>/`. Later
-reviewers are denied both, so a second round cannot anchor on the first.
+Reports are written to `.claude/docs/reviews/<branch>-<time>.md`
+(`detached-<time>.md` on a detached HEAD) and the reviewer's transcript to
+`.claude/logs/isolated-review/<run>/`. Keep both out of git. Later reviewers are
+denied both, so a second round cannot anchor on the first.
+
+**The transcript holds the full text of every file the reviewer read** (each
+`tool_result`). Secrets are redacted by pattern only, so treat that directory
+like the source itself: do not share or attach it. `field-report` never copies
+it.
+
+If the run-review process is signalled (SIGTERM, SIGHUP, Ctrl-C) it stops the
+reviewer, redacts the transcript and still writes a FAILED report. SIGKILL
+cannot be caught: then the reviewer runs on until its own budget or time
+ceiling, and nothing is redacted.
 
 ## Locks (do not loosen without re-measuring)
 
@@ -77,7 +96,12 @@ reviewers are denied both, so a second round cannot anchor on the first.
   `CLAUDE.md`, checkpoints, logs and earlier reports. The verification plan
   reaches the reviewer only as "implementer-authored claims".
 - Model pinned to Fable; ceilings $20 / 45 min; no `--bare` (it drops OAuth
-  login and CLAUDE.md).
+  login and CLAUDE.md). The neutrality measurements were made on Fable, so the
+  pin is not a setting: **a project without Fable access cannot use this skill**
+  (every run ends FAILED, "pinned model 'fable' did not run") and uses a
+  person-opened A2 review instead. `/initproject` says so.
+- The scripts run with the project's `python3`, 3.8 or newer; they use only the
+  standard library.
 
 ## Field reports
 
@@ -97,4 +121,7 @@ verdict per finding and anything the review missed. How to fill it in:
   to run.
 - Quality of the review itself cannot be checked automatically.
 - In projects that keep `.claude/` out of git, the "branch changes the reviewer"
-  check cannot see edits to this skill — they are untracked.
+  check cannot see edits to this skill — they are untracked. The same holds for
+  the deny-change check: only a committed `.claude/settings.json` is compared.
+- A secret the branch itself commits (a new `.env`, a key in code) reaches the
+  reviewer through the diff; the Read denies do not apply to text on stdin.

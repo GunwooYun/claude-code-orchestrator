@@ -29,14 +29,19 @@ import argparse
 import hashlib
 import io
 import json
+import os
 import re
 import secrets
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 from shutil import which
+from types import FrameType
 
 MODEL = "fable"
 PROBE_MODEL = "haiku"
@@ -47,6 +52,7 @@ PROBE_TIMEOUT_S = 120
 INLINE_MAX_LINES = 500
 HARD_CAP_LINES = 3000
 KILL_GRACE_S = 30
+INTERRUPT_GRACE_S = 5
 EXPECTED_TOOLS = {"Read", "Grep", "Glob"}
 REQUIRED_SECTIONS = ("## Findings", "## Tests", "## Coverage", "## Not reviewed")
 
@@ -126,12 +132,19 @@ class Refused(Exception):
     """A precondition failed; the reviewer is not started."""
 
 
+class Interrupted(Exception):
+    """run-review itself was signalled; the reviewer is stopped, a report still written."""
+
+
 def git(root: Path, *args: str, check: bool = True) -> str:
     # errors="replace": a changed file in a legacy encoding made `git diff`
     # undecodable and the script died with a traceback, no report, after the
     # probe had already been paid for (separate-session review, F1).
+    # core.quotePath=false: by default git prints `"src/\355\225\234.py"` for a
+    # non-ASCII name, which never matched what the reviewer read or wrote — no
+    # such change could be COMPLETE (round-4 review #1).
     result = subprocess.run(
-        ["git", *args],
+        ["git", "-c", "core.quotePath=false", *args],
         cwd=root,
         capture_output=True,
         text=True,
@@ -160,8 +173,17 @@ def excluded(path: str) -> bool:
 
 
 def dirty_paths(root: Path) -> list[str]:
-    out = git(root, "status", "--porcelain", "--untracked-files=all")
-    paths = [line[3:].split(" -> ")[-1] for line in out.splitlines() if line]
+    # -z: NUL-separated and never quoted; a rename entry is followed by its
+    # original path, which is skipped.
+    fields = git(root, "status", "--porcelain", "-z", "--untracked-files=all")
+    fields_iter = iter(fields.split("\0"))
+    paths = []
+    for entry in fields_iter:
+        if not entry:
+            continue
+        paths.append(entry[3:])
+        if "R" in entry[:2] or "C" in entry[:2]:
+            next(fields_iter, None)
     return [p for p in paths if not excluded(p)]
 
 
@@ -187,17 +209,22 @@ def check_ceilings(args: argparse.Namespace) -> None:
 
 def changed_files(root: Path, merge_base: str) -> list[tuple[str, str]]:
     """(status letter, path) for every file the range changes; renames give the new path."""
-    out = git(root, "diff", "--name-status", "-M", merge_base, "HEAD")
+    fields = git(root, "diff", "--name-status", "-z", "-M", merge_base, "HEAD")
+    fields_iter = iter(f for f in fields.split("\0") if f)
     files = []
-    for line in out.splitlines():
-        parts = line.split("\t")
-        files.append((parts[0][0], parts[-1]))
+    for status in fields_iter:
+        path = next(fields_iter, "")
+        if status[0] in "RC":  # old path, then new path
+            path = next(fields_iter, path)
+        files.append((status[0], path))
     return files
 
 
 def changed_lines(root: Path, merge_base: str) -> int:
     total = 0
-    for line in git(root, "diff", "--numstat", merge_base, "HEAD").splitlines():
+    # -M like changed_files: without it a rename counts as every line deleted
+    # and added whenever diff.renames is off (round-4 review #19).
+    for line in git(root, "diff", "--numstat", "-M", merge_base, "HEAD").splitlines():
         added, removed, _ = line.split("\t", 2)
         total += int(added) if added.isdigit() else 0
         total += int(removed) if removed.isdigit() else 0
@@ -207,17 +234,45 @@ def changed_lines(root: Path, merge_base: str) -> int:
 # --- inputs -----------------------------------------------------------------
 
 
+def read_denies(settings_text: str) -> list[str]:
+    try:
+        data = json.loads(settings_text)
+        deny = data.get("permissions", {}).get("deny", [])
+    except (ValueError, AttributeError):
+        return []
+    return [r for r in deny if isinstance(r, str) and r.startswith("Read(")]
+
+
 def project_read_denies(root: Path) -> list[str]:
     rules: list[str] = []
     for name in ("settings.json", "settings.local.json"):
-        path = root / ".claude" / name
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            text = (root / ".claude" / name).read_text(encoding="utf-8")
+        except OSError:
             continue
-        deny = data.get("permissions", {}).get("deny", [])
-        rules.extend(r for r in deny if isinstance(r, str) and r.startswith("Read("))
+        rules.extend(read_denies(text))
     return rules
+
+
+def deny_change(root: Path, merge_base: str) -> list[str]:
+    """
+    The project's Read denies are forwarded to the reviewer: they are how an
+    adopter keeps its secrets from it. But the branch under review can change
+    them, and so choose what its own reviewer cannot see (round-4 review X1).
+    Forwarding stays; a change to the forwarded rules keeps the run from being
+    COMPLETE. Only the committed settings.json can be compared —
+    settings.local.json is not part of the branch.
+    """
+    rel = ".claude/settings.json"
+    before = set(read_denies(git(root, "show", f"{merge_base}:{rel}", check=False)))
+    after = set(read_denies(git(root, "show", f"HEAD:{rel}", check=False)))
+    if before == after:
+        return []
+    return [
+        f"the branch changes the Read denies forwarded to the reviewer (added: "
+        f"{sorted(after - before)}, removed: {sorted(before - after)}) — what the "
+        "reviewer could see was set by the change under review"
+    ]
 
 
 def settings_json(root: Path) -> str:
@@ -307,38 +362,67 @@ def run_claude(
     expired login) says why only on stderr (separate-session review, F2).
     """
     capture.parent.mkdir(parents=True, exist_ok=True)
-    # Two plain `with`s, not the parenthesised form (Python 3.10+): adopting
-    # projects run this with whatever python3 they have (round-3 review F8).
-    with (
-        capture.open("w", encoding="utf-8") as out,
-        capture.with_suffix(".stderr").open("w", encoding="utf-8") as err,
-    ):
-        proc = subprocess.Popen(
-            # Bytes, not str: the prompt holds non-ASCII (dashes) and argv is
-            # otherwise encoded with the filesystem codec — ASCII under a C
-            # locale — which raised before the reviewer started.
-            [a.encode("utf-8", "surrogateescape") for a in argv],
-            cwd=root,
-            stdin=subprocess.PIPE,
-            stdout=out,
-            stderr=err,
-            # UTF-8 regardless of locale: git() output is decoded as UTF-8, and
-            # a C/ASCII locale made writing it (or a Korean verification plan)
-            # to stdin raise after the probe (round-2 review N5).
-            encoding="utf-8",
-            errors="replace",
-        )
-        try:
-            proc.communicate(stdin_text, timeout=timeout_s)
-        except subprocess.TimeoutExpired:
-            proc.terminate()
+    # Nested `with`s, not one `with` over two managers: `ruff format` rewrites
+    # that into the parenthesised form, a SyntaxError before Python 3.10, and
+    # adopting projects run this with whatever python3 they have (round-3 F8,
+    # undone by the formatter; round-4 review #5).
+    with capture.open("w", encoding="utf-8") as out:
+        with capture.with_suffix(".stderr").open("w", encoding="utf-8") as err:
+            proc = subprocess.Popen(
+                # Bytes, not str: the prompt holds non-ASCII (dashes) and argv
+                # is otherwise encoded with the filesystem codec — ASCII under
+                # a C locale — which raised before the reviewer started.
+                [a.encode("utf-8", "surrogateescape") for a in argv],
+                cwd=root,
+                stdin=subprocess.PIPE,
+                stdout=out,
+                stderr=err,
+                # UTF-8 regardless of locale: git() output is decoded as UTF-8,
+                # and a C/ASCII locale made writing it (or a Korean verification
+                # plan) to stdin raise after the probe (round-2 review N5).
+                encoding="utf-8",
+                errors="replace",
+                # Its own process group, so stopping it stops everything it
+                # started (round-4 review #2).
+                start_new_session=True,
+            )
             try:
-                proc.wait(timeout=KILL_GRACE_S)
+                proc.communicate(stdin_text, timeout=timeout_s)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
-            return False
+                stop(proc, KILL_GRACE_S)
+                return False
+            except BaseException:
+                # run-review is being stopped (a signal, Ctrl-C). The CLI has
+                # its whole input already and would run on to the budget
+                # ceiling, unreported (round-4 review #2).
+                stop(proc, INTERRUPT_GRACE_S)
+                raise
     return True
+
+
+def stop(proc: subprocess.Popen[str], grace_s: float) -> None:
+    """Terminate the process group, then kill it if it does not exit in time."""
+    signal_group(proc, signal.SIGTERM)
+    try:
+        proc.wait(timeout=grace_s)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    signal_group(proc, getattr(signal, "SIGKILL", signal.SIGTERM))
+    proc.wait()
+
+
+def signal_group(proc: subprocess.Popen[str], sig: int) -> None:
+    try:
+        if hasattr(os, "killpg"):
+            os.killpg(proc.pid, sig)
+            return
+    except (ProcessLookupError, PermissionError):
+        pass  # no such group: at least the process itself
+    try:
+        proc.send_signal(sig)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 def jsonl_lines(text: str) -> list[str]:
@@ -392,8 +476,8 @@ def isolation_problems(init: dict | None) -> list[str]:
     return problems
 
 
-def probe(root: Path, settings: str, log_dir: Path) -> list[str]:
-    """Same settings, cheap model: two reads that must both be refused."""
+def probe(root: Path, settings: str, log_dir: Path) -> tuple[list[str], float]:
+    """Same settings, cheap model: two reads that must both be refused. (problems, cost)"""
     token_in, token_out = secrets.token_hex(8), secrets.token_hex(8)
     # The name must not contain the token: the reviewer echoes requested paths
     # in its tool calls and answer, which read as a leak (found by the first
@@ -429,18 +513,31 @@ def probe(root: Path, settings: str, log_dir: Path) -> list[str]:
     problems = [] if finished else ["probe: timed out"]
     problems += [f"probe {p}" for p in isolation_problems(parsed["init"])]
     result = parsed["result"] or {}
-    denied = [
-        d for d in result.get("permission_denials", []) if d.get("tool_name") == "Read"
-    ]
-    if len(denied) < 2:
+    # Each canary by path, not a count: a model that retried one read and never
+    # tried the other produced two denials and proved half (round-4 review #13).
+    # Measured (2.1.284): each denial carries `tool_input.file_path`.
+    denied = {
+        same_path(root, str((d.get("tool_input") or {}).get("file_path", "")))
+        for d in result.get("permission_denials", [])
+        if isinstance(d, dict) and d.get("tool_name") == "Read"
+    }
+    missing = [p for p in (inside, outside) if same_path(root, str(p)) not in denied]
+    if missing:
         problems.append(
-            f"probe: expected both reads denied, saw {len(denied)} denial(s)"
+            f"probe: expected both reads denied, {len(missing)} of 2 were not"
         )
     if token_in in text or token_out in text:
         problems.append("probe: a canary's content reached the model")
     if parsed["init"] is None or parsed["result"] is None:
         problems += [f"probe {r}" for r in stderr_reasons(capture)]
-    return problems
+    return problems, float(result.get("total_cost_usd") or 0)
+
+
+def same_path(root: Path, path: str) -> str:
+    """A comparable form: absolute, `.`/`..` and symlinks resolved."""
+    if not path:
+        return ""
+    return os.path.realpath(os.path.join(root, path))
 
 
 def stderr_reasons(capture: Path) -> list[str]:
@@ -461,22 +558,41 @@ def stderr_reasons(capture: Path) -> list[str]:
 # --- verdict ----------------------------------------------------------------
 
 
+def heading_lines(text: str, heading: str) -> list[re.Match[str]]:
+    """
+    A heading is a line of its own. A substring search took a reviewer's
+    `## Coverage` quoted inside a finding for the section (round-4 review #4).
+    """
+    return list(re.finditer(rf"^{re.escape(heading)}[ \t]*$", text, re.MULTILINE))
+
+
 def section(text: str, heading: str) -> str:
-    start = text.find(heading)
-    if start < 0:
+    found = heading_lines(text, heading)
+    if not found:
         return ""
-    rest = text[start + len(heading) :]
+    rest = text[found[-1].end() :]
     nxt = re.search(r"^## ", rest, re.MULTILINE)
     return rest[: nxt.start()] if nxt else rest
 
 
+def listed(path: str, coverage: str) -> bool:
+    """
+    The path as a whole token: `a.py` is inside `src/data.py`, and a substring
+    check called it listed (round-4 review #4). Unicode \\w, so a Korean name is
+    bounded like any other.
+    """
+    pattern = r"(?<![\w./-])" + re.escape(path) + r"(?![\w/-]|\.\w)"
+    return re.search(pattern, coverage) is not None
+
+
 def touched(root: Path, path: str, tool_uses: list[dict]) -> bool:
-    target = str(root / path)
+    # Compared resolved, not as strings: `./`, `..` or a symlinked checkout
+    # made every read look like a different file (round-4 review #12).
+    target = same_path(root, path)
     for use in tool_uses:
-        args = use.get("input", {})
-        if use.get("name") == "Read" and args.get("file_path") in (target, path):
-            return True
-        if use.get("name") == "Grep" and args.get("path") in (target, path):
+        args = use.get("input") or {}
+        key = {"Read": "file_path", "Grep": "path"}.get(str(use.get("name")))
+        if key and same_path(root, str(args.get(key) or "")) == target:
             return True
     return False
 
@@ -504,12 +620,12 @@ def judge(
     if not text.strip():
         failed.append("empty result")
     for heading in REQUIRED_SECTIONS:
-        if heading not in text:
+        if not heading_lines(text, heading):
             failed.append(f"missing section: {heading}")
     incomplete: list[str] = []
     coverage = section(text, "## Coverage")
     for status, path in files:
-        if path not in coverage:
+        if not listed(path, coverage):
             failed.append(f"coverage: {path} not listed")
         elif status != "D" and not touched(root, path, parsed["tool_uses"]):
             incomplete.append(f"coverage: {path} listed but never read")
@@ -657,7 +773,8 @@ def script_hash() -> str:
 
 def write_report(root: Path, branch: str, header: list[str], body: str) -> Path:
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", branch) or "detached"
+    # `rev-parse --abbrev-ref HEAD` says "HEAD" when detached.
+    safe = "detached" if branch == "HEAD" else re.sub(r"[^A-Za-z0-9._-]+", "-", branch)
     path = root / REPORT_REL / f"{safe}-{stamp}.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(header) + "\n\n---\n\n" + body + "\n", encoding="utf-8")
@@ -679,6 +796,71 @@ def record_refusal(root: Path, reason: str) -> None:
         pass  # recording must never change the verdict
 
 
+def check_preconditions(
+    root: Path, args: argparse.Namespace
+) -> tuple[str, str, str, int]:
+    """(base, head, merge_base, changed lines), or Refused."""
+    check_ceilings(args)
+    base = resolve_base(root, args.base)
+    dirty = dirty_paths(root)
+    if dirty:
+        raise Refused(f"the working tree must be clean (commit first): {dirty[:5]}")
+    head = git(root, "rev-parse", "HEAD").strip()
+    merge_base = git(root, "merge-base", "HEAD", base).strip()
+    if head == merge_base:
+        raise Refused(f"HEAD is the merge-base with {base}: nothing to review")
+    if git(root, "diff", "--name-only", merge_base, "HEAD", "--", SKILL_REL).strip():
+        raise Refused(
+            "this branch changes the reviewer itself (isolated-review); it cannot "
+            "review its own change — use a person-opened session"
+        )
+    lines = changed_lines(root, merge_base)
+    if lines > HARD_CAP_LINES:
+        raise Refused(
+            f"{lines} changed lines exceeds the {HARD_CAP_LINES}-line cap — split the branch"
+        )
+    if which("claude") is None:
+        raise Refused("claude is not on PATH")
+    return base, head, merge_base, lines
+
+
+def raise_interrupted(signum: int, _frame: FrameType | None) -> None:
+    raise Interrupted(f"interrupted by {signal.Signals(signum).name}")
+
+
+def set_signal_handlers(
+    handler: Callable[[int, FrameType | None], None] | signal.Handlers,
+) -> None:
+    """
+    SIGTERM/SIGHUP (a killed parent, a closed terminal) and Ctrl-C all become
+    Interrupted while the reviewer may run, so the CLI is stopped and the
+    transcript still redacted (round-4 review #2). SIGKILL cannot be caught:
+    then the CLI runs on to its budget ceiling, unreported.
+    """
+    for name in ("SIGTERM", "SIGHUP", "SIGINT"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), handler)
+
+
+def remove_work(root: Path, work: Path) -> list[str]:
+    """Remove this run's scratch files. Never raises: the review is paid for (round-4 review #8)."""
+    problems = []
+    try:
+        if work.exists():
+            shutil.rmtree(work)
+    except OSError as exc:
+        problems.append(
+            f"clean-up: could not remove {work.relative_to(root)}: {type(exc).__name__}: {exc}"
+        )
+    # The probe's directory and the work root, once empty (round-4 review #19).
+    for leftover in (root / WORK_REL / "probe", root / WORK_REL):
+        try:
+            leftover.rmdir()
+        except OSError:
+            pass
+    return problems
+
+
 def main(argv: list[str]) -> int:
     # The report goes to stdout; under a C/ASCII locale printing it (even the
     # header's dashes) would raise after the review was paid for.
@@ -686,34 +868,20 @@ def main(argv: list[str]) -> int:
         if isinstance(stream, io.TextIOWrapper):
             stream.reconfigure(encoding="utf-8", errors="backslashreplace")
     args = parse_args(argv)
-    root = Path(git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
     try:
-        check_ceilings(args)
-        base = resolve_base(root, args.base)
-        dirty = dirty_paths(root)
-        if dirty:
-            raise Refused(f"the working tree must be clean (commit first): {dirty[:5]}")
-        head = git(root, "rev-parse", "HEAD").strip()
-        merge_base = git(root, "merge-base", "HEAD", base).strip()
-        if head == merge_base:
-            raise Refused(f"HEAD is the merge-base with {base}: nothing to review")
-        if git(
-            root, "diff", "--name-only", merge_base, "HEAD", "--", SKILL_REL
-        ).strip():
-            raise Refused(
-                "this branch changes the reviewer itself (isolated-review); it cannot "
-                "review its own change — use a person-opened session"
-            )
-        lines = changed_lines(root, merge_base)
-        if lines > HARD_CAP_LINES:
-            raise Refused(
-                f"{lines} changed lines exceeds the {HARD_CAP_LINES}-line cap — split the branch"
-            )
-        if which("claude") is None:
-            raise Refused("claude is not on PATH")
+        root = Path(git(Path.cwd(), "rev-parse", "--show-toplevel").strip())
     except Refused as exc:
-        print(f"run-review: REFUSED — {exc}", file=sys.stderr)
-        record_refusal(root, str(exc))
+        # No repository, so nowhere to record it (round-4 review #9).
+        print(f"run-review: REFUSED — {redact(str(exc))[0]}", file=sys.stderr)
+        return EXIT["REFUSED"]
+    try:
+        base, head, merge_base, lines = check_preconditions(root, args)
+    except Refused as exc:
+        # The reason carries git stderr and the user's --base: a token in a URL
+        # given as the base was printed and logged as-is (round-4 review #7).
+        reason = redact(str(exc))[0]
+        print(f"run-review: REFUSED — {reason}", file=sys.stderr)
+        record_refusal(root, reason)
         return EXIT["REFUSED"]
 
     run_id = f"{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}"
@@ -721,16 +889,19 @@ def main(argv: list[str]) -> int:
     log_dir = root / LOG_REL / run_id
     branch = git(root, "rev-parse", "--abbrev-ref", "HEAD").strip()
     settings = settings_json(root)
+    project_denies = project_read_denies(root)
     files = changed_files(root, merge_base)
     started = time.monotonic()
     before = snapshot(root)
     reasons: list[str] = []
     text = ""
-    cost = 0.0
+    cost = probe_cost = 0.0
+    denials_seen = 0
     models: list[str] = []
     mode = "inline"
+    set_signal_handlers(raise_interrupted)
     try:
-        problems = probe(root, settings, log_dir)
+        problems, probe_cost = probe(root, settings, log_dir)
         if problems:
             verdict, reasons = "FAILED", problems + ["the review was not started"]
         else:
@@ -765,17 +936,24 @@ def main(argv: list[str]) -> int:
                     0,
                     f"timed out after {args.timeout:g} min — partial stream kept, not a verdict",
                 )
+            changed_denies = deny_change(root, merge_base)
+            reasons += changed_denies
+            if changed_denies and verdict == "COMPLETE":
+                verdict = "INCOMPLETE"
             result = parsed["result"] or {}
             cost = float(result.get("total_cost_usd") or 0)
             models = list((result.get("modelUsage") or {}).keys())
+            denials_seen = len(result.get("permission_denials") or [])
+    except Interrupted as exc:
+        verdict = "FAILED"
+        reasons.insert(0, f"{exc} — the reviewer was stopped, not a verdict")
     except Exception as exc:  # noqa: BLE001 - a crash must still leave a report
         verdict = "FAILED"
         reasons.append(f"internal error in run-review: {type(exc).__name__}: {exc}")
     finally:
-        if work.exists():
-            for path in sorted(work.rglob("*"), reverse=True):
-                path.unlink() if path.is_file() else path.rmdir()
-            work.rmdir()
+        # Writing the report takes a moment; a second signal must not lose it.
+        set_signal_handlers(signal.SIG_IGN)
+        reasons += remove_work(root, work)
     transcript_redactions, problems = redact_transcripts(log_dir)
     reasons += problems
     if snapshot(root) != before:
@@ -806,7 +984,9 @@ def main(argv: list[str]) -> int:
         f"- base: {base}  merge-base: {merge_base[:12]}  HEAD: {head[:12]}  branch: {branch}",
         f"- changed: {len(files)} files, {lines} lines, diff {mode}",
         f"- model: {', '.join(models) or 'none'}  cost: ${cost:.2f}  "
-        f"time: {time.monotonic() - started:.0f}s",
+        f"time: {time.monotonic() - started:.0f}s  probe cost: ${probe_cost:.3f}",
+        f"- reviewer Read denies: {len(FIXED_DENY)} fixed + project {project_denies}; "
+        f"denials during the review: {denials_seen}",
         f"- reviewer script sha256: {script_hash()}",
         f"- secrets redacted: {redactions} in this report, {transcript_redactions} in the transcript",
         f"- transcript: {LOG_REL}/{run_id}/",
