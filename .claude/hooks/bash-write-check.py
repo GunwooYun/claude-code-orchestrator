@@ -89,9 +89,13 @@ WRITE_PATTERN = re.compile(
 )
 GATE_SCRIPT = re.compile(r"^\.claude[/\\]scripts[/\\]verify-")
 # Commands that never write a file themselves; next to git they do not make a
-# git command the model's edit (see only_git).
+# git command the model's edit (see only_git). Not `sort` (`-o FILE`) or `uniq`
+# (a second operand is its output file): both can write.
 READ_ONLY = frozenset(
-    {"cd", "pwd", "echo", "ls", "cat", "head", "tail", "wc", "grep", "true", "test"}
+    {
+        *("cd", "pwd", "echo", "ls", "cat", "head", "tail", "wc", "grep"),
+        *("cut", "tr", "jq", "true", "test"),
+    }
 )
 ENV_PREFIX = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
