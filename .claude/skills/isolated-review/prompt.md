@@ -24,8 +24,10 @@ the first one:
 
 ## Findings
 Each finding: `path:line` — the concrete failure it predicts (what input or
-state produces what wrong result) — confidence (high / medium / low). If you
-find nothing, write "None found." Do not invent findings to fill the section.
+state produces what wrong result) — confidence (high / medium / low). Write each
+finding as one line starting with `- ` and ending in `— high`, `— medium` or
+`— low`, nothing after it. If you find nothing, write "None found." Do not
+invent findings to fill the section.
 
 ## Tests
 For each behaviour the diff changes: is there a test for it, and would that

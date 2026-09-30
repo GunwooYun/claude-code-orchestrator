@@ -78,17 +78,25 @@ FIXED_DENY = [
     # Neutrality: the implementer's framing, session traces, earlier verdicts.
     "Read(./CLAUDE.md)",
     "Read(./CLAUDE.local.md)",
+    # Nested context files, and the session history /checkpointing also writes
+    # to .agents/rules/AGENTS.md — the same framing CLAUDE.md is denied for
+    # (round-5 review F1).
+    "Read(./**/CLAUDE.md)",
+    "Read(./**/CLAUDE.local.md)",
+    "Read(./.agents/**)",
     "Read(./.claude/checkpoints/**)",
     "Read(./.claude/logs/**)",
     "Read(./.claude/docs/reviews/**)",
     f"Read(./{WORK_REL}/probe/**)",
 ]
 
+# A left boundary on each: without it `--disk-cache-directory-path` became
+# `--di[REDACTED]` — any kebab-case name holding "sk-" (round-5 review F2).
 SECRET_PATTERNS = [
-    re.compile(r"AKIA[0-9A-Z]{16}"),
+    re.compile(r"(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}"),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
-    re.compile(r"gh[pousr]_[A-Za-z0-9]{36,}"),
-    re.compile(r"sk-[A-Za-z0-9_-]{20,}"),
+    re.compile(r"(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{36,}"),
+    re.compile(r"(?<![A-Za-z0-9-])sk-[A-Za-z0-9_-]{20,}"),
 ]
 # A secret-named identifier (`password`, `DB_PASSWORD`, `access_token`,
 # `SECRET_KEY`, `api-key` — the keyword as a whole snake_case word, any
@@ -144,7 +152,9 @@ def git(root: Path, *args: str, check: bool = True) -> str:
     # non-ASCII name, which never matched what the reviewer read or wrote — no
     # such change could be COMPLETE (round-4 review #1).
     result = subprocess.run(
-        ["git", "-c", "core.quotePath=false", *args],
+        # color.ui=never: a global `always` put ANSI escapes into the diff the
+        # reviewer reads (round-5 review F7).
+        ["git", "-c", "core.quotePath=false", "-c", "color.ui=never", *args],
         cwd=root,
         capture_output=True,
         text=True,
@@ -821,6 +831,14 @@ def check_preconditions(
         )
     if which("claude") is None:
         raise Refused("claude is not on PATH")
+    # The probe's "outside" canary goes to the temp directory. Inside the
+    # repository it would be readable and fail every run with a misleading
+    # probe reason (round-5 review F9).
+    tmp = os.path.realpath(tempfile.gettempdir())
+    if os.path.commonpath([tmp, os.path.realpath(root)]) == os.path.realpath(root):
+        raise Refused(
+            "TMPDIR is inside the repository; the probe needs a temp directory outside it"
+        )
     return base, head, merge_base, lines
 
 
@@ -926,6 +944,9 @@ def main(argv: list[str]) -> int:
                 capture,
                 args.timeout * 60,
             )
+            # The reviewer has finished: a signal from here on must not be
+            # reported as "the reviewer was stopped" (round-5 review F10).
+            set_signal_handlers(signal.SIG_IGN)
             parsed = parse_stream(capture)
             verdict, reasons, text = judge(root, parsed, files)
             if parsed["init"] is None or parsed["result"] is None:

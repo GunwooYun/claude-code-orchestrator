@@ -62,7 +62,7 @@ security boundary or a public interface, also ask the user for an A2 review.
 
 | Exit | Verdict | Meaning |
 |---|---|---|
-| 0 | COMPLETE | The reviewer finished, isolation was confirmed, and every changed file was listed and actually read. **Not an approval.** |
+| 0 | COMPLETE | The reviewer finished, isolation was confirmed, and every changed file was listed and actually opened — with Read, or searched with Grep on that file. Deleted files need no read. **Not an approval.** |
 | 3 | INCOMPLETE | A changed file was listed in Coverage but never read — treat unread files as unreviewed. Or the branch changes the project's `Read(...)` denies, which are forwarded to the reviewer: the change under review set what its reviewer could not see (the header lists the rules added and removed) |
 | 1 | FAILED | Isolation not confirmed, probe failed, budget/timeout, wrong model, missing section, or a changed file missing from Coverage |
 | 4 | INVALID | The tree changed during the run. The report is kept but describes a moving target — rerun |
@@ -93,7 +93,10 @@ ceiling, and nothing is redacted.
 - A Haiku probe with the same settings runs first and must be refused two reads
   (one inside the repo, one outside); otherwise the review never starts.
 - Deny rules: secrets, the project's own Read denies, and — for neutrality —
-  `CLAUDE.md`, checkpoints, logs and earlier reports. The verification plan
+  every `CLAUDE.md` and `CLAUDE.local.md` (nested ones too), `.agents/` (where
+  `/checkpointing` also writes the session's history), checkpoints, logs and
+  earlier reports. A change to one of those files is therefore reviewed from
+  the diff only. The verification plan
   reaches the reviewer only as "implementer-authored claims".
 - Model pinned to Fable; ceilings $20 / 45 min; no `--bare` (it drops OAuth
   login and CLAUDE.md). The neutrality measurements were made on Fable, so the

@@ -81,7 +81,7 @@ if scenario == "startup_error":
     sys.exit(1)
 
 tools = ["Glob", "Grep", "Read"]
-if scenario == "init_bash" and not probe:
+if (scenario == "init_bash" and not probe) or (scenario == "probe_bash" and probe):
     tools = ["Bash", "Glob", "Grep", "Read"]
 slash = ["/loop"] if scenario == "init_slash" and not probe else []
 emit({"type": "system", "subtype": "init", "tools": tools, "slash_commands": slash,
@@ -129,7 +129,16 @@ if probe:
 if scenario == "sleep":
     # Longer than any test waits: a reviewer that is not stopped must show up
     # as a hung test, not end on its own in time to pass.
+    # A child of its own, as the CLI has (ripgrep): stopping the reviewer
+    # must stop its process group, not only the process.
+    import subprocess
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(300)"])
+    (log / "main.child.pid").write_text(str(child.pid))
     time.sleep(300)
+if scenario == "modify_ignored_claude_file":
+    # Ignored and untracked: invisible to `git status`, only the content hash
+    # of .claude/ can see it.
+    Path(".claude/settings.local.json").write_text('{"changed": true}')
 if scenario == "no_result":
     sys.exit(0)  # a crash that still exits 0: init printed, no result event
 if scenario == "modify_tree":
@@ -163,6 +172,11 @@ body += "## Coverage\n" + "\n".join(f"- {f}: read in full" for f in coverage) + 
 body += "## Not reviewed\nNothing outside the diff.\n"
 if scenario == "tests_heading_inline":
     body = body.replace("## Tests\n", "The `## Tests` part: ")
+if scenario == "heading_trailing":
+    body = body.replace("## Tests\n", "## Tests are below\n")
+if scenario == "two_coverage":
+    body = body.replace("None found.",
+        "- `prompt.md:3` — its example reads:\n\n```\n## Coverage\n- nothing\n```\n\n— low")
 if scenario == "missing_section":
     body = body.replace("## Not reviewed\nNothing outside the diff.\n", "")
 if scenario == "secret":
@@ -226,6 +240,7 @@ class Sandbox:
         base_files: dict[str, str] | None = None,
         deleted: list[str] | None = None,
         renamed: dict[str, str] | None = None,
+        claude_md: str | None = None,
     ) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.root = Path(self._tmp.name) / "repo"
@@ -250,10 +265,13 @@ class Sandbox:
             ".claude/settings.local.json\n",
             encoding="utf-8",
         )
-        (self.root / "CLAUDE.md").write_text(
+        default_claude_md = (
             "# Project\n\n## Current Project: x\n\n### Decisions\n- trust me\n\n"
             "### Verification plan\n| ID | what |\n| V1 | adds work |\n"
-            "| V2 | 한국어 시나리오 |\n\n## Other\n",
+            "| V2 | 한국어 시나리오 |\n\n## Other\n"
+        )
+        (self.root / "CLAUDE.md").write_text(
+            claude_md if claude_md is not None else default_claude_md,
             encoding="utf-8",
         )
         (self.root / "tracked.txt").write_text("base\n", encoding="utf-8")

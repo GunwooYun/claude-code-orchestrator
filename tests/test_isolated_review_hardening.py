@@ -28,6 +28,7 @@ from test_isolated_review import (
     EXIT_COMPLETE,
     EXIT_FAILED,
     EXIT_INCOMPLETE,
+    EXIT_INVALID,
     EXIT_REFUSED,
     REPO,
     SCRIPT_REL,
@@ -188,14 +189,27 @@ class InterruptTests(IsolatedReviewCase):
             with self.subTest(signal=sig.name):
                 box = self.sandbox()
                 proc = self.start(box)
-                self.wait_for(box.log / "main.pid")
+                self.wait_for(box.log / "main.child.pid")
                 reviewer = int((box.log / "main.pid").read_text())
+                child = int((box.log / "main.child.pid").read_text())
                 proc.send_signal(sig)
                 out, _ = proc.communicate(timeout=WAIT_S)
                 self.assertEqual(EXIT_FAILED, proc.returncode, out)
                 self.assertIn("interrupted", out)
                 self.assertFalse(self.alive(reviewer), "the reviewer kept running")
+                # Round-5 review F5: only the process group reaches this one.
+                self.assertTrue(self.gone(child), "the reviewer's child kept running")
                 self.assertEqual(1, len(box.reports()))
+
+    def gone(self, pid: int) -> bool:
+        """An orphan is reaped by init shortly after it dies; allow for that."""
+        deadline = time.monotonic() + 5
+        while self.alive(pid):
+            if time.monotonic() > deadline:
+                os.kill(pid, signal.SIGKILL)  # do not leak it past the test
+                return False
+            time.sleep(0.1)
+        return True
 
 
 class CleanupAndRefusalTests(IsolatedReviewCase):
@@ -499,6 +513,143 @@ class DocumentedNumbersTests(unittest.TestCase):
         feature = (REPO / ".claude/skills/feature/SKILL.md").read_text(encoding="utf-8")
         a1 = feature.split("**A1 — `/isolated-review`", 1)[1].split("**A2", 1)[0]
         self.assertIn("--base", a1)
+
+
+class RoundFiveTests(IsolatedReviewCase):
+    """Round-5 separate-session review, 2026-09-30. F-numbers are its findings."""
+
+    def deny_rules(self, box: Sandbox) -> list[str]:
+        argv = box.argv()
+        return json.loads(argv[argv.index("--settings") + 1])["permissions"]["deny"]
+
+    def test_f1_the_implementers_other_notes_are_denied(self) -> None:
+        # /checkpointing writes the session's history to .agents/rules/AGENTS.md
+        # too; nested CLAUDE.md files are context files like the root one.
+        box = self.sandbox()
+        box.run()
+        deny = self.deny_rules(box)
+        for rule in ("Read(./.agents/**)", "Read(./**/CLAUDE.md)"):
+            with self.subTest(rule=rule):
+                self.assertIn(rule, deny)
+
+    def test_f2_kebab_case_names_quoted_as_evidence_are_kept(self) -> None:
+        for text in (
+            "the `--disk-cache-directory-path` flag is never validated",
+            "class `task-runner-configuration-panel` is unused",
+            "the mask-sensitive-fields-in-logs option",
+            "`desk-notification-service-handler` has no resource limits",
+            "the risk-assessment-matrix-v2 spreadsheet",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual((text, 0), RR.redact(text))
+        key = "sk-" + "a1" * 12
+        self.assertEqual(("key [REDACTED]", 1), RR.redact(f"key {key}"))
+
+    def findings(self, body: str) -> list[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "feat-20260930-120000.md"
+            report.write_text(
+                "# Isolated review — COMPLETE\n\n---\n\n## Findings\n"
+                + body
+                + "\n\n## Tests\n- x — high\n",
+                encoding="utf-8",
+            )
+            return load_field_report().parse_report(report)["confidences"]
+
+    def test_f3_field_report_counts_findings_in_every_common_form(self) -> None:
+        cases = {
+            "- `a.py:1` — breaks — high\n- `b.py:2` — breaks — low": ["high", "low"],
+            "1. `a.py:1` — breaks — high\n2. `b.py:2` — breaks — low": ["high", "low"],
+            "- `a.py:1` — breaks — confidence: high\n- `b.py:2` — breaks (medium)": [
+                "high",
+                "medium",
+            ],
+            "- `a.py:1` — bad input\n  produces wrong output — high": ["high"],
+            "- **`a.py:1`** — breaks — **high**": ["high"],
+            "* `a.py:1` — slow path is low priority — medium": ["medium"],
+            "None found.": [],
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                self.assertEqual(expected, self.findings(body))
+
+    def test_f3_the_prompt_fixes_the_finding_line_format(self) -> None:
+        prompt = " ".join((SKILL / "prompt.md").read_text(encoding="utf-8").split())
+        self.assertIn("one line starting with `- `", prompt)
+        self.assertIn("ending in `— high`, `— medium` or `— low`", prompt)
+
+    def test_f4_an_ignored_file_under_claude_changed_mid_run_is_invalid(self) -> None:
+        # Invisible to `git status`: only the content hash of .claude/ sees it.
+        result = self.sandbox().run(scenario="modify_ignored_claude_file")
+        self.assertEqual(EXIT_INVALID, result.returncode, result.stdout)
+
+    def test_f6_a_probe_granted_bash_stops_the_review(self) -> None:
+        box = self.sandbox()
+        result = box.run(scenario="probe_bash")
+        self.assertEqual(EXIT_FAILED, result.returncode, result.stdout)
+        self.assertIn("probe isolation", result.stdout)
+        self.assertFalse((box.log / "main.argv.json").exists(), "reviewer ran anyway")
+
+    def test_f6_the_last_coverage_heading_is_the_section(self) -> None:
+        result = self.sandbox().run(scenario="two_coverage")
+        self.assertEqual(EXIT_COMPLETE, result.returncode, result.stdout)
+
+    def test_f6_a_heading_with_trailing_words_is_not_the_heading(self) -> None:
+        result = self.sandbox().run(scenario="heading_trailing")
+        self.assertEqual(EXIT_FAILED, result.returncode, result.stdout)
+        self.assertIn("missing section: ## Tests", result.stdout)
+
+    def test_f6_a_detached_head_report_is_named_detached(self) -> None:
+        box = self.sandbox()
+        subprocess.run(["git", "checkout", "-q", "--detach"], cwd=box.root, check=True)
+        box.run()
+        [report] = box.reports()
+        self.assertTrue(report.name.startswith("detached-"), report.name)
+
+    def test_f6_the_plan_stops_at_the_next_subheading(self) -> None:
+        box = self.sandbox(
+            claude_md="# P\n\n## Current Project: x\n\n### Verification plan\n"
+            "| V1 | adds work |\n\n### Decisions\n- trust me\n"
+        )
+        box.run()
+        self.assertIn("V1", box.stdin())
+        self.assertNotIn("trust me", box.stdin())
+
+    def test_f7_a_colour_config_does_not_reach_the_reviewer(self) -> None:
+        box = self.sandbox()
+        subprocess.run(
+            ["git", "config", "color.ui", "always"], cwd=box.root, check=True
+        )
+        box.run()
+        self.assertNotIn("\x1b[", box.stdin())
+
+    def test_f9_a_temp_dir_inside_the_repository_is_refused(self) -> None:
+        # The "outside" canary would sit inside the working directory, be
+        # readable, and fail every run with a misleading probe reason.
+        box = self.sandbox()
+        inside = box.root / "tmp-inside"
+        inside.mkdir()
+        result = box.run(extra_env={"TMPDIR": str(inside)})
+        self.assertEqual(EXIT_REFUSED, result.returncode, result.stderr)
+        self.assertIn("TMPDIR", result.stderr)
+
+    def test_f11_skill_md_says_grep_counts_as_reading(self) -> None:
+        skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        row = next(x for x in skill.splitlines() if x.startswith("| 0 | COMPLETE |"))
+        self.assertIn("Grep", row)
+
+    def test_f12_field_report_judges_the_probe_like_run_review(self) -> None:
+        box = self.sandbox()
+        box.run(scenario="probe_same_twice")
+        out = subprocess.run(
+            [sys.executable, str(FIELD_REPORT)],
+            cwd=box.root,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        ).stdout
+        row = next(line for line in out.splitlines() if line.startswith("| 1 |"))
+        self.assertNotEqual("passed", row.split("|")[12].strip(), row)
 
 
 if __name__ == "__main__":

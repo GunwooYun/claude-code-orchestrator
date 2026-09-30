@@ -45,7 +45,12 @@ STACK_MARKERS = {
     "Makefile": "make",
     "Dockerfile": "docker",
 }
-CONFIDENCE = re.compile(r"[—-]\s*(high|medium|low)\s*\.?\s*$", re.IGNORECASE)
+# A finding is a top-level list item (`- `, `* `, `1.`, `1)`), continued by
+# indented lines; its confidence is the last high/medium/low word at its end.
+# Only `- … — high` was counted, so a numbered list read as "no findings" and
+# `— confidence: high` as "?" (round-5 review F3).
+FINDING_START = re.compile(r"^ ?(?:[-*]|\d+[.)])\s")
+CONFIDENCE = re.compile(r"\b(high|medium|low)\b[\W_]*$", re.IGNORECASE)
 HIDDEN = "<hidden>"
 # Without --include-paths only these shapes leave the machine. Hiding what
 # looked like a path was not enough: branch names, `Makefile`, credentials in
@@ -198,10 +203,15 @@ def parse_report(path: Path) -> dict:
         if "## Findings" in body
         else ""
     )
+    items: list[str] = []
     for line in findings.splitlines():
-        if line.lstrip().startswith("- "):
-            m = CONFIDENCE.search(line)
-            run["confidences"].append(m.group(1).lower() if m else "?")
+        if FINDING_START.match(line):
+            items.append(line)
+        elif items and line.strip() and line[:1].isspace():
+            items[-1] += " " + line.strip()
+    for item in items:
+        m = CONFIDENCE.search(item)
+        run["confidences"].append(m.group(1).lower() if m else "?")
     return run
 
 
@@ -234,11 +244,19 @@ def parse_transcript(root: Path, rel: str | None) -> dict:
                         if block.get("name") == "Read":
                             read_files.add(str(block.get("input", {}).get("file_path")))
             elif event.get("type") == "result":
-                denials = len(event.get("permission_denials") or [])
+                # Distinct paths, as run-review judges it: one canary denied
+                # twice is not a passed probe (round-5 review F12).
+                denials = len(
+                    {
+                        str((d.get("tool_input") or {}).get("file_path"))
+                        for d in event.get("permission_denials") or []
+                        if isinstance(d, dict) and d.get("tool_name") == "Read"
+                    }
+                )
         if kind == "review":
             facts["reads"] = len(read_files)
         elif denials is not None:
-            facts["probe"] = "passed" if denials >= 2 else f"{denials} denial(s)"
+            facts["probe"] = "passed" if denials >= 2 else f"{denials} of 2 denied"
     return facts
 
 
