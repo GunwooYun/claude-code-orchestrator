@@ -590,7 +590,7 @@ cd ../<project>-review && claude
 - **기능 PR**: 바뀐 것을 `CHANGELOG.md` 의 `## [Unreleased]` 아래에 적는다. 그 섹션은 항상 버전 항목들보다 위에 있다.
 - **릴리스**: `develop` 에서 `## [Unreleased]` 를 `## [X.Y.Z] - 날짜` 로 바꾸고 `.claude/ORCHESTRATOR_VERSION` 을 같은 버전으로 올린다(맨 위 버전 항목과 다르면 `tests/test_versioning.py` 가 실패한다) → `develop` 을 `main` 으로 PR·머지 → `main` 에 태그 `vX.Y.Z` 를 달고 push.
 - **급한 수정**: `main` 에서 고쳐 패치 버전으로 릴리스하고, 같은 커밋을 `develop` 에 되돌려 머지한다.
-- 버전은 실사용 검증이 끝나지 않은 기능이 남아 있는 동안 `0.x` 로 둔다.
+- `1.0.0` 부터 여러 프로젝트에서 실사용한다. 다음 변경은 실사용 리포트(field report, 또는 "무엇을 하려 했고, 무엇이 일어났고, 어떻게 우회했는지")를 근거로 정한다.
 
 ### Commands
 
