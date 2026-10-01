@@ -121,6 +121,11 @@ verdict per finding and anything the review missed. How to fill it in:
 ## Limits
 
 - One report, no follow-up questions.
+- It reads; it does not run anything. Defects that only show when code runs —
+  a mutation that leaves the tests green, a library that behaves differently
+  from its types — are what it missed when replayed against person-opened
+  reviews (2026-10-01). Its "this test would fail if…" claims are by reading,
+  and its severities run high: weigh its facts, not its labels.
 - Bias is reduced, not zero: this session still picks the base branch and when
   to run.
 - Quality of the review itself cannot be checked automatically.

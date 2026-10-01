@@ -285,6 +285,38 @@ with evidence: a field report where redaction kept someone from judging a
 finding. Then narrow by name (exclude suffixes such as `_expiry`, `_limit`,
 `_header`) for that case, rather than guessing at value shapes.
 
+## Replay against person-opened reviews (Immich fork, 2026-10-01)
+
+Six past units of work (wave10b, 10d, 11b, 11c, 11d, 11e), each with a committed
+A2 review and the user's verdicts. Range = the one the review request named;
+HEAD before the A2 review existed. A worktree of the fork with v0.1.1 `.claude/`.
+
+| | |
+|---|---|
+| Cost / time | $32.05 total ($3.58–$9.07 each), 135–336 s each |
+| Verdicts | 5 COMPLETE, 1 INCOMPLETE (below) |
+| A2 findings (25) | 10 found, 1 partial, 14 missed — both Mediums missed |
+| A1-only findings | 10, all real on checking the code, none false; one severity disputed |
+
+- **Both Medium misses needed execution**: a mutation run that left the tests
+  green (A1 had asserted the test "would fail"), and a Node/library probe. A2 was
+  also steered by the implementer's "please attack" list, which A1 does not get.
+- **A1 reliably finds stale text** — comments, plan rows, schema docs — with no
+  false positives; one was caught by A2 only a round later.
+- **A1 severities run high**: its "medium" was A2's nit or low on items the
+  project had accepted by design.
+- The INCOMPLETE was a false negative of this script: a file **added** in the
+  range was read through the diff file (its whole content is in the diff) but
+  never opened by path. Not fixed; recorded below.
+
+Conclusion: it complements an A2 review, as SKILL.md says; nothing here is a
+high defect in the script. Backlog from this replay: count an added file as
+read when the diff file was read; nothing else.
+
+Comparison by a deep-reasoning subagent reading both reports and the code at
+each HEAD; the six isolated reports and transcripts stay in the fork's local
+`.claude/` (not committed).
+
 ## Final verification plan
 
 Fake `claude` (first on PATH, records argv and stdin, emits scripted
