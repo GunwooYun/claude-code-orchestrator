@@ -3,12 +3,28 @@
 `.claude/ORCHESTRATOR_VERSION` in an adopting project says which entry below it
 came from. Check it with `/orchestrator-version` (add `--check-latest` to compare
 with the newest release). Releases are tags `vX.Y.Z` on `main`; `develop` holds
-work that has not been released. Versions stay `0.x` while features are still
-being validated in real use.
+work that has not been released. From 1.0.0 the template is used across real
+projects, and changes are driven by reports from that use (field reports, or
+"what I tried, what happened, how I worked around it").
 
 Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
+
+## [1.0.0] - 2026-10-02
+
+The template is put into use across projects. No code change from 0.1.1; this
+release changes how the template evolves: from here, by reports from real use
+rather than by rounds of review.
+
+### Known limits (stated, not hidden)
+- `/isolated-review` has not yet run on live work in progress. It was replayed
+  on six past units of work in a real project (Immich fork) and compared with
+  the person-opened reviews of the same changes: it found 10 of 25 of their
+  findings and missed both Medium ones, which needed running code (mutation
+  runs, library probes) — a read-only reviewer cannot. It found 10 real issues
+  of its own, no false ones; its severities run high. It complements an A2
+  review and does not replace it. Details: `docs/isolated-review.md`.
 
 ## [0.1.1] - 2026-10-01
 
