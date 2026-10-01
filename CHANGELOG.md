@@ -10,23 +10,25 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
-## [Unreleased]
+## [0.1.1] - 2026-10-01
 
-Merged to `develop`, not yet released. A release renames this heading.
+Small fixes after 0.1.0 (#12, #13, #14). No change to how a project adopts or
+runs the template.
 
 ### Changed
 - `/isolated-review` field reports ask whether a hidden value kept the person
   from judging a finding. Redaction stays broad (decided 2026-10-01) and is
-  narrowed only on that evidence.
+  narrowed only on that evidence (#14).
 
 ### Fixed
 - `bash-write-check` no longer reports files git rewrote when git runs next to
   read-only commands (`cd x && git rebase …`, `… | tail`); a writing command
   or a redirection in the same line is still checked. `cut`, `tr` and `jq`
-  count as read-only too; `sort` and `uniq` do not (both can write a file).
+  count as read-only too; `sort` and `uniq` do not (both can write a file)
+  (#12, #13).
 - `/isolated-review`: a second report in the same second is written as
   `<name>-2.md` instead of overwriting the first; `field-report` reads its
-  date.
+  date (#12).
 
 ## [0.1.0] - 2026-09-30
 
