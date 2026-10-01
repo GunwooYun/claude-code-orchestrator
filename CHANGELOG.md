@@ -11,6 +11,16 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [Unreleased]
+
+Merged to `develop`, not yet released. A release renames this heading.
+
+### Added
+- `/initproject` asks whether the orchestrator may push, merge PRs, tag and
+  delete merged branches on its own (Step 2 question 5, applied in Step 2b):
+  the permission goes to `.claude/settings.local.json`, the instruction to
+  `## Project Setup`. Force-push and history rewrites stay denied either way.
+
 ## [1.0.0] - 2026-10-02
 
 The template is put into use across projects. No code change from 0.1.1; this
