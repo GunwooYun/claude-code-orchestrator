@@ -653,6 +653,34 @@ class RoundFiveTests(IsolatedReviewCase):
         self.assertNotEqual("passed", row.split("|")[12].strip(), row)
 
 
+class RedactionEvidenceTests(IsolatedReviewCase):
+    """
+    F8 was decided "keep, revisit only with evidence" (2026-10-01). The evidence
+    can only come from field reports, so both the drafted report and the guide
+    must ask for it.
+    """
+
+    def test_field_report_asks_whether_redaction_blocked_a_judgement(self) -> None:
+        box = self.sandbox()
+        box.run(scenario="findings")
+        out = subprocess.run(
+            [sys.executable, str(FIELD_REPORT)],
+            cwd=box.root,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        ).stdout
+        self.assertIn(
+            "A hidden value in the report kept you from judging a finding", out
+        )
+
+    def test_the_guide_asks_for_it_too(self) -> None:
+        guide = (REPO / ".claude/docs/templates/field-report.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("[REDACTED]", guide)
+
+
 class ReportNameTests(unittest.TestCase):
     """Two runs ending in the same second wrote the same file; the first was lost."""
 
