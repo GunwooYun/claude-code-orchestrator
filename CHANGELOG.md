@@ -11,7 +11,7 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
-## [1.0.0] - 2026-10-01
+## [1.0.0] - 2026-10-02
 
 The template is put into use across projects. No code change from 0.1.1; this
 release changes how the template evolves: from here, by reports from real use
