@@ -350,6 +350,13 @@ def main() -> int:
         )
         print("- Compared with a person-opened (A2) review? What differed:")
         print("- Useful? (one line):")
+        # The over-redaction decision (F8) is revisited only on this evidence.
+        # Not the marker's literal text: this output must never contain it
+        # (test_it_never_carries_review_text_code_or_secrets).
+        print(
+            "- A hidden value in the report kept you from judging a finding? "
+            "Kind of value only, never the value:"
+        )
         print("- Friction or odd behaviour:\n")
     print("## Template-wide observations (optional)\n")
     print(

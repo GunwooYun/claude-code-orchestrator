@@ -14,6 +14,11 @@ project changed, back up a gitignored `.claude/` first).
 
 Merged to `develop`, not yet released. A release renames this heading.
 
+### Changed
+- `/isolated-review` field reports ask whether a hidden value kept the person
+  from judging a finding. Redaction stays broad (decided 2026-10-01) and is
+  narrowed only on that evidence.
+
 ### Fixed
 - `bash-write-check` no longer reports files git rewrote when git runs next to
   read-only commands (`cd x && git rebase …`, `… | tail`); a writing command

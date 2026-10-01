@@ -276,8 +276,14 @@ found 7 mutants the tests did not catch (F4–F6).
 secret-named identifier is redacted whatever it is: `"token_expiry":
 "2026-01-01T00:00:00Z"`, `api_key_header = "X-Api-Key"`, `TOKEN_LIMIT=100000000000`
 all lose their value. So `[REDACTED]` in a report does **not** mean a secret was
-there — only that something matched. Narrowing it trades recall for precision;
-that is the user's decision and was not made here.
+there — only that something matched. Narrowing it trades recall for precision.
+
+**Decided (user, 2026-10-01): keep it.** Reports stay local and out of git, so a
+redacted value can always be read in the code itself; a missed secret can leave
+through the transcript or a field report and cannot be taken back. Revisit only
+with evidence: a field report where redaction kept someone from judging a
+finding. Then narrow by name (exclude suffixes such as `_expiry`, `_limit`,
+`_header`) for that case, rather than guessing at value shapes.
 
 ## Final verification plan
 
