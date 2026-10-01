@@ -43,7 +43,7 @@ Record: languages, package manager, formatter/linter/type-checker **with pinned
 versions**, test runner and how it is invoked (locally or inside a container),
 default branch, commit convention.
 
-## Step 2 — Ask the user (one AskUserQuestion, several questions)
+## Step 2 — Ask the user (AskUserQuestion: questions 1–4 in one call, 5 in a second — it takes at most four)
 
 1. **Project overview** — what does it do, in 1–2 sentences (used for
    `AGENTS.md` and `DESIGN.md`).
@@ -61,6 +61,36 @@ default branch, commit convention.
    A tier the user cannot name honestly gets no script.
 4. **Code language** for identifiers/comments (English default) and any extra
    conventions.
+5. **Git and GitHub operations** — may the orchestrator push, merge PRs, tag
+   releases and delete merged branches on its own, or ask each time?
+   - **Delegated**: fewer interruptions; the user reviews PRs after the fact.
+   - **Ask** (the template default): every push, merge and tag waits for a yes.
+   Either way force-push, history rewrites, tag deletion and anything that
+   touches production stay with the user. Apply the answer in Step 2b.
+
+### Step 2b — Apply the git-operations choice
+
+**Delegated** — the permission and the behaviour are recorded separately,
+because they live in different files with different lifetimes:
+
+- `.claude/settings.local.json` (never committed; created if missing) — add to
+  `permissions.allow`: `Bash(git push origin *)` and, if `gh` is installed and
+  logged in (`gh auth status`), `Bash(gh pr *)`. Merge into the existing
+  list; do not replace it. Leave `.claude/settings.json` alone: it ships to
+  every copy, and its `deny` rules (`git push --force`, `git push -f`) still
+  win over this allow — deny is evaluated first.
+- `CLAUDE.md` `## Project Setup` — add `Git operations: delegated — Claude
+  pushes, merges PRs (merge commit), tags releases and deletes merged branches;
+  it asks before force-push, history rewrites, tag deletion and anything that
+  touches production.` Without this line the next session only has the
+  permission, not the instruction to use it.
+
+**Ask** — change no settings (the template's `ask` rules already cover `git
+push`) and add `Git operations: ask — Claude asks before every push, merge and
+tag.` to `## Project Setup`.
+
+If `gh` is missing, say that merges and PRs will be manual whichever was
+chosen, and record the delegated line without "merges PRs".
 
 ## Step 3 — Confirm the model matrix
 
