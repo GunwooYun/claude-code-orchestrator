@@ -23,6 +23,7 @@ import time
 import unittest
 from pathlib import Path
 from types import ModuleType
+from unittest import mock
 
 from test_isolated_review import (
     EXIT_COMPLETE,
@@ -650,6 +651,56 @@ class RoundFiveTests(IsolatedReviewCase):
         ).stdout
         row = next(line for line in out.splitlines() if line.startswith("| 1 |"))
         self.assertNotEqual("passed", row.split("|")[12].strip(), row)
+
+
+class RedactionEvidenceTests(IsolatedReviewCase):
+    """
+    F8 was decided "keep, revisit only with evidence" (2026-10-01). The evidence
+    can only come from field reports, so both the drafted report and the guide
+    must ask for it.
+    """
+
+    def test_field_report_asks_whether_redaction_blocked_a_judgement(self) -> None:
+        box = self.sandbox()
+        box.run(scenario="findings")
+        out = subprocess.run(
+            [sys.executable, str(FIELD_REPORT)],
+            cwd=box.root,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        ).stdout
+        self.assertIn(
+            "A hidden value in the report kept you from judging a finding", out
+        )
+
+    def test_the_guide_asks_for_it_too(self) -> None:
+        guide = (REPO / ".claude/docs/templates/field-report.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("[REDACTED]", guide)
+
+
+class ReportNameTests(unittest.TestCase):
+    """Two runs ending in the same second wrote the same file; the first was lost."""
+
+    def test_a_second_report_in_the_same_second_does_not_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with mock.patch.object(RR.time, "strftime", return_value="20260930-120000"):
+                first = RR.write_report(root, "feat", ["# first"], "one")
+                second = RR.write_report(root, "feat", ["# second"], "two")
+            self.assertNotEqual(first, second)
+            self.assertIn("one", first.read_text(encoding="utf-8"))
+            self.assertIn("two", second.read_text(encoding="utf-8"))
+
+    def test_field_report_reads_the_date_of_a_numbered_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "feat-20260930-120000-2.md"
+            report.write_text("# Isolated review — COMPLETE\n", encoding="utf-8")
+            self.assertEqual(
+                "2026-09-30", load_field_report().parse_report(report)["date"]
+            )
 
 
 if __name__ == "__main__":

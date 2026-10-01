@@ -663,6 +663,37 @@ class BashWriteCheckTests(unittest.TestCase):
         self.touch("a.py")
         self.assertEqual("", self.call("PostToolUse", "git checkout -- a.py"))
 
+    def test_git_among_read_only_commands_is_not_reported(self) -> None:
+        # Seen in this repo's own sessions: git rewriting files inside a
+        # compound command drew "checked 5 of 17 files written by this command".
+        for command in (
+            "cd /tmp/x && git fetch -q && git checkout -q --detach origin/b && git status --short",
+            "git add README.md && GIT_EDITOR=true git rebase --continue 2>&1 | tail -3",
+            "git rebase origin/develop 2>&1 | tail -3; git diff --name-only --diff-filter=U",
+            # Seen after the fix above: `| cut` was not on the list.
+            "git switch -q develop && git merge -q --ff-only origin/develop && git branch -vv | cut -c1-80",
+            "git log --format=%s | tr a-z A-Z",
+            "git log -1 --format=%s | jq -R .",
+        ):
+            with self.subTest(command=command):
+                self.call("PreToolUse", command)
+                self.touch("a.py")
+                self.assertEqual("", self.call("PostToolUse", command))
+
+    def test_a_writing_command_next_to_git_is_still_checked(self) -> None:
+        for command in (
+            "git checkout -- a.py && cp b.py a.py",
+            "cd . && echo y > a.py && git add a.py",
+            "git stash && sed -i s/1/2/ a.py",
+            # Not on the list on purpose: both can write a file themselves.
+            "git log --format=%s | sort -o a.py",
+            "git log --format=%s | uniq - a.py",
+        ):
+            with self.subTest(command=command):
+                self.call("PreToolUse", command)
+                self.touch("a.py")
+                self.assertIn("[bash-write] a.py", self.call("PostToolUse", command))
+
     def test_a_passing_file_from_a_non_editing_command_stays_silent(self) -> None:
         self.gate.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         old = time.time() - 60

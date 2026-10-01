@@ -88,6 +88,16 @@ WRITE_PATTERN = re.compile(
     r"open\([^)]*['\"][wa]\+?['\"]"
 )
 GATE_SCRIPT = re.compile(r"^\.claude[/\\]scripts[/\\]verify-")
+# Commands that never write a file themselves; next to git they do not make a
+# git command the model's edit (see only_git). Not `sort` (`-o FILE`) or `uniq`
+# (a second operand is its output file): both can write.
+READ_ONLY = frozenset(
+    {
+        *("cd", "pwd", "echo", "ls", "cat", "head", "tail", "wc", "grep"),
+        *("cut", "tr", "jq", "true", "test"),
+    }
+)
+ENV_PREFIX = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 
 def read_payload() -> dict:
@@ -138,9 +148,29 @@ def take_mark(project_dir: str, tool_use_id: str) -> int | None:
 
 
 def only_git(command: str) -> bool:
-    """checkout/pull/stash rewrite files that are not the model's edits."""
+    """
+    checkout/pull/stash/rebase rewrite files that are not the model's edits. A
+    command of git plus commands that only read (`cd`, `| tail`, `git status`)
+    is still git's doing: counting it drew "checked 5 of 17 files written by
+    this command" after every `cd x && git rebase ...`. Any other command, or a
+    redirection into a file, means the model may have written something.
+    """
     segments = [s.strip() for s in re.split(r"&&|\|\||;|\|", command) if s.strip()]
-    return bool(segments) and all(s.split()[0] == "git" for s in segments)
+    words = [_program(s) for s in segments]
+    if "git" not in words:
+        return False
+    return all(
+        word == "git" or (word in READ_ONLY and not WRITE_PATTERN.search(segment))
+        for word, segment in zip(words, segments, strict=True)
+    )
+
+
+def _program(segment: str) -> str:
+    """The command's name, past `VAR=value` prefixes (`GIT_EDITOR=true git ...`)."""
+    for word in segment.split():
+        if not ENV_PREFIX.match(word):
+            return word
+    return ""
 
 
 def modified_since(project_dir: str, started_ns: int) -> tuple[list[str], bool]:

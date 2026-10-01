@@ -177,7 +177,8 @@ def parse_report(path: Path) -> dict:
     run: dict = {"file": path.name, "reasons": [], "confidences": []}
     first = header.splitlines()[0] if header else ""
     run["verdict"] = first.rsplit("—", 1)[-1].strip() or "unknown"
-    stamp = re.search(r"(\d{8})-(\d{6})\.md$", path.name)
+    # `-2`, `-3`: a second report in the same second (run-review write_report).
+    stamp = re.search(r"(\d{8})-(\d{6})(?:-\d+)?\.md$", path.name)
     run["date"] = (
         f"{stamp.group(1)[:4]}-{stamp.group(1)[4:6]}-{stamp.group(1)[6:]}"
         if stamp
@@ -349,6 +350,13 @@ def main() -> int:
         )
         print("- Compared with a person-opened (A2) review? What differed:")
         print("- Useful? (one line):")
+        # The over-redaction decision (F8) is revisited only on this evidence.
+        # Not the marker's literal text: this output must never contain it
+        # (test_it_never_carries_review_text_code_or_secrets).
+        print(
+            "- A hidden value in the report kept you from judging a finding? "
+            "Kind of value only, never the value:"
+        )
         print("- Friction or odd behaviour:\n")
     print("## Template-wide observations (optional)\n")
     print(
