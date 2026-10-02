@@ -32,6 +32,13 @@ security boundary or a public interface, also ask the user for an A2 review.
    branch does not change `.claude/skills/isolated-review/` itself; at most 3000
    changed lines. If refused, tell the user the reason verbatim. Do not work
    around it (do not commit "just to make it clean" without asking).
+
+   **Docs and evidence files that inflate the count** can be left out of the
+   cap — and only the cap — with a committed `.claude/isolated-review.json`:
+   `{"cap_exclude": ["dev-docs/**", "dev-test/**/results/*"]}`. Those files are
+   still in the diff and still must be in Coverage. A branch that changes this
+   list is INCOMPLETE (the change under review must not decide how much of
+   itself counts). Suggest it to the user; do not add it on your own.
 2. **Ask the user once**: "격리 리뷰를 실행할까요? 기준 브랜치 `<base>`, Fable 모델,
    최대 $20, 최대 45분입니다." They may already be reviewing by hand, and they
    can correct the base.
@@ -62,10 +69,10 @@ security boundary or a public interface, also ask the user for an A2 review.
 
 | Exit | Verdict | Meaning |
 |---|---|---|
-| 0 | COMPLETE | The reviewer finished, isolation was confirmed, and every changed file was listed and actually opened — with Read, or searched with Grep on that file. Deleted files need no read. **Not an approval.** |
-| 3 | INCOMPLETE | A changed file was listed in Coverage but never read — treat unread files as unreviewed. Or the branch changes the project's `Read(...)` denies, which are forwarded to the reviewer: the change under review set what its reviewer could not see (the header lists the rules added and removed) |
+| 0 | COMPLETE | The reviewer finished, isolation was confirmed, and every changed file was listed and actually opened — with Read, or searched with Grep on that file. Deleted files need no read; a file the branch **adds** counts as read when its whole content reached the reviewer in the diff (on stdin, or the diff file's Reads covered its lines). **Not an approval.** |
+| 3 | INCOMPLETE | A changed file was listed in Coverage but never read — treat unread files as unreviewed. Or the branch changes the project's `Read(...)` denies, which are forwarded to the reviewer: the change under review set what its reviewer could not see (the header lists the rules added and removed). Or it changes `cap_exclude` |
 | 1 | FAILED | Isolation not confirmed, probe failed, budget/timeout, wrong model, missing section, or a changed file missing from Coverage |
-| 4 | INVALID | The tree changed during the run. The report is kept but describes a moving target — rerun |
+| 4 | INVALID | The tree changed during the run; the reason names what changed. The report is kept but describes a moving target — rerun. Dotfiles under `.claude/` (a hook's state, e.g. `.claude/hooks/.blocked-reviews`) are not counted |
 | 2 | REFUSED | A precondition failed; nothing ran |
 
 Reports are written to `.claude/docs/reviews/<branch>-<time>.md`

@@ -11,6 +11,32 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [1.1.0] - 2026-10-02
+
+The first changes driven by a field report (Immich, #20), plus the git-operations
+choice in `/initproject` (#19).
+
+### Added
+- `/initproject` asks whether the orchestrator may push, merge PRs, tag and
+  delete merged branches on its own (Step 2 question 5, applied in Step 2b):
+  the permission goes to `.claude/settings.local.json`, the instruction to
+  `## Project Setup`. Force-push and history rewrites stay denied either way.
+- `/isolated-review`: an optional, committed `.claude/isolated-review.json`
+  (`{"cap_exclude": [globs]}`) leaves docs and evidence files out of the
+  3,000-line cap — not out of the review. A branch that changes the list is
+  INCOMPLETE.
+- `/feature` Phase 6 and `CLAUDE.md`: a review round ends when it has no
+  Medium-or-higher finding; low and nit go with the next change.
+
+### Fixed
+From the first field report (Immich, 2026-10-02), where three real runs ended
+INVALID, INCOMPLETE, INCOMPLETE for reasons that were not the reviewer's:
+- `/isolated-review` no longer counts a dotfile under `.claude/` (a hook's
+  state) as a tree change, and INVALID now names the files that changed.
+- A file the branch adds counts as read when its whole content reached the
+  reviewer through the diff — inline, or through Reads of the diff file that
+  cover its lines. Doc-heavy branches were always INCOMPLETE.
+
 ## [1.0.0] - 2026-10-02
 
 The template is put into use across projects. No code change from 0.1.1; this
