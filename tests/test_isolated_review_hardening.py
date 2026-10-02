@@ -307,7 +307,11 @@ class PythonFloorTests(IsolatedReviewCase):
 
     def test_5_run_review_and_field_report_run_on_the_floor(self) -> None:
         python = self.old_python()
-        box = self.sandbox(changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"})
+        box = self.sandbox(
+            # Modified, not added: an added file is fully in the diff and counts as read.
+            base_files={"src/a.py": "a = 0\n", "src/b.py": "b = 0\n"},
+            changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"},
+        )
         result = box.run(scenario="coverage_no_read", python=python)
         self.assertEqual(EXIT_INCOMPLETE, result.returncode, result.stderr)
         report = subprocess.run(
@@ -467,7 +471,11 @@ class ReasonShapeDriftTests(IsolatedReviewCase):
     )
 
     def test_16_every_reason_run_review_writes_has_a_known_shape(self) -> None:
-        box = self.sandbox(changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"})
+        box = self.sandbox(
+            # Modified, not added: an added file is fully in the diff and counts as read.
+            base_files={"src/a.py": "a = 0\n", "src/b.py": "b = 0\n"},
+            changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"},
+        )
         # From stdout, not the report files: runs within one second share a
         # report name. modify_tree runs last; it leaves the tree dirty, so the
         # run after it is a refusal.

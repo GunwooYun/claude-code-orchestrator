@@ -26,6 +26,7 @@ in the template repository. The short version:
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import io
 import json
@@ -52,6 +53,8 @@ PROBE_TIMEOUT_S = 120
 INLINE_MAX_LINES = 500
 HARD_CAP_LINES = 3000
 KILL_GRACE_S = 30
+# Claude Code's Read returns this many lines when no limit is given.
+READ_DEFAULT_LIMIT = 2000
 INTERRUPT_GRACE_S = 5
 EXPECTED_TOOLS = {"Read", "Grep", "Glob"}
 REQUIRED_SECTIONS = ("## Findings", "## Tests", "## Coverage", "## Not reviewed")
@@ -61,6 +64,8 @@ SKILL_REL = ".claude/skills/isolated-review"
 WORK_REL = ".claude/isolated-review"
 LOG_REL = ".claude/logs/isolated-review"
 REPORT_REL = ".claude/docs/reviews"
+# Committed by the project: paths left out of the line cap (still reviewed).
+CONFIG_REL = ".claude/isolated-review.json"
 # Paths this script writes, or that hold other runs: not part of the snapshot.
 SNAPSHOT_EXCLUDES = (WORK_REL, ".claude/logs", REPORT_REL, ".claude/checkpoints")
 
@@ -230,15 +235,99 @@ def changed_files(root: Path, merge_base: str) -> list[tuple[str, str]]:
     return files
 
 
-def changed_lines(root: Path, merge_base: str) -> int:
-    total = 0
+def line_counts(root: Path, merge_base: str) -> list[tuple[str, int]]:
+    """(path, added + removed lines) per changed file; renames give the new path."""
     # -M like changed_files: without it a rename counts as every line deleted
-    # and added whenever diff.renames is off (round-4 review #19).
-    for line in git(root, "diff", "--numstat", "-M", merge_base, "HEAD").splitlines():
-        added, removed, _ = line.split("\t", 2)
-        total += int(added) if added.isdigit() else 0
-        total += int(removed) if removed.isdigit() else 0
-    return total
+    # and added whenever diff.renames is off (round-4 review #19). -z: a rename
+    # is `added\tremoved\t` followed by the old and the new path.
+    fields = git(root, "diff", "--numstat", "-z", "-M", merge_base, "HEAD").split("\0")
+    counts: list[tuple[str, int]] = []
+    i = 0
+    while i < len(fields):
+        entry = fields[i]
+        i += 1
+        if not entry:
+            continue
+        added, removed, path = entry.split("\t", 2)
+        if not path:
+            path = fields[i + 1] if i + 1 < len(fields) else ""
+            i += 2
+        n = (int(added) if added.isdigit() else 0) + (
+            int(removed) if removed.isdigit() else 0
+        )
+        counts.append((path, n))
+    return counts
+
+
+def changed_lines(root: Path, merge_base: str) -> int:
+    return sum(n for _, n in line_counts(root, merge_base))
+
+
+def cap_exclusions(text: str | None) -> list[str]:
+    """
+    `cap_exclude` from CONFIG_REL: globs whose files do not count toward the
+    line cap. A field report had 4,104 changed lines, 1,243 of them code — the
+    rest review docs and evidence files — and the range had to be split by hand.
+    Those files are still in the diff and still reviewed. A file that exists but
+    cannot be read is refused rather than ignored: silently ignoring it would
+    change what the cap means.
+    """
+    if text is None:
+        return []
+    try:
+        patterns = json.loads(text).get("cap_exclude", [])
+    except (ValueError, AttributeError) as exc:
+        raise Refused(f"{CONFIG_REL} is not valid: {exc}") from exc
+    if not isinstance(patterns, list) or not all(isinstance(p, str) for p in patterns):
+        raise Refused(
+            f'{CONFIG_REL} is not valid: "cap_exclude" must be a list of globs'
+        )
+    return patterns
+
+
+def read_cap_config(root: Path) -> list[str]:
+    path = root / CONFIG_REL
+    if not path.is_file():
+        return []
+    try:
+        return cap_exclusions(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise Refused(f"{CONFIG_REL} is not valid: {exc}") from exc
+
+
+def capped_lines(counts: list[tuple[str, int]], patterns: list[str]) -> int:
+    return sum(
+        n for path, n in counts if not any(fnmatch.fnmatch(path, p) for p in patterns)
+    )
+
+
+def cap_change(root: Path, merge_base: str) -> list[str]:
+    """Like deny_change: the change under review must not decide how much of itself counts."""
+
+    def at(ref: str) -> list[str]:
+        shown = subprocess.run(
+            ["git", "show", f"{ref}:{CONFIG_REL}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if shown.returncode != 0:
+            return []  # absent (or untracked, as in a local-only .claude/)
+        try:
+            return cap_exclusions(shown.stdout)
+        except Refused:
+            return []
+
+    before, after = set(at(merge_base)), set(at("HEAD"))
+    if before == after:
+        return []
+    return [
+        f"the branch changes cap_exclude in {CONFIG_REL} (added: {sorted(after - before)}, "
+        f"removed: {sorted(before - after)}) — how much of the change counted toward the "
+        "cap was set by the change under review"
+    ]
 
 
 # --- inputs -----------------------------------------------------------------
@@ -608,7 +697,10 @@ def touched(root: Path, path: str, tool_uses: list[dict]) -> bool:
 
 
 def judge(
-    root: Path, parsed: dict, files: list[tuple[str, str]]
+    root: Path,
+    parsed: dict,
+    files: list[tuple[str, str]],
+    seen: set[str] | None = None,
 ) -> tuple[str, list[str], str]:
     """(verdict, reasons, result text)."""
     failed = isolation_problems(parsed["init"])
@@ -637,7 +729,11 @@ def judge(
     for status, path in files:
         if not listed(path, coverage):
             failed.append(f"coverage: {path} not listed")
-        elif status != "D" and not touched(root, path, parsed["tool_uses"]):
+        elif (
+            status != "D"
+            and path not in (seen or set())
+            and not touched(root, path, parsed["tool_uses"])
+        ):
             incomplete.append(f"coverage: {path} listed but never read")
     if failed:
         return "FAILED", failed + incomplete, text
@@ -646,30 +742,100 @@ def judge(
     return "COMPLETE", [], text
 
 
+def seen_in_diff(
+    root: Path,
+    files: list[tuple[str, str]],
+    diff: str,
+    diff_file: Path | None,
+    tool_uses: list[dict],
+) -> set[str]:
+    """
+    Added files whose whole content reached the reviewer through the diff. It
+    never opens them by path, so they read as "listed but never read" and a
+    doc-heavy branch was always INCOMPLETE (field report, 2026-10-02). Inline,
+    the diff is all on stdin; in a diff file, the Reads of that file must cover
+    the added file's lines.
+    """
+    added = {path for status, path in files if status == "A"}
+    if not added or diff_file is None:
+        return added
+    spans = diff_spans(diff)
+    target = same_path(root, str(diff_file))
+    ranges = []
+    for use in tool_uses:
+        args = use.get("input") or {}
+        if (
+            use.get("name") != "Read"
+            or same_path(root, str(args.get("file_path") or "")) != target
+        ):
+            continue
+        start = max(int(args.get("offset") or 1), 1)
+        ranges.append((start, start + int(args.get("limit") or READ_DEFAULT_LIMIT) - 1))
+    return {
+        path
+        for path in added
+        if path in spans
+        and all(any(lo <= n <= hi for lo, hi in ranges) for n in range(*spans[path]))
+    }
+
+
+def diff_spans(diff: str) -> dict[str, tuple[int, int]]:
+    """{new path: (first line, line after last)} of each file's section, 1-based."""
+    spans: dict[str, tuple[int, int]] = {}
+    lines = diff.split("\n")
+    start, path = 0, ""
+    for i, line in enumerate(lines + ["diff --git <end>"], start=1):
+        if line.startswith("diff --git "):
+            if path:
+                spans[path] = (start, i)
+            start, path = i, ""
+        elif line.startswith("+++ b/") and not path:
+            path = line[len("+++ b/") :].rstrip("\t")
+    return spans
+
+
 # --- snapshot, report ---------------------------------------------------------
 
 
-def snapshot(root: Path) -> str:
-    digest = hashlib.sha256()
-    digest.update(git(root, "rev-parse", "HEAD").encode())
-    digest.update("\n".join(dirty_paths(root)).encode())
+def state_file(rel: str) -> bool:
+    """
+    A dotfile under .claude/ is a tool's state, not anyone's edit: a project
+    hook writing `.claude/hooks/.blocked-reviews` mid-run made a real review
+    INVALID (field report, 2026-10-02).
+    """
+    parts = rel.split("/")
+    return parts[0] == ".claude" and any(p.startswith(".") for p in parts[1:])
+
+
+def snapshot(root: Path) -> dict[str, str]:
+    """{name: content hash} — compared key by key, so INVALID can say what moved."""
+    state = {"HEAD": git(root, "rev-parse", "HEAD").strip()}
+    state.update({f"dirty: {p}": "dirty" for p in dirty_paths(root)})
     claude_dir = root / ".claude"
     candidates = [root / "CLAUDE.md"]
     if claude_dir.is_dir():
         candidates += sorted(p for p in claude_dir.rglob("*") if p.is_file())
     for path in candidates:
         rel = path.relative_to(root).as_posix()
-        if excluded(rel) or "__pycache__" in rel or not path.is_file():
+        if (
+            excluded(rel)
+            or state_file(rel)
+            or "__pycache__" in rel
+            or not path.is_file()
+        ):
             continue
-        digest.update(rel.encode())
         try:
-            digest.update(path.read_bytes())
+            state[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
         except OSError:
             # Vanished or unreadable between the listing and the read. The name
             # still counts; raising here ran outside the safety net and lost
             # the report (round-3 review F7).
-            digest.update(b"<unreadable>")
-    return digest.hexdigest()
+            state[rel] = "<unreadable>"
+    return state
+
+
+def moved(before: dict[str, str], after: dict[str, str]) -> list[str]:
+    return sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))
 
 
 def redact(text: str) -> tuple[str, int]:
@@ -818,8 +984,8 @@ def record_refusal(root: Path, reason: str) -> None:
 
 def check_preconditions(
     root: Path, args: argparse.Namespace
-) -> tuple[str, str, str, int]:
-    """(base, head, merge_base, changed lines), or Refused."""
+) -> tuple[str, str, str, int, int, list[str]]:
+    """(base, head, merge_base, changed lines, lines counted toward the cap, cap_exclude), or Refused."""
     check_ceilings(args)
     base = resolve_base(root, args.base)
     dirty = dirty_paths(root)
@@ -834,10 +1000,13 @@ def check_preconditions(
             "this branch changes the reviewer itself (isolated-review); it cannot "
             "review its own change — use a person-opened session"
         )
-    lines = changed_lines(root, merge_base)
-    if lines > HARD_CAP_LINES:
+    patterns = read_cap_config(root)
+    counts = line_counts(root, merge_base)
+    lines = sum(n for _, n in counts)
+    counted = capped_lines(counts, patterns)
+    if counted > HARD_CAP_LINES:
         raise Refused(
-            f"{lines} changed lines exceeds the {HARD_CAP_LINES}-line cap — split the branch"
+            f"{counted} changed lines exceeds the {HARD_CAP_LINES}-line cap — split the branch"
         )
     if which("claude") is None:
         raise Refused("claude is not on PATH")
@@ -849,7 +1018,7 @@ def check_preconditions(
         raise Refused(
             "TMPDIR is inside the repository; the probe needs a temp directory outside it"
         )
-    return base, head, merge_base, lines
+    return base, head, merge_base, lines, counted, patterns
 
 
 def raise_interrupted(signum: int, _frame: FrameType | None) -> None:
@@ -903,7 +1072,9 @@ def main(argv: list[str]) -> int:
         print(f"run-review: REFUSED — {redact(str(exc))[0]}", file=sys.stderr)
         return EXIT["REFUSED"]
     try:
-        base, head, merge_base, lines = check_preconditions(root, args)
+        base, head, merge_base, lines, counted, patterns = check_preconditions(
+            root, args
+        )
     except Refused as exc:
         # The reason carries git stderr and the user's --base: a token in a URL
         # given as the base was printed and logged as-is (round-4 review #7).
@@ -934,6 +1105,7 @@ def main(argv: list[str]) -> int:
             verdict, reasons = "FAILED", problems + ["the review was not started"]
         else:
             diff = git(root, "diff", merge_base, "HEAD")
+            diff_file = None
             if lines <= INLINE_MAX_LINES:
                 diff_ref = diff
             else:
@@ -958,7 +1130,8 @@ def main(argv: list[str]) -> int:
             # reported as "the reviewer was stopped" (round-5 review F10).
             set_signal_handlers(signal.SIG_IGN)
             parsed = parse_stream(capture)
-            verdict, reasons, text = judge(root, parsed, files)
+            seen = seen_in_diff(root, files, diff, diff_file, parsed["tool_uses"])
+            verdict, reasons, text = judge(root, parsed, files, seen)
             if parsed["init"] is None or parsed["result"] is None:
                 reasons += stderr_reasons(capture)
             if not finished:
@@ -967,7 +1140,9 @@ def main(argv: list[str]) -> int:
                     0,
                     f"timed out after {args.timeout:g} min — partial stream kept, not a verdict",
                 )
-            changed_denies = deny_change(root, merge_base)
+            changed_denies = deny_change(root, merge_base) + cap_change(
+                root, merge_base
+            )
             reasons += changed_denies
             if changed_denies and verdict == "COMPLETE":
                 verdict = "INCOMPLETE"
@@ -987,11 +1162,16 @@ def main(argv: list[str]) -> int:
         reasons += remove_work(root, work)
     transcript_redactions, problems = redact_transcripts(log_dir)
     reasons += problems
-    if snapshot(root) != before:
+    changed_during = moved(before, snapshot(root))
+    if changed_during:
         verdict = "INVALID"
+        shown = ", ".join(changed_during[:5]) + (
+            f" and {len(changed_during) - 5} more" if len(changed_during) > 5 else ""
+        )
         reasons.insert(
             0,
-            "INVALID: the tree changed during the review — this report describes a moving target",
+            "INVALID: the tree changed during the review — this report describes a "
+            f"moving target (changed: {shown})",
         )
 
     text, redactions = redact(text)
@@ -1014,6 +1194,13 @@ def main(argv: list[str]) -> int:
         *[f"- reason: {r}" for r in reasons],
         f"- base: {base}  merge-base: {merge_base[:12]}  HEAD: {head[:12]}  branch: {branch}",
         f"- changed: {len(files)} files, {lines} lines, diff {mode}",
+        *(
+            [
+                f"- cap: {counted} of {lines} lines counted; {CONFIG_REL} excludes {patterns}"
+            ]
+            if patterns
+            else []
+        ),
         f"- model: {', '.join(models) or 'none'}  cost: ${cost:.2f}  "
         f"time: {time.monotonic() - started:.0f}s  probe cost: ${probe_cost:.3f}",
         f"- reviewer Read denies: {len(FIXED_DENY)} fixed + project {project_denies}; "
