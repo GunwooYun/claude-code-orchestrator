@@ -11,9 +11,10 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
-## [Unreleased]
+## [1.1.0] - 2026-10-02
 
-Merged to `develop`, not yet released. A release renames this heading.
+The first changes driven by a field report (Immich, #20), plus the git-operations
+choice in `/initproject` (#19).
 
 ### Added
 - `/initproject` asks whether the orchestrator may push, merge PRs, tag and
