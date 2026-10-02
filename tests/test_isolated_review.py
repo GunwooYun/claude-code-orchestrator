@@ -139,6 +139,11 @@ if scenario == "modify_ignored_claude_file":
     # Ignored and untracked: invisible to `git status`, only the content hash
     # of .claude/ can see it.
     Path(".claude/settings.local.json").write_text('{"changed": true}')
+if scenario == "touch_hook_state":
+    # A project hook keeps its state in a dotfile under .claude/ (seen in a
+    # real project: .claude/hooks/.blocked-reviews), written during the run.
+    Path(".claude/hooks").mkdir(parents=True, exist_ok=True)
+    Path(".claude/hooks/.blocked-reviews").write_text("pending\n")
 if scenario == "no_result":
     sys.exit(0)  # a crash that still exits 0: init printed, no result event
 if scenario == "modify_tree":
@@ -152,6 +157,15 @@ if scenario == "lock_work":
 read_files = files
 if scenario in ("coverage_no_read", "wrong_model_no_read"):
     read_files = files[1:]
+if scenario in ("diff_only_full", "diff_only_partial"):
+    # Read nothing by path; page through the diff file the material names.
+    read_files = []
+    diff_path = stdin.split("The diff (")[1].split(" is in ")[1].split(" — ")[0]
+    args = {"file_path": diff_path}
+    if scenario == "diff_only_partial":
+        args.update(offset=1, limit=10)
+    emit({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Read", "input": args}]}})
 for f in read_files:
     if scenario == "grep_only":
         use = {"type": "tool_use", "name": "Grep", "input": {"pattern": "x", "path": f"{root}/{f}"}}
@@ -556,12 +570,20 @@ class VerdictTests(IsolatedReviewCase):
         )
 
     def test_r16_a_file_claimed_but_never_read_is_incomplete(self) -> None:
-        box = self.sandbox(changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"})
+        box = self.sandbox(
+            # Modified, not added: an added file is fully in the diff and counts as read.
+            base_files={"src/a.py": "a = 0\n", "src/b.py": "b = 0\n"},
+            changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"},
+        )
         result = box.run(scenario="coverage_no_read")
         self.assertEqual(EXIT_INCOMPLETE, result.returncode, result.stdout)
 
     def test_r16_a_changed_file_missing_from_coverage_fails(self) -> None:
-        box = self.sandbox(changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"})
+        box = self.sandbox(
+            # Modified, not added: an added file is fully in the diff and counts as read.
+            base_files={"src/a.py": "a = 0\n", "src/b.py": "b = 0\n"},
+            changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"},
+        )
         result = box.run(scenario="coverage_missing")
         self.assertEqual(EXIT_FAILED, result.returncode, result.stdout)
 
@@ -661,7 +683,11 @@ class SeparateSessionReviewFindingTests(IsolatedReviewCase):
         self.assertIn("terminal_reason", result.stdout)
 
     def test_failed_outranks_incomplete(self) -> None:
-        box = self.sandbox(changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"})
+        box = self.sandbox(
+            # Modified, not added: an added file is fully in the diff and counts as read.
+            base_files={"src/a.py": "a = 0\n", "src/b.py": "b = 0\n"},
+            changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"},
+        )
         result = box.run(scenario="wrong_model_no_read")
         self.assertEqual(EXIT_FAILED, result.returncode)
         self.assertIn("pinned model", result.stdout)
@@ -785,7 +811,8 @@ class RedactionTests(unittest.TestCase):
         locked.write_text("x", encoding="utf-8")
         os.chmod(locked, 0)
         self.addCleanup(os.chmod, locked, 0o644)
-        self.assertEqual(64, len(self.script.snapshot(box.root)))
+        state = self.script.snapshot(box.root)
+        self.assertEqual("<unreadable>", state[".claude/locked.txt"])
 
     def setUp(self) -> None:
         self.script = load_script()
@@ -962,7 +989,11 @@ class FieldReportTests(IsolatedReviewCase):
         self.assertNotIn("REDACTED", text, "not even the redacted review body")
 
     def test_paths_are_hidden_unless_asked_for(self) -> None:
-        box = self.sandbox(changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"})
+        box = self.sandbox(
+            # Modified, not added: an added file is fully in the diff and counts as read.
+            base_files={"src/a.py": "a = 0\n", "src/b.py": "b = 0\n"},
+            changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"},
+        )
         box.run(scenario="coverage_no_read")
         hidden = self.field_report(box).stdout
         self.assertIn("INCOMPLETE", hidden)

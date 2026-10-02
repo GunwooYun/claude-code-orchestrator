@@ -20,6 +20,21 @@ Merged to `develop`, not yet released. A release renames this heading.
   delete merged branches on its own (Step 2 question 5, applied in Step 2b):
   the permission goes to `.claude/settings.local.json`, the instruction to
   `## Project Setup`. Force-push and history rewrites stay denied either way.
+- `/isolated-review`: an optional, committed `.claude/isolated-review.json`
+  (`{"cap_exclude": [globs]}`) leaves docs and evidence files out of the
+  3,000-line cap — not out of the review. A branch that changes the list is
+  INCOMPLETE.
+- `/feature` Phase 6 and `CLAUDE.md`: a review round ends when it has no
+  Medium-or-higher finding; low and nit go with the next change.
+
+### Fixed
+From the first field report (Immich, 2026-10-02), where three real runs ended
+INVALID, INCOMPLETE, INCOMPLETE for reasons that were not the reviewer's:
+- `/isolated-review` no longer counts a dotfile under `.claude/` (a hook's
+  state) as a tree change, and INVALID now names the files that changed.
+- A file the branch adds counts as read when its whole content reached the
+  reviewer through the diff — inline, or through Reads of the diff file that
+  cover its lines. Doc-heavy branches were always INCOMPLETE.
 
 ## [1.0.0] - 2026-10-02
 

@@ -81,7 +81,13 @@ KNOWN_REASONS = [
         (r"^timed out after [\d.]+ min — partial stream kept, not a verdict$", ""),
         (r"^internal error in run-review: \w+:(.*)$", "hidden"),
         (r"^transcript redaction failed:(.*)$", "hidden"),
+        (
+            r"^INVALID: the tree changed during the review — this report describes a "
+            r"moving target \(changed: (.*)\)$",
+            "hidden",
+        ),
         (r"^INVALID: the tree changed during the review — .*$", ""),
+        (r"^the branch changes cap_exclude in \S+ (.*)$", "hidden"),
         (r"^(?:probe )?cli stderr:(.*)$", "hidden"),
         (
             r"^the branch changes the Read denies forwarded to the reviewer (.*)$",
@@ -92,6 +98,7 @@ KNOWN_REASONS = [
         # Refusals
         (r"^the working tree must be clean \(commit first\):(.*)$", "hidden"),
         (r"^no --base given and origin/HEAD is not set$", ""),
+        (r"^\.claude/isolated-review\.json is not valid:(.*)$", "hidden"),
         (r"^HEAD is the merge-base with (.+): nothing to review$", "hidden"),
         (r"^this branch changes the reviewer itself .*$", ""),
         (r"^\d+ changed lines exceeds the \d+-line cap — split the branch$", ""),
