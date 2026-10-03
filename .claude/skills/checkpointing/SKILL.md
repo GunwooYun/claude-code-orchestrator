@@ -1,175 +1,34 @@
 ---
 name: checkpointing
 description: |
-  Save session context to agent configuration files or create full checkpoint files.
-  Supports three modes: session history (default), full checkpoint (--full),
-  and skill analysis (--full --analyze) for extracting reusable patterns.
+  Write the agy consultation history from .claude/logs/cli-tools.jsonl into the
+  `## Session History` section of CLAUDE.md and `## Consultation History` of
+  .agents/rules/AGENTS.md, so the next session (and agy) can see what was asked.
 metadata:
-  short-description: Checkpoint session context with skill extraction support
+  short-description: Write agy consultation history into the context files
 ---
 
-# Checkpointing — 세션 컨텍스트 지속성
+# Checkpointing — 세션 기록
 
-**세션 중 작업 기록을 저장하고 재사용 가능한 스킬 패턴을 찾는다.**
+`.claude/logs/cli-tools.jsonl` 의 agy 상담 이력을 날짜별로 정리해서 두 파일에 쓴다.
 
-## 모드
+| 파일 | 헤딩 |
+|---|---|
+| `CLAUDE.md` | `## Session History` |
+| `.agents/rules/AGENTS.md` | `## Consultation History` |
 
-### Mode 1: Session History(기본값)
-
-CLI 상담 이력을 각 에이전트의 구성 파일에 추가한다.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  .claude/logs/cli-tools.jsonl                               │
-│                      ↓                                      │
-│  /checkpointing                                             │
-│                      ↓                                      │
-│  ┌──────────────┐ ┌───────────────────────────┐             │
-│  │  CLAUDE.md   │ │ .agents/rules/AGENTS.md   │             │
-│  │ ## Session   │ │ ## Consultation           │             │
-│  │ History      │ │ History                   │             │
-│  └──────────────┘ └───────────────────────────┘             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Mode 2: Full Checkpoint（--full）
-
-전체 작업의 포괄적인 스냅 샷을 만든다.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Data Sources:                                              │
-│  ├─ git log (commits)                                       │
-│  ├─ git diff (file changes)                                 │
-│  └─ cli-tools.jsonl (agy logs)                              │
-│                      ↓                                      │
-│  /checkpointing --full                                      │
-│                      ↓                                      │
-│  .claude/checkpoints/2026-01-28-153000.md                   │
-│  ├─ Summary (commits, files, consultations)                 │
-│  ├─ Git History (commits list)                              │
-│  ├─ File Changes (created, modified, deleted)               │
-│  └─ CLI Consultations (agy)                                 │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Mode 3: Skill Analysis（--full --analyze）
-
-체크포인트에서 스킬화할 수 있는 패턴을 발견한다.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  /checkpointing --full --analyze                            │
-│                      ↓                                      │
-│  1. Full Checkpoint 생성                                   │
-│  2. 분석용 프롬프트 생성                                    │
-│     → .claude/checkpoints/YYYY-MM-DD-HHMMSS.analyze-prompt.md│
-│                      ↓                                      │
-│  3. 서브에이전트에서 AI 분석 수행                            │
-│     → 작업 패턴 발견                                      │
-│     → 스킬 후보 제안                                        │
-│                      ↓                                      │
-│  4. 새로운 스킬을 .claude/skills/에 추가                         │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**발견할 패턴 예시:**
-- 테스트 → 구현 반복(TDD 워크플로우)
-- 연구 → 설계 → 구현 흐름
-- 특정 파일 세트의 동시 변경
-- CLI 상담 → 코드 변경 순서
+헤딩이 파일마다 다르다 — 같다고 가정하면 AGENTS.md 에 두 번째 섹션이 계속 덧붙는다(실제로 그랬다).
 
 ## 사용법
 
 ```bash
-# Session History 모드(기본값)
-/checkpointing
-
-# Full Checkpoint 모드
-/checkpointing --full
-
-# Skill Analysis 모드(권장)
-/checkpointing --full --analyze
-
-# 기간 지정
-/checkpointing --since "2026-01-26"
-/checkpointing --full --analyze --since "2026-01-26"
+/checkpointing                       # 전체 로그
+/checkpointing --since "2026-01-26"  # 이 날짜(로컬)부터
 ```
 
-### Skill Analysis 실행 흐름
+## 형식
 
-```bash
-# Step 1: 체크포인트 + 분석 프롬프트 생성
-python checkpoint.py --full --analyze
-
-# Step 2: 서브에이전트에서 분석(Claude 자동 실행)
-# → 분석 프롬프트 로드
-# → 스킬 후보 제안
-# → 사용자가 승인하면 스킬 생성
-```
-
-## 처리 내용
-
-### Session History 모드
-
-1. `.claude/logs/cli-tools.jsonl` 구문 분석
-2. agy 상담 내용을 날짜별로 정리
-3. **각 파일의 자기 헤딩 아래에** 추가한다 — `CLAUDE.md` 는
-   `## Session History`, `.agents/rules/AGENTS.md` 는 `## Consultation History`.
-   두 파일이 같은 헤딩을 쓴다고 가정하면 AGENTS.md 에 두 번째 섹션이 계속
-   덧붙는다 (실제로 그랬다).
-
-### Full Checkpoint 모드
-
-1. **Git 정보 수집**
-   - `git log`로 커밋 내역
-   - `git diff --name-status`로 파일 변경
-   - `git diff --numstat`로 행 수 변경
-
-2. **CLI 상담 로그 분석**
-   - agy 상담 내용 및 성공/실패
-
-3. **체크포인트 파일 생성**
-   - `.claude/checkpoints/YYYY-MM-DD-HHMMSS.md`
-
-## Full Checkpoint 형식
-
-```markdown
-# Checkpoint: 2026-01-28 15:30:00 UTC
-
-## Summary
-- **Commits**: 5
-- **Files changed**: 12 (8 modified, 3 created, 1 deleted)
-- **agy researches**: 2
-
-## Git History
-
-### Commits
-- `abc1234` Add checkpointing enhancement
-- `def5678` Update documentation
-
-### File Changes
-
-**Created:**
-- `new_feature.py` (+120)
-
-**Modified:**
-- `checkpoint.py` (+80, -20)
-- `SKILL.md` (+45, -10)
-
-**Deleted:**
-- `old_script.py`
-
-## CLI Tool Consultations
-
-### Antigravity (2 researches)
-- ✓ 조사: Git integration best practices
-```
-
-## Session History 형식
-
-`CLAUDE.md` 에 쓰이는 형태. 라벨과 상태 표기는 영어다
-(`.claude/rules/language.md` — 이 섹션은 agy 도 읽는다).
+라벨과 상태는 영어다(이 섹션은 agy 도 읽는다):
 
 ```markdown
 ## Session History
@@ -181,31 +40,13 @@ python checkpoint.py --full --analyze
 - [FAILED] a call that returned nothing
 ```
 
-`.agents/rules/AGENTS.md` 에는 같은 내용이 `## Consultation History` 아래에
-쓰인다. 헤딩만 다르고 본문 형식은 같다.
-
-**위 두 예시는 코드 펜스 안에 있고, 그것이 의도된 것이다.** `checkpoint.py` 는
-펜스 안의 헤딩을 섹션 시작으로 보지 않는다 — 보던 때에는 이 문서의 예시를
-섹션으로 잡아 닫는 백틱까지 지웠다.
-
-## 실행 타이밍
-
-| 타이밍 | 권장 모드 |
-|-----------|-----------|
-| 세션 종료 전 | `--full --analyze` |
-| 중요한 설계 결정 후 | `--full` |
-| 큰 기능 구현 완료 후 | `--full --analyze` |
-| 장시간 작업 구분 |`--full` |
-| 반복 패턴을 느꼈을 때 | `--full --analyze` |
-| 일일 가벼운 기록 | 기본 |
+위 예시가 코드 펜스 안에 있는 것은 의도다 — `checkpoint.py` 는 펜스 안의 헤딩을 섹션 경계로 보지 않는다.
 
 ## 주의사항
 
-- 로그가 비어 있으면 아무 것도 추가되지 않는다.
-- 기존 히스토리 섹션(파일마다 위 헤딩)은 **덮어 쓴다.** 그 뒤에 오는 H1/H2
-  섹션은 보존되고, 코드 펜스 안의 헤딩은 경계로 취급하지 않는다.
-- 로그 파일 자체는 변경되지 않는다 (읽기 전용)
-- Full Checkpoint는 `.claude/checkpoints/`에 축적된다.
-- Git 초기화되지 않은 프로젝트에서도 CLI 로그 부분이 작동한다.
--`--analyze` 로 생성된 스킬 제안은 인간이 검토하고 나서 채용하는 것이다.
-- 스킬 분석은 패턴을 고정하지 않고 AI가 자유롭게 발견하는 설계를 한다.
+- **기존 히스토리 섹션을 덮어쓴다.** 실행 전에 커밋하고, 리뷰 전용 세션에서는 쓰지 않는다.
+- 섹션 순서: `## Project Setup` → `## Current Project` → `## Session History`(항상 마지막) —
+  `CLAUDE.md` 「`CLAUDE.md` 섹션의 수명」. 그 뒤에 오는 H1/H2 섹션은 보존된다.
+- 로그가 비어 있으면 아무것도 쓰지 않는다. 로그 파일은 읽기만 한다.
+- 예전의 `--full`(체크포인트 파일)과 `--analyze`(스킬 후보 발굴)는 2026-10-03 에 뺐다 — 한 번도
+  쓰이지 않았고, 새 스킬은 실사용 리포트로만 만든다. 태그 `v1.1.0` 에 남아 있다.
