@@ -142,10 +142,8 @@ agy models   # 사용 가능한 모델 슬러그 확인
 │   │   ├── doc-write/           # 문서 작성 (자동 발동)
 │   │   ├── jira-setup/          # Jira 연결 (프로젝트당 1회)
 │   │   ├── ticket/              # 티켓에서 작업 시작 (자동 발동)
-│   │   ├── lens-review/         # 다관점 병렬 리뷰 (자동 발동)
 │   │   ├── feature/             # 작업 단위 킥오프 (티켓마다)
-│   │   ├── plan/                # 구현 계획
-│   │   ├── tdd/                 # 테스트 주도 개발
+│   │   ├── isolated-review/     # 격리 리뷰 (Phase 6 기본)
 │   │   ├── checkpointing/       # 세션 영속화
 │   │   ├── deep-reasoning/      # 심층 추론 서브에이전트 연동
 │   │   ├── antigravity-system/  # Antigravity CLI (agy) 연동
@@ -399,7 +397,7 @@ claude
 
 **Step E — 스모크 테스트**: `/deep-reasoning`·`/antigravity-system` 스킬이 목록에 뜨는지, `.claude/skills/antigravity-system/agy-probe` 가 `READY` 를 내는지(아니면 첫 단어가 상태다 — `MISSING`/`UNAUTHENTICATED`/`DEGRADED`), 파일 하나를 일부러 깨뜨려 저장했을 때 린트 훅이 **말을 하는지**, 그리고 `git status` 로 **게이트가 파일을 고치지 않았는지**를 확인한다. 게이트가 조용히 고치면 그 티어를 잘못 만든 것이다.
 
-남는 판단(테스트 실행 방식, 기존 린트 지적 처리 등)은 `DESIGN.md`의 TODO에 적어 두고 실제 작업하면서 오케스트레이터와 함께 정하면 된다 — `design-tracker`가 결정을 기록한다.
+남는 판단(테스트 실행 방식, 기존 린트 지적 처리 등)은 `DESIGN.md`의 TODO에 적어 두고 실제 작업하면서 오케스트레이터와 함께 정하면 된다 — 오래 남는 결정은 그때 `DESIGN.md` 에 적는다.
 
 ### 2. 질문 유형별 라우팅 — 누구에게 시킬 것인가
 

@@ -30,8 +30,8 @@ metadata:
 - 라우팅(토큰량 × 추론 난이도), 2단계 퍼널, 판정 위임 금지:
   `.claude/rules/antigravity-delegation.md` → "What goes to agy — by cost, not topic"
 - agy 를 쓸 수 없을 때의 대체 경로: 같은 파일 → "When agy is unavailable"
-- 에이전트별 강점 요약과 트리거 문구: `CLAUDE.md` 의 빠른 사용 가이드
-- 출력이 클 때 서브에이전트를 경유하는 기준: `CLAUDE.md` 의 출력 크기 기준
+- 에이전트별 역할: `CLAUDE.md` 의 목적 절 (역할 표)
+- 출력이 클 때 서브에이전트를 경유하는 기준: `CLAUDE.md` 의 컨텍스트 관리
 
 ## How to Consult
 
