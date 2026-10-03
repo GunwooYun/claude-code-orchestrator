@@ -1,6 +1,6 @@
 ---
 name: isolated-review
-description: Run a NEUTRAL review of the current branch by a separate `claude -p` reviewer that shares no context with this session and can only read. It is /feature Phase 6 Option A1 — the review by a context that did not write the change — launched by the orchestrator instead of by hand. Use it when implementation is finished and committed and the user wants the separate-session review. Always ask the user once before running it (it costs money and time). Do NOT use it for a quick in-session check (that is deep-reasoning or /lens-review), and do NOT use it to review a change to this skill itself (it refuses).
+description: Run a NEUTRAL review of the current branch by a separate `claude -p` reviewer that shares no context with this session and can only read. It is /feature Phase 6 Option A1 — the review by a context that did not write the change — launched by the orchestrator instead of by hand. Use it when implementation is finished and committed and the user wants the separate-session review. Always ask the user once before running it (it costs money and time). Do NOT use it for a quick in-session check (that is deep-reasoning), and do NOT use it to review a change to this skill itself (it refuses).
 ---
 
 # Isolated Review
