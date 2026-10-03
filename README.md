@@ -26,7 +26,7 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
 
 | | 상태 |
 |---|---|
-| 훅 6개 | **동작 확인.** 각 훅마다 "반응해야 하는 입력 / 무시해야 하는 입력" 한 쌍으로 테스트했다. `lint-on-save`·`bash-write-check` 는 실제 세션에서 모델에게 결과가 도달하는 것을 확인했다. 효과를 잴 수 없던 제안 훅 4개는 2026-10-03 에 뺐다 |
+| 훅 4개 | **동작 확인.** 각 훅마다 "반응해야 하는 입력 / 무시해야 하는 입력" 한 쌍으로 테스트했다. `lint-on-save`·`bash-write-check` 는 실제 세션에서 모델에게 결과가 도달하는 것을 확인했다. 효과를 잴 수 없던 제안 훅 6개는 2026-10-03 에 뺐다 |
 | `.claude/scripts/verify-save`, `verify-task` | **동작 확인.** 저장 게이트는 **읽기 전용**이다 — 파일을 고치지 않고 보고만 한다 |
 | 규칙·스킬 문서의 일관성 | **테스트로 고정.** 모델 등급↔슬러그 일치, 섹션 포인터 해소, 임계값 단일 정의, 항상-로드 예산 |
 | `checkpoint.py` | **동작 확인** (펜스·rename·범위·원자적 쓰기 회귀 테스트) |
@@ -210,15 +210,13 @@ agy models   # 사용 가능한 모델 슬러그 확인
 
 ### `/checkpointing` — 세션 저장
 
-대화·결정·코드 흐름을 재사용 가능하게 보존한다.
+agy 상담 이력을 다음 세션(과 agy)이 볼 수 있게 남긴다.
 
 ```bash
-/checkpointing                    # 기본: agy 상담 로그를 CLAUDE.md / .agents/rules/AGENTS.md 의 Session History 에 기록
-/checkpointing --full             # 전체 : git 이력 및 파일 변경 포함 → .claude/checkpoints/
-/checkpointing --full --analyze   # 분석 : 재사용 가능한 기술 패턴(스킬 후보) 발견
+/checkpointing                    # agy 상담 로그를 CLAUDE.md / .agents/rules/AGENTS.md 의 Session History 에 기록
 ```
 
-> 주의: 기본 모드는 `CLAUDE.md`와 `.agents/rules/AGENTS.md`를 **직접 수정**한다(Session History 섹션 덮어쓰기). 리뷰 전용 세션에서는 실행하지 않는다.
+> 주의: `CLAUDE.md`와 `.agents/rules/AGENTS.md`를 **직접 수정**한다(Session History 섹션 덮어쓰기). 리뷰 전용 세션에서는 실행하지 않는다.
 
 ### `/deep-reasoning` — 심층 추론 서브에이전트 연동
 
@@ -418,7 +416,7 @@ claude
       ↓
 /isolated-review         Phase 6 기본 — 격리된 읽기 전용 리뷰어 (필요하면 §5 의 사람이 여는 세션도)
       ↓
-/checkpointing --full --analyze   세션 기록 + 반복 패턴을 스킬 후보로 추출
+/checkpointing                    agy 상담 기록을 Session History 에 남김 (선택)
 ```
 
 `/feature`가 CLAUDE.md에 추가하는 `## Current Project` 블록은 다음 세션의 출발점이다. 기능이 끝나면 지우거나 요약해 둔다.
@@ -430,7 +428,7 @@ claude
 - **출력이 10줄을 넘을 것 같으면 서브에이전트.** 메인 컨텍스트는 실질 70~100k 토큰이고, 한 번 오염되면 세션 내내 비용을 낸다.
 - **리서치는 파일로**: agy 결과는 `.claude/docs/research/<topic>.md`에 저장시키고 메인에는 요약 5~7줄만 받는다. 다음 세션의 deep-reasoning이 그 파일을 읽는다.
 - **라이브러리 제약은 `docs/libraries/`에**: 한 번 조사한 라이브러리의 버전·금기 사항을 적어 두면 코드 리뷰 템플릿이 자동으로 참조한다.
-- **세션이 길어지면 `/checkpointing --full`** 후 새 세션. `/clear`보다 낫다.
+- **세션이 길어지면** 결정을 `## Current Project` 에 남기고 새 세션을 연다.
 - 플랜 모드(Shift+Tab)로 설계 단계를 분리하면 deep-reasoning 상담 결과가 플랜 파일에 남아 세션이 끊겨도 이어진다.
 
 ### 5. 리뷰는 다른 세션에서 — 오염 없이
@@ -549,17 +547,15 @@ uv run ruff check .
 
 ## Hooks
 
-자동화 훅은 적절한 시점에서 에이전트 연동을 제안합니다.
+훅은 4개다 — 저장 시 검사(`lint-on-save`, `bash-write-check`)와 agy 호출 기록(`log-cli-tools`), 그리고 둘이 함께 쓰는 `_savecheck`. 무엇을 위임할지 "제안"하는 훅은 효과를 잴 수 없어 2026-10-03 에 모두 뺐다 — 위임 기준은 `CLAUDE.md` 가 말한다.
 
 | 후크 | 트리거 | 동작 |
 |--------|----------|------|
 | `lint-on-save.py` | 파일 저장 | `.claude/scripts/verify-save` 에 경로를 넘기고 출력을 그대로 전달. **도구 이름을 하나도 모른다** — 무엇을 검사하는지는 스크립트가 정한다. 티어가 없으면 세션당 한 번만 알린다 |
 | `bash-write-check.py` | Bash 전·후 | Bash 로 쓴 파일(`sed -i`, 리다이렉션, heredoc)은 위 훅을 거치지 않는다. 명령 전 시각을 표시하고, 뒤에 그 이후 수정된 파일에 `verify-save` 를 돌려 알린다(최대 5개, 빌드·로그 디렉터리 제외, git 명령 제외). 편집 명령이면 "Edit/Write 를 쓰라"를 덧붙인다. mtime 기반이라 `cp -p` 처럼 시각을 보존하는 쓰기와 너무 큰 트리는 놓친다(후자는 세션당 한 번 알린다) |
-| `suggest-deep-reasoning-before-write.py` | 파일 쓰기 전 | 심층 추론 리뷰 제안. 크기 규칙(500자)은 **소스 파일에만** 적용된다 — 긴 문서는 설계 결정이 아니다. 경로가 설계처럼 보이면(`DESIGN.md`, `core/`, `schema`) 내용과 무관하게 발동 |
-| `post-test-analysis.py` | 테스트 실패 | 디버깅 분석 제안 |
 | `log-cli-tools.py` | agy 실행 | I/O 로깅 (`.claude/logs/cli-tools.jsonl`) |
 
-훅은 전부 **제안만** 한다(차단하지 않음). 훅 파일명을 바꾸면 `.claude/settings.json`의 등록 경로를 **같은 커밋에서** 함께 바꿔야 한다 — 어긋나면 PreToolUse 훅 오류로 모든 Edit이 막힌다.
+훅은 아무것도 차단하지 않는다(알리기만 한다). 훅 파일명을 바꾸면 `.claude/settings.json`의 등록 경로를 **같은 커밋에서** 함께 바꿔야 한다 — 어긋나면 PreToolUse 훅 오류로 모든 Edit이 막힌다.
 
 훅마다 "반응해야 하는 payload / 무시해야 하는 payload" 한 쌍이 `tests/test_hook_effects.py` 에 있다. 계약 테스트(`test_hook_contract.py`)만으로는 **죽은 훅을 잡을 수 없다** — 빈 출력은 "보고할 것 없음"이라는 합법적인 답이므로, payload 를 읽고 바로 리턴하는 훅이 전부 통과한다. 실제로 그랬던 훅이 있었다.
 

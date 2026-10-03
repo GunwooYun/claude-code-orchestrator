@@ -86,15 +86,9 @@ PAYLOADS: dict[str, dict] = {
 # Which payloads each hook must tolerate. Every hook must survive every payload
 # it can plausibly receive, plus the degenerate inputs below.
 HOOK_PAYLOADS: dict[str, tuple[str, ...]] = {
-    "agent-router.py": ("UserPromptSubmit",),
-    "suggest-deep-reasoning-before-write.py": ("PreToolUse-Edit",),
-    "suggest-antigravity-research.py": ("PreToolUse-WebSearch",),
-    "suggest-deep-reasoning-after-plan.py": ("PostToolUse-Task",),
-    "post-test-analysis.py": ("PostToolUse-Bash",),
     "log-cli-tools.py": ("PostToolUse-Bash",),
     "lint-on-save.py": ("PostToolUse-Edit",),
     "bash-write-check.py": ("PreToolUse-Bash", "PostToolUse-Bash"),
-    "post-implementation-review.py": ("PostToolUse-Edit",),
 }
 
 DEGENERATE_INPUTS = ("", "not json at all", "[]", "null", "{}")
@@ -219,69 +213,6 @@ class HookContractTests(unittest.TestCase):
             for payload in DEGENERATE_INPUTS:
                 with self.subTest(hook=path.name, payload=payload or "<empty>"):
                     self.assert_contract(path, payload)
-
-
-class PostTestAnalysisRegressionTests(unittest.TestCase):
-    """The false-positive bugs: overlapping patterns and green-run detection."""
-
-    def setUp(self) -> None:
-        import importlib.util
-
-        spec = importlib.util.spec_from_file_location(
-            "post_test_analysis", HOOKS_DIR / "post-test-analysis.py"
-        )
-        assert spec and spec.loader
-        self.hook = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.hook)
-
-    def test_single_error_line_does_not_trip_the_threshold(self) -> None:
-        suggested, _ = self.hook.has_complex_failure("error: unexpected token\n")
-        self.assertFalse(suggested, "one error line must not count as several failures")
-
-    def test_green_pytest_verbose_run_is_not_a_failure(self) -> None:
-        output = (
-            "tests/test_a.py::test_error_message_is_clear PASSED\n"
-            "tests/test_a.py::test_error_code_mapping PASSED\n"
-            "tests/test_a.py::test_raises_value_error PASSED\n"
-            "============================== 3 passed in 0.05s ===============================\n"
-        )
-        suggested, reason = self.hook.has_complex_failure(output)
-        self.assertFalse(suggested, f"green run flagged as failure: {reason}")
-
-    def test_module_not_found_does_not_suppress_a_real_failure(self) -> None:
-        output = (
-            "ModuleNotFoundError: No module named 'foo'\n"
-            "Traceback (most recent call last):\n"
-            "  File 'a.py', line 2, in <module>\n"
-            "AssertionError: expected 3, got 4\n"
-            "2 failed, 1 passed\n"
-        )
-        suggested, _ = self.hook.has_complex_failure(output)
-        self.assertTrue(
-            suggested, "a traceback must not be suppressed by a simple error"
-        )
-
-    def test_bare_module_not_found_is_left_alone(self) -> None:
-        suggested, _ = self.hook.has_complex_failure(
-            "ModuleNotFoundError: No module named 'foo'\n"
-        )
-        self.assertFalse(suggested, "a mechanical fix needs no deep reasoning")
-
-    def test_real_multi_failure_run_is_flagged(self) -> None:
-        output = (
-            "=================================== FAILURES ===================================\n"
-            "FAILED tests/test_a.py::test_one - AssertionError\n"
-            "FAILED tests/test_b.py::test_two - ValueError\n"
-            "2 failed, 39 passed in 1.20s\n"
-        )
-        suggested, _ = self.hook.has_complex_failure(output)
-        self.assertTrue(suggested)
-
-    def test_explicit_success_flag_wins_over_scary_words(self) -> None:
-        suggested, _ = self.hook.has_complex_failure(
-            "error: something\nTraceback (most recent call last):\n", flagged=False
-        )
-        self.assertFalse(suggested, "an explicit success flag must be honoured")
 
 
 if __name__ == "__main__":

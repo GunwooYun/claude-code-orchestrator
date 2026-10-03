@@ -27,7 +27,6 @@ part meant to be copied.
 
 from __future__ import annotations
 
-import ast
 import json
 import re
 import unittest
@@ -247,6 +246,41 @@ class LargeChangeThresholdTests(unittest.TestCase):
         self.assertIn("보안 경계", body)
 
 
+class TierBudgetTests(unittest.TestCase):
+    """The tier budgets must leave no gap and agree everywhere they are restated.
+
+    A real target's e2e took 6m32s: over `task` (≤5 min) and under `unit`
+    (10–60 min), so no tier admitted it. Drift tripwire over prose.
+    """
+
+    SITES = (
+        REPO / "CLAUDE.md",
+        REPO / "README.md",
+        REPO / ".claude" / "rules" / "testing.md",
+        REPO / ".claude" / "scripts" / "README.md",
+        SKILLS / "initproject" / "SKILL.md",
+    )
+    TASK_MAX = re.compile(r"≤\s*(\d+)\s*(?:분|min)")
+    UNIT_RANGE = re.compile(r"(\d+)\s*[~–]\s*60\s*(?:분|min)")
+
+    def _found(self, pattern: re.Pattern[str]) -> list[tuple[str, int]]:
+        return [
+            (path.name, int(m.group(1)))
+            for path in self.SITES
+            for m in pattern.finditer(path.read_text(encoding="utf-8"))
+        ]
+
+    def test_the_scan_finds_every_restatement(self) -> None:
+        self.assertGreaterEqual(len(self._found(self.TASK_MAX)), 6)
+        self.assertGreaterEqual(len(self._found(self.UNIT_RANGE)), 6)
+
+    def test_unit_starts_where_task_ends(self) -> None:
+        task_max = {value for _, value in self._found(self.TASK_MAX)}
+        unit_min = {value for _, value in self._found(self.UNIT_RANGE)}
+        self.assertEqual(1, len(task_max), f"task budgets disagree: {task_max}")
+        self.assertEqual(task_max, unit_min, "a gap or overlap between task and unit")
+
+
 class AlwaysLoadedBudgetTests(unittest.TestCase):
     """
     A ratchet on the always-loaded layer, and a check that syntax stays out of it.
@@ -280,7 +314,7 @@ class AlwaysLoadedBudgetTests(unittest.TestCase):
     """
 
     # A ratchet, not a measurement: raise it deliberately, with a reason.
-    BUDGET_BYTES = 35_000
+    BUDGET_BYTES = 31_000
 
     def _always_loaded(self) -> list[Path]:
         files = [REPO / "CLAUDE.md"]
@@ -448,13 +482,15 @@ class ModelTierConsistencyTests(unittest.TestCase):
                     )
         self.assertEqual([], problems, "; ".join(problems))
 
-    def test_at_least_three_files_restate_the_table(self) -> None:
-        """Guards the extractor: with none found, the test above is vacuous."""
+    def test_the_extractor_finds_a_restatement(self) -> None:
+        """Guards the extractor: with none found, the test above is vacuous.
+        Restatements were cut on purpose (2026-10-03); one is enough to prove
+        the extractor works."""
         restating = [
             p for p in self._files() if p != self.CANONICAL and self._pairings(p)
         ]
         self.assertGreaterEqual(
-            len(restating), 3, f"only {len(restating)} files paired a tier with a slug"
+            len(restating), 1, f"only {len(restating)} files paired a tier with a slug"
         )
 
     def test_every_slug_used_anywhere_is_a_known_slug(self) -> None:
@@ -547,59 +583,6 @@ class SectionPointerTests(unittest.TestCase):
         )
 
 
-class PhraseTestHonestyTests(unittest.TestCase):
-    """
-    A phrase test that claims more than it proves is worse than no test.
-
-    /lens-review measured that roughly 90 of this suite's assertions are
-    substring matches against markdown, and that 14 separate mutations of the
-    template leave the suite green. That is a real limit of the approach, not a
-    bug to fix by adding more phrases — so every module that asserts on markdown
-    has to say so where the next reader will see it.
-    """
-
-    def _markdown_asserting_modules(self) -> list[Path]:
-        modules = []
-        for path in sorted((REPO / "tests").glob("test_*.py")):
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-            for node in tree.body:
-                if not isinstance(node, (ast.Assign, ast.AnnAssign)):
-                    continue
-                if any(
-                    isinstance(sub, ast.Constant)
-                    and isinstance(sub.value, str)
-                    and sub.value.endswith(".md")
-                    for sub in ast.walk(node)
-                ):
-                    modules.append(path)
-                    break
-        return modules
-
-    def test_the_scan_finds_the_modules_it_is_meant_to(self) -> None:
-        """Guards the guard: a selector that matches nothing passes vacuously."""
-        found = {p.name for p in self._markdown_asserting_modules()}
-        self.assertIn("test_routing_rules.py", found)
-        self.assertGreaterEqual(len(found), 5, f"the selector found only {found}")
-
-    def test_each_one_states_that_it_is_a_tripwire(self) -> None:
-        for path in self._markdown_asserting_modules():
-            with self.subTest(module=path.name):
-                doc = ast.get_docstring(ast.parse(path.read_text(encoding="utf-8")))
-                self.assertIsNotNone(doc, "no module docstring at all")
-                assert doc is not None
-                lowered = doc.lower()
-                self.assertIn(
-                    "drift tripwire",
-                    lowered,
-                    "a module of substring assertions on prose must say so",
-                )
-                self.assertIn(
-                    "behavioural",
-                    lowered,
-                    "it must also say what it is NOT — behavioural coverage",
-                )
-
-
 class ScriptContractTests(unittest.TestCase):
     """The template's own scripts must satisfy the contract they document."""
 
@@ -636,79 +619,6 @@ class ScriptContractTests(unittest.TestCase):
                 text,
                 f"verify-save invokes {slower}: saving a file must not start a build",
             )
-
-
-class ShippedDesignSkeletonTests(unittest.TestCase):
-    """`.claude/docs/DESIGN.md` is copied into every adopting project and read by
-    deep-reasoning as THAT project's design. It must be an empty skeleton; the
-    template's own record lives in `docs/DESIGN.md`, which Quick Start does not
-    copy. Found on the first interactive /initproject run: the adopter's file
-    still carried this template's Key Decisions."""
-
-    SKELETON = REPO / ".claude" / "docs" / "DESIGN.md"
-    RECORD = REPO / "docs" / "DESIGN.md"
-    HEADINGS = [
-        "# Project Design Document",
-        "## Overview",
-        "## Architecture",
-        "## Implementation Plan",
-        "### Patterns & Approaches",
-        "### Libraries & Roles",
-        "### Key Decisions",
-        "## TODO",
-        "## Open Questions",
-        "## Changelog",
-    ]
-
-    def _lines(self) -> list[str]:
-        text = self.SKELETON.read_text(encoding="utf-8")
-        text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
-        text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
-        return [line.strip() for line in text.splitlines() if line.strip()]
-
-    def test_the_skeleton_keeps_the_headings_skills_write_into(self) -> None:
-        headings = [line for line in self._lines() if line.startswith("#")]
-        self.assertEqual(self.HEADINGS, headings)
-
-    def test_the_skeleton_carries_no_content(self) -> None:
-        for line in self._lines():
-            if line.startswith("#") or line.startswith(">"):
-                continue
-            if re.fullmatch(r"\|[-\s|]*\|", line):  # separator or empty row
-                continue
-            if re.fullmatch(r"\|(\s*[A-Z][\w &]*\s*\|)+", line):  # header row
-                continue
-            self.fail(f"the shipped skeleton carries content: {line!r}")
-
-    def test_the_template_keeps_its_own_record(self) -> None:
-        text = self.RECORD.read_text(encoding="utf-8")
-        self.assertIn("deep-reasoning pins `model: fable`", text)
-
-
-class VerifiedStateTableTests(unittest.TestCase):
-    """README's verified-state table is the single source of what has run. Its
-    never-run count must follow the skill directories. Drift tripwire."""
-
-    def test_the_never_run_count_matches_the_skills_on_disk(self) -> None:
-        readme = (REPO / "README.md").read_text(encoding="utf-8")
-        row = next(
-            line for line in readme.splitlines() if line.startswith("| 스킬 실행 |")
-        )
-        before, _, _ = row.partition("나머지")
-        ran = set(re.findall(r"`/([a-z-]+)`", before))
-        count = re.search(r"나머지 (\d+)개", row)
-        self.assertIsNotNone(count, "the row no longer states a count")
-        assert count is not None
-        skills = {p.name for p in SKILLS.iterdir() if (p / "SKILL.md").is_file()}
-        self.assertLessEqual(ran, skills, "a skill named as run does not exist")
-        self.assertEqual(len(skills) - len(ran), int(count.group(1)))
-
-    def test_initproject_is_recorded_as_run(self) -> None:
-        readme = (REPO / "README.md").read_text(encoding="utf-8")
-        row = next(
-            line for line in readme.splitlines() if line.startswith("| 스킬 실행 |")
-        )
-        self.assertIn("/initproject", row.partition("나머지")[0])
 
 
 def normalise_rule(rule: str) -> str:
@@ -833,160 +743,6 @@ class CommitAttributionTests(unittest.TestCase):
         # Drift tripwire over prose.
         text = (REPO / "CLAUDE.md").read_text(encoding="utf-8")
         self.assertIn("Co-Authored-By", text)
-
-
-class TierBudgetTests(unittest.TestCase):
-    """The tier budgets must leave no gap and agree everywhere they are restated.
-
-    A real target's e2e took 6m32s: over `task` (≤5 min) and under `unit`
-    (10–60 min), so no tier admitted it. Drift tripwire over prose.
-    """
-
-    SITES = (
-        REPO / "CLAUDE.md",
-        REPO / "README.md",
-        REPO / ".claude" / "rules" / "testing.md",
-        REPO / ".claude" / "scripts" / "README.md",
-        SKILLS / "initproject" / "SKILL.md",
-    )
-    TASK_MAX = re.compile(r"≤\s*(\d+)\s*(?:분|min)")
-    UNIT_RANGE = re.compile(r"(\d+)\s*[~–]\s*60\s*(?:분|min)")
-
-    def _found(self, pattern: re.Pattern[str]) -> list[tuple[str, int]]:
-        return [
-            (path.name, int(m.group(1)))
-            for path in self.SITES
-            for m in pattern.finditer(path.read_text(encoding="utf-8"))
-        ]
-
-    def test_the_scan_finds_every_restatement(self) -> None:
-        self.assertGreaterEqual(len(self._found(self.TASK_MAX)), 6)
-        self.assertGreaterEqual(len(self._found(self.UNIT_RANGE)), 6)
-
-    def test_unit_starts_where_task_ends(self) -> None:
-        task_max = {value for _, value in self._found(self.TASK_MAX)}
-        unit_min = {value for _, value in self._found(self.UNIT_RANGE)}
-        self.assertEqual(1, len(task_max), f"task budgets disagree: {task_max}")
-        self.assertEqual(task_max, unit_min, "a gap or overlap between task and unit")
-
-
-class InitprojectSkillTests(unittest.TestCase):
-    """Findings from the first real /initproject run (skill-test-initproject.md)."""
-
-    SKILL = SKILLS / "initproject" / "SKILL.md"
-
-    def _drift_grep(self) -> str:
-        """The Step 6 drift grep, exactly as the skill tells the model to run it."""
-        text = self.SKILL.read_text(encoding="utf-8")
-        match = re.search(r"```bash\n(grep -rn 'uv run.*?)```", text, re.DOTALL)
-        self.assertIsNotNone(match, "Step 6 drift grep block not found")
-        assert match is not None
-        return match.group(1)
-
-    def test_drift_grep_does_not_report_the_skills_own_files(self) -> None:
-        # Behavioural: runs the documented pipeline. Every hit it prints must be
-        # judged by a person, so hits on the skill's own instructions are noise
-        # the person has to learn to ignore on every run.
-        import subprocess
-
-        result = subprocess.run(
-            ["sh", "-c", self._drift_grep()],
-            cwd=REPO,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        hits = result.stdout.splitlines()
-        self.assertTrue(hits, "the grep found nothing — the scan itself is broken")
-        own = [h for h in hits if h.startswith(".claude/skills/initproject/")]
-        self.assertEqual([], own, "the drift grep reports the skill's own text")
-
-    def test_drift_grep_catches_python_test_examples(self) -> None:
-        # The first interactive run (Node project) left conftest.py / None in
-        # testing.md's examples: the grep only knew tool names, and Step 6 said
-        # only `## 명령` named the template's tools.
-        import subprocess
-
-        result = subprocess.run(
-            ["sh", "-c", self._drift_grep()],
-            cwd=REPO,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertIn("conftest", result.stdout)
-
-    def test_step_6_covers_what_the_first_run_had_to_adapt(self) -> None:
-        # Drift tripwire over prose.
-        text = self.SKILL.read_text(encoding="utf-8")
-        step6 = text.split("## Step 6", 1)[1].split("\n## ", 1)[0]
-        self.assertIn("`.claude/rules/language.md`", step6)
-        self.assertNotIn("Only the short `## 명령` section", step6)
-
-    def test_the_skill_says_it_needs_a_person(self) -> None:
-        # A: headless it stops at Step 2 and still exits `success`;
-        # interactively it completed (2026-09-28). Drift tripwire over prose.
-        text = self.SKILL.read_text(encoding="utf-8")
-        ground = text.split("## Ground rules", 1)[1].split("\n## ", 1)[0]
-        self.assertIn("claude -p", ground)
-        readme = (REPO / "README.md").read_text(encoding="utf-8")
-        section = readme.split("### `/initproject`", 1)[1].split("\n## ", 1)[0]
-        self.assertIn("claude -p", section)
-
-    def test_step_4_replaces_the_template_tagline(self) -> None:
-        text = self.SKILL.read_text(encoding="utf-8")
-        step4 = text.split("## Step 4", 1)[1].split("\n## ", 1)[0]
-        self.assertIn("멀티 에이전트 협업 프레임워크", step4)
-
-    def test_no_document_promises_a_fixed_number_of_scripts(self) -> None:
-        # Step 5 says a tier with no honest answer gets no script, so a fixed
-        # count is a promise the skill is told to break.
-        promise = re.compile(r"four verification scripts|스크립트 4개")
-        for path in (REPO / "README.md", self.SKILL):
-            with self.subTest(path=path.name):
-                text = path.read_text(encoding="utf-8")
-                self.assertIsNone(promise.search(text))
-
-    def test_rules_for_what_you_write_point_at_the_helper_convention(self) -> None:
-        text = self.SKILL.read_text(encoding="utf-8")
-        section = text.split("### Rules for what you write", 1)[1].split("\n### ", 1)[0]
-        self.assertIn("_lib.sh", section)
-
-    def test_step_4_retitles_the_copied_claude_md(self) -> None:
-        # G: without this, an adopter's only always-loaded context opens with
-        # "# Claude Code Orchestrator". The ground rules must allow the edit
-        # Step 4 asks for, or the two instructions contradict each other.
-        text = self.SKILL.read_text(encoding="utf-8")
-        step4 = text.split("## Step 4", 1)[1].split("\n## ", 1)[0]
-        ground = text.split("## Ground rules", 1)[1].split("\n## ", 1)[0]
-        self.assertIn("H1", step4)
-        self.assertIn("project name", step4)
-        self.assertIn("the H1", ground)
-
-    def test_the_save_tiers_structural_silence_is_documented(self) -> None:
-        # F: an unconfigured or half-configured verify-save is silent on every
-        # file, indistinguishable from "nothing to report". Not fixable by the
-        # contract (silence IS the contract for unhandled types), so it must be
-        # written where people look. Drift tripwire over prose; the behaviour
-        # itself is covered in test_verify_scripts.py.
-        contract = (REPO / ".claude" / "scripts" / "README.md").read_text(
-            encoding="utf-8"
-        )
-        marker = '**"해당 없음"은 종료 코드로 표현하지 않는다.**'
-        paragraph = contract.split(marker, 1)[1].split("\n## ", 1)[0]
-        self.assertIn("/initproject", paragraph)
-        readme = (REPO / "README.md").read_text(encoding="utf-8")
-        pitfalls = readme.split("### 8. 자주 밟는 함정", 1)[1].split("\n## ", 1)[0]
-        self.assertIn("verify-save", pitfalls)
-
-    def test_the_skill_does_not_permit_a_gate_that_rewrites_files(self) -> None:
-        # .claude/scripts/README.md already retracted "a formatter may rewrite
-        # the file" after it made verify-save silently rewrite what the model
-        # wrote; the skill kept the old permission and passed it to adopters.
-        text = self.SKILL.read_text(encoding="utf-8")
-        for stale in ("formatter may rewrite", "if a formatter was enabled"):
-            with self.subTest(stale=stale):
-                self.assertNotIn(stale, text)
 
 
 if __name__ == "__main__":

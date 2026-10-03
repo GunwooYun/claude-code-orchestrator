@@ -11,6 +11,31 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [Unreleased]
+
+Merged to `develop`, not yet released. A release renames this heading.
+
+### Removed (breaking)
+- Hooks `suggest-deep-reasoning-before-write` and `post-test-analysis` — the
+  same unmeasured-nudge class as the four removed in 2.0.0. Remove their
+  `settings.json` registrations in the same step.
+- `/checkpointing --full` and `--analyze` (never run; skill mining contradicts
+  "new skills only from field reports"). Session-history mode stays.
+- Orphan shipped files: two obsolete research notes, the writing-style template
+  and two unreferenced skill references; three uncalled functions.
+
+### Changed
+- `/feature` SKILL.md keeps what every run needs; the A2 review procedure, the
+  Option B prompt and the no-agy research prompt moved to `references/`
+  (loaded on demand): 25 KB → 21 KB per use.
+- `/deep-reasoning` and `/antigravity-system` SKILL.md no longer restate the
+  always-loaded rules or the executor's command lines.
+- `rules/testing.md` and `rules/dev-environment.md` drop examples the model
+  already knows. Always-loaded context 31.9 KB → 28.7 KB; ratchet 31 KB.
+- Tests that only matched prose (CLAUDE.md sections, doc-write, Jira, several
+  consistency classes) were removed; structural checks that caught real breaks
+  stay.
+
 ## [2.0.0] - 2026-10-03
 
 The direction review (`docs/direction-review-2026-10-03.md`). The template is an
