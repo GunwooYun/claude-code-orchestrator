@@ -11,6 +11,32 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [2.0.0] - 2026-10-03
+
+The direction review (`docs/direction-review-2026-10-03.md`). The template is an
+**orchestrator**: the main session talks, decides and delegates; subagents work
+in their own contexts and return summaries. This release cuts what does not
+serve that and stops building: from here, changes come only from field reports.
+
+### Removed (breaking)
+- Skills `/plan`, `/tdd`, `/simplify`, `/design-tracker`, `/update-design`,
+  `/research-lib`, `/update-lib-docs`, `/lens-review` — never run in real work.
+- Hooks `agent-router`, `suggest-antigravity-research`,
+  `suggest-deep-reasoning-after-plan`, `post-implementation-review` — nudges
+  whose effect was never measured. Their `settings.json` registrations are gone
+  too; **an adopting project must remove its own registrations of these hooks
+  in the same step**, or every edit fails on a missing hook file.
+- Everything removed is still in tag `v1.1.0`.
+
+### Changed
+- `CLAUDE.md` opens with the purpose and the one test for any change ("does it
+  improve delegation, context saving or result quality?"); template history
+  and test-file references are out. The rules files keep only their decisions.
+  Always-loaded context: 51 KB → about 32 KB (cap lowered to 35 KB).
+- README: purpose section; the "what is verified" table states current facts
+  (agy is in real use; four skills never run).
+- Phrase tests on the rewritten rules are reduced to the four rules that matter.
+
 ## [1.1.0] - 2026-10-02
 
 The first changes driven by a field report (Immich, #20), plus the git-operations

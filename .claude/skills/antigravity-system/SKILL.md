@@ -18,7 +18,7 @@ metadata:
 > **상세규칙**: `.claude/rules/antigravity-delegation.md`
 
 > **agy 를 쓸 수 없을 때**: `.claude/skills/antigravity-system/agy-probe` 로 상태를
-> 확인하고 `.claude/rules/antigravity-delegation.md` 의 "agy 가 없을 때" 절을
+> 확인하고 `.claude/rules/antigravity-delegation.md` 의 "When agy is unavailable" 절을
 > 따른다. 리서치를 건너뛰지 말고 대체 경로로 진행하되 **무엇으로 대체했는지를
 > 산출물 첫 줄에 남긴다.** 이 문구를 복제하지 않는다 — 규칙이 단일 출처다.
 
@@ -28,8 +28,8 @@ metadata:
 정하고, 여기 복제하지 않는다 — 두 곳에 같은 기준이 있으면 갈라진다.
 
 - 라우팅(토큰량 × 추론 난이도), 2단계 퍼널, 판정 위임 금지:
-  `.claude/rules/antigravity-delegation.md` → "라우팅은 주제가 아니라 비용으로 한다"
-- agy 를 쓸 수 없을 때의 대체 경로: 같은 파일 → "agy 가 없을 때"
+  `.claude/rules/antigravity-delegation.md` → "What goes to agy — by cost, not topic"
+- agy 를 쓸 수 없을 때의 대체 경로: 같은 파일 → "When agy is unavailable"
 - 에이전트별 강점 요약과 트리거 문구: `CLAUDE.md` 의 빠른 사용 가이드
 - 출력이 클 때 서브에이전트를 경유하는 기준: `CLAUDE.md` 의 출력 크기 기준
 
@@ -76,7 +76,7 @@ carries `--dangerously-skip-permissions --sandbox` + "Do not create or modify an
 Unsure → higher tier. Never downgrade T4. Empty answer → check stderr for `auto-denied`
 first (flag problem, same tier with flags); only a genuinely shallow answer → re-run once
 on `gemini-3.1-pro-high`. Never pass `--effort`.
-Full policy: `.claude/rules/antigravity-delegation.md` → "Model Policy".
+Full policy: `.claude/rules/antigravity-delegation.md` → "Model policy".
 
 ### CLI Options Reference
 

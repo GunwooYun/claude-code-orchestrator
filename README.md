@@ -10,22 +10,32 @@ Claude Code (Orchestrator) ─┬─ deep-reasoning Subagent (Claude Fable, 심�
                             └─ Subagents (Parallel Tasks)
 ```
 
+## 목적
+
+**이 템플릿은 오케스트레이터다.** 메인 Claude Code 는 사용자와 대화하고 판단·조정만 한다. 실제 일은
+서브에이전트(deep-reasoning, general-purpose → agy)에 맡기고, 서브에이전트는 각자 독립된 컨텍스트에서
+일한 뒤 요약만 돌려준다. 메인 컨텍스트를 아끼면서 **사용자의 목표에 맞는 결과**를 만드는 것이 목적이다.
+
+새 기능을 넣는 기준도 이것 하나다 — **위임·컨텍스트 절약·결과 품질 중 하나를 낫게 하는가.**
+(원본: [gaebalai/claude-code-orchestrator](https://github.com/gaebalai/claude-code-orchestrator).
+2026-10-03 방향 점검: `docs/direction-review-2026-10-03.md`)
+
 ## 지금 쓸 수 있는가 — 검증된 것과 아닌 것
 
 **쓸 수 있다.** 단, 무엇이 실제로 확인됐는지 알고 쓰는 편이 낫다.
 
 | | 상태 |
 |---|---|
-| 훅 9개 | **동작 확인.** 각 훅마다 "반응해야 하는 입력 / 무시해야 하는 입력" 한 쌍으로 테스트하고, 훅을 no-op 으로 만들면 빨간불이 나는 것까지 확인했다. **정정 (2026-09-28)**: `lint-on-save` 는 결과를 stderr(exit 0)로 냈는데, 그 채널은 Claude 에게 전달되지 않는다 — 테스트도 stderr 를 봐서 통과했다. 지금은 `additionalContext` 로 보내고, 실제 세션에서 모델에게 도달하는 것을 확인했다. 9번째 `bash-write-check` 도 실제 세션에서 Bash 편집을 감지해 알리는 것을 확인했다 |
+| 훅 6개 | **동작 확인.** 각 훅마다 "반응해야 하는 입력 / 무시해야 하는 입력" 한 쌍으로 테스트했다. `lint-on-save`·`bash-write-check` 는 실제 세션에서 모델에게 결과가 도달하는 것을 확인했다. 효과를 잴 수 없던 제안 훅 4개는 2026-10-03 에 뺐다 |
 | `.claude/scripts/verify-save`, `verify-task` | **동작 확인.** 저장 게이트는 **읽기 전용**이다 — 파일을 고치지 않고 보고만 한다 |
 | 규칙·스킬 문서의 일관성 | **테스트로 고정.** 모델 등급↔슬러그 일치, 섹션 포인터 해소, 임계값 단일 정의, 항상-로드 예산 |
 | `checkpoint.py` | **동작 확인** (펜스·rename·범위·원자적 쓰기 회귀 테스트) |
-| 스킬 실행 | `/lens-review` 와 `/deep-reasoning` 은 **실제로 돌았고 진짜 결함을 찾았다**(이 저장소의 `docs/DESIGN.md` 에 "Found by `/lens-review`" 로 남아 있다). `/initproject` 는 **Node/TS 프로젝트에서 대화형으로 8단계를 완주했다**(2026-09-28) — 생성된 검증 스크립트가 실제로 실패하는 것까지 세션 밖에서 확인했고, 드러난 결함 다섯 개는 고쳤다. 헤드리스(`claude -p`)는 지원하지 않는다. `/feature` 는 **두 번 돌았다**(2026-09-28 Node/TS 프로젝트에서 구현 루프까지, 2026-09-29 Immich 포크에서 승인 게이트까지 — 둘 다 결함을 드러냈고 고쳤다). Phase 6 별도 세션 리뷰는 아직 실전에서 돈 적이 없다. `/isolated-review` 는 심어 둔 버그와 프롬프트 주입이 있는 시험 저장소에서 **실제 CLI 로 돌았다**(2026-09-29): 버그를 찾고, 주입을 따르지 않고 발견으로 보고했으며, 쓰기·비밀값 누출이 없었다. 단 리뷰어가 쓰기나 `.env` 읽기를 **시도하지 않았으므로** 그 실행이 격리를 증명한 것은 아니다 — 격리의 근거는 별도 실측과 매 실행의 도구 목록·프로브 검사다. 실제 작업 브랜치에서는 아직이다. **나머지 13개는 한 번도 안 돌렸다.** 테스트는 스킬의 *문서*가 일관되는지만 본다 |
-| agy 연동 | **미확인.** 이 저장소를 만든 컨테이너에 agy 가 없었다. 모델 정책·soft-deny 실동작은 문서상 설계다 |
+| 스킬 실행 | 실제 작업에서 돈 것: `/initproject`(Node/TS, Immich), `/feature`(Node/TS, Immich 여러 작업), `/isolated-review`(Immich 실작업 3회 + 지난 작업 6건 재검증), `/deep-reasoning`, `/antigravity-system`(Immich 에서 agy 18회), `/orchestrator-version`(업그레이드). **나머지 4개는 한 번도 안 돌렸다** — `checkpointing`, `doc-write`, `jira-setup`, `ticket` (회사 저장소에서 쓸 예정). 테스트는 스킬의 *문서*가 일관되는지만 본다 |
+| agy 연동 | **실사용 중.** Immich 에서 18회 호출(대부분 `gemini-3.1-pro-high`). 단 리서치 정확도 문제가 보고됐다 — 줄 번호 없이 답하고, 테스트가 있는 곳을 "공백"으로 지목한 적이 있다 |
 | Jira·Confluence | 커넥터로 **측정한 사실**에 기반하지만(프로젝트 141개, cloudId 중복 등), 스킬 실행은 미확인 |
 | Windows | **미확인.** `verify-*` 해석기 목록은 배려하지만 훅 등록(`python3`)은 아니다 |
 
-즉 **기계가 볼 수 있는 부분은 검증됐고, 프롬프트가 실제 세션에서 어떻게 작동하는지는 아직 아니다.** `/initproject` 는 한 스택(Node/TS)에서만 돌았으므로 다른 스택에서는 여전히 어긋날 수 있다 — 어긋나는 게 나오면 그게 정상이고, 그때 고치면 된다. 다음 실전 대상은 `/feature` 다.
+2026-10-03 부터 이 템플릿은 **새로 만들지 않고 쓰면서 고친다.** 실사용 리포트에 적힌 high·medium 문제만 고친다 — 운영 방식은 `docs/direction-review-2026-10-03.md`.
 
 전체 미결 목록: `docs/DESIGN.md` 의 Open Questions (이 템플릿 자신의 설계 기록 — 복사되지 않는다. 채택 프로젝트가 받는 `.claude/docs/DESIGN.md` 는 빈 뼈대다).
 
@@ -142,7 +152,7 @@ agy models   # 사용 가능한 모델 슬러그 확인
 │   │   └── ...
 │   │
 │   ├── hooks/                   # 자동화 훅
-│   │   ├── agent-router.py      # 에이전트 라우팅
+│   │   ├── bash-write-check.py  # Bash 로 쓴 파일도 저장 검사
 │   │   ├── lint-on-save.py      # 저장 시 verify-save 호출 (도구 이름 모름)
 │   │   └── ...
 │   │
@@ -200,33 +210,6 @@ agy models   # 사용 가능한 모델 슬러그 확인
 `unit`(5~60분) / `full`(무제한, CI 전용). `unit`/`e2e` 같은 말은 스택마다 뜻이
 달라 판단 기준이 못 된다. 자세한 원칙은 `.claude/rules/testing.md`.
 
-### `/plan` — 구현 계획 수립
-
-요구사항을 실제 구현 단계로 분해한다.
-
-```
-/plan API 엔드포인트 추가
-```
-
-**출력:**
-- 구현 단계(파일, 변경 내용, 검증 방법)
-- 의존성 및 위험
-- 검증 기준
-
-### `/tdd` — 테스트 주도 개발
-
-Red → Green → Refactor 사이클을 강제한다.
-
-```
-/tdd 사용자 등록 기능
-```
-
-**워크플로우:**
-1. 테스트 케이스 설계
-2. 실패한 테스트 작성(Red)
-3. 최소한의 구현(Green)
-4. 리팩토링(Refactor)
-
 ### `/checkpointing` — 세션 저장
 
 대화·결정·코드 흐름을 재사용 가능하게 보존한다.
@@ -258,14 +241,6 @@ Red → Green → Refactor 사이클을 강제한다.
 - "조사해" "리서치해"
 - "이 PDF/동영상 보기"
 - "코드베이스 전체 이해"
-
-### `/simplify` — 코드 리팩토링
-
-코드를 간결화·가독성 향상시킵니다.
-
-### `/design-tracker` — 설계 결정 추적
-
-아키텍처 및 구현 결정을 `.claude/docs/DESIGN.md`에 자동으로 기록합니다. `/update-design`은 같은 파일을 수동으로 강제 갱신한다.
 
 ### `/doc-write` — 문서 작성 (자동 발동, 타이핑 불필요)
 
@@ -311,35 +286,6 @@ Confluence 페이지, Jira 티켓 본문, 저장소 준거 문서, 구현 계획
 상태이고 남이 쓴 것일 수 있다). 자격증명은 기록하지 않는다 — 인증은 커넥터가 관리하고
 **로그인은 대신 할 수 없다**.
 
-### `/lens-review` — 다관점 병렬 리뷰 (자동 발동)
-
-같은 변경을 **직교하는 관점 3개로 병렬 검토**하고 취합한다. 기본 렌즈는
-`correctness`(주장한 동작을 하는가) / `design`(구조가 유지되는가) /
-`robustness`(적대적 입력·실패 모드). 변경 성격에 따라 하나를 교체한다 — 테스트가
-빈약하면 `design` → 검증 충분성, 순수 리팩터링이면 `correctness` → 동작 보존.
-
-**가장 큰 가치는 발견 목록이 아니라 관점 간 충돌이다.** correctness 가 "여기 가드를
-추가하라"고 하는데 design 이 "이 함수는 존재하지 않아야 한다"고 하면, 그것이 진짜
-설계 결정 지점이다. 취합 단계는 **충돌을 임의로 판정하지 않고** 양쪽 근거와
-무엇을 잃는지를 나란히 제시한다.
-
-```
-큰 변경 ──> agy 프리필터 (한 번, 모든 렌즈에 같은 목록)
-              ├─> correctness  ─┐
-              ├─> design       ─┼─> 취합: 중복 제거 → 충돌 노출 → 심각도 정렬
-              └─> robustness   ─┘
-```
-
-비용은 렌즈 수에 선형이라 **3개를 권한다** — 4개 이상에서는 새 발견보다 중복이
-빠르게 늘어난다. **작은 변경에는 쓰지 않는다**: deep-reasoning 한 번이 더 싸고
-결과도 같다. 발견의 적대적 재검증은 조건부다(자동 수정에 쓸 때, 또는 렌즈가 신뢰도를
-낮게 표시했을 때).
-
-**별도 세션 리뷰를 대체하지 않는다.** 렌즈는 격리된 컨텍스트에서 돌지만
-**프롬프트를 이 세션이 쓰므로 프레이밍 편향이 남는다.** 최종 리뷰는 여전히
-`git worktree` 로 격리한 새 세션이 담당한다 — 이 스킬은 그 전에 명백한 것들을
-걷어내 최종 리뷰가 어려운 것에 집중하게 한다.
-
 ### `/isolated-review` — 격리 리뷰 (`/feature` Phase 6 기본)
 
 구현을 커밋한 뒤, 사용자에게 한 번 묻고 오케스트레이터가 **이 세션과 컨텍스트를 공유하지 않는 `claude -p` 리뷰어**를 띄운다. 리뷰어는 고정된 요청문만 받고(누구도 문장을 덧붙일 수 없다), Read·Grep·Glob 외에는 아무 도구도 없다. 리포트는 요약하지 않고 그대로 보여주며, 판정은 COMPLETE / INCOMPLETE / FAILED / INVALID 뿐 — "승인"은 없다.
@@ -347,10 +293,6 @@ Confluence 페이지, Jira 티켓 본문, 저장소 준거 문서, 구현 계획
 격리는 지시가 아니라 **도구 집합**으로 한다: 허용 목록(`--allowedTools`)은 제한이 아니라서 실측에서 리뷰어가 파일을 썼다. 그래서 `--restricted`·MCP 차단·슬래시 명령 차단을 쓰고, 매 실행의 시작 이벤트로 실제 도구 목록을 확인하며, 같은 설정의 값싼 프로브가 두 번의 금지된 읽기를 거부당해야 리뷰가 시작된다. 구현자가 쓴 `CLAUDE.md` 는 읽지 못하고 검증 계획만 "구현자의 주장"으로 전달된다. 되묻기가 필요하면 사람이 여는 세션(Phase 6 A2)을 쓴다. 설계와 실측 전체: `docs/isolated-review.md`.
 
 **실사용 검증 중이다.** 여러 저장소에서 몇 번 쓴 뒤 `.claude/skills/isolated-review/field-report` 로 리포트 초안을 만들고(판정·비용·도구 목록·발견 개수만 — 리뷰 본문·코드·비밀값은 넣지 않는다), 발견마다 진짜/오탐/모름과 놓친 문제를 적어 템플릿 개발 쪽에 전한다. 작성법: `.claude/docs/templates/field-report.md`.
-
-### `/research-lib`, `/update-lib-docs` — 라이브러리 제약 문서
-
-`/research-lib <lib>`는 라이브러리 조사 결과를 `.claude/docs/libraries/<lib>.md`에 저장하고, `/update-lib-docs`는 기존 문서를 최신화한다. deep-reasoning 코드 리뷰와 agy 리서치가 이 문서를 제약 조건으로 참조한다.
 
 ### `/initproject` — 첫 세션 설정 (프로젝트당 1회)
 
@@ -468,7 +410,7 @@ claude
 | 실제 구현, 파일 수정, 테스트 실행, 커밋 | **메인 Claude** / general-purpose | 평소대로 |
 | 한두 문장 답이면 되는 질문 | **메인 Claude 직접** | 서브에이전트 띄우지 말 것 |
 
-트리거 단어가 들어가면 `agent-router.py`가 자동으로 제안하지만, 확실할 때는 **명시적으로** 지정하는 편이 빠르다: "deep-reasoning에게 이 diff 리뷰시켜 줘", "agy로 httpx vs aiohttp 조사해서 research에 저장해 줘".
+확실할 때는 **명시적으로** 지정하는 편이 빠르다: "deep-reasoning에게 이 diff 리뷰시켜 줘", "agy로 httpx vs aiohttp 조사해서 research에 저장해 줘".
 
 ### 3. 기능 하나의 표준 사이클
 
@@ -476,15 +418,7 @@ claude
 /feature <기능>       agy 사전조사 → 요구사항 → 검증 계획 → deep-reasoning 리뷰 → 태스크 목록
                       → 사용자 승인 → CLAUDE.md 갱신 → 구현 루프 → 별도 세션 리뷰
       ↓
-/plan <세부 항목>        단계·파일·검증 기준 분해
-      ↓
-/tdd <단위>              Red → Green → Refactor (테스트 먼저)
-      ↓
-구현 → 훅이 리뷰 제안    파일 3개/100줄 넘으면 post-implementation-review 가 deep-reasoning 리뷰를 권함
-      ↓
-/simplify                리팩토링 패스
-      ↓
-별도 세션 리뷰            아래 §5 참고 (worktree)
+/isolated-review         Phase 6 기본 — 격리된 읽기 전용 리뷰어 (필요하면 §5 의 사람이 여는 세션도)
       ↓
 /checkpointing --full --analyze   세션 기록 + 반복 패턴을 스킬 후보로 추출
 ```
@@ -543,7 +477,6 @@ cd ../<project>-review && claude
 |---|---|
 | `CLAUDE.md` 기술 스택 / `rules/dev-environment.md` | 프로젝트 스택에 맞추기 (기본값은 uv/ruff/ty) |
 | `scripts/verify-*` | 이 프로젝트의 실제 검증 명령으로 작성 (훅은 손대지 않는다) |
-| `hooks/agent-router.py` 트리거 목록 | 팀이 자주 쓰는 표현 추가, 과잉 매칭 단어("문서" 등) 조정 |
 | `agents/deep-reasoning.md` `model:` | 세션 모델과 다른 리뷰 모델을 쓰고 싶을 때만 |
 | `settings.json` `permissions.allow` | 프로젝트 도구 명령을 좁게 추가(`Bash(npm run test:*)` 처럼). `docker`·`curl`·`kill`·`git push` 는 템플릿이 `ask` 에 둔다 — allow 로 옮기지 않는다 |
 | `.agents/rules/AGENTS.md` | agy에게 줄 프로젝트 설명·금기 사항 |
@@ -622,14 +555,10 @@ uv run ruff check .
 
 | 후크 | 트리거 | 동작 |
 |--------|----------|------|
-| `agent-router.py` | 사용자 입력 | deep-reasoning / agy 라우팅 제안 |
 | `lint-on-save.py` | 파일 저장 | `.claude/scripts/verify-save` 에 경로를 넘기고 출력을 그대로 전달. **도구 이름을 하나도 모른다** — 무엇을 검사하는지는 스크립트가 정한다. 티어가 없으면 세션당 한 번만 알린다 |
 | `bash-write-check.py` | Bash 전·후 | Bash 로 쓴 파일(`sed -i`, 리다이렉션, heredoc)은 위 훅을 거치지 않는다. 명령 전 시각을 표시하고, 뒤에 그 이후 수정된 파일에 `verify-save` 를 돌려 알린다(최대 5개, 빌드·로그 디렉터리 제외, git 명령 제외). 편집 명령이면 "Edit/Write 를 쓰라"를 덧붙인다. mtime 기반이라 `cp -p` 처럼 시각을 보존하는 쓰기와 너무 큰 트리는 놓친다(후자는 세션당 한 번 알린다) |
 | `suggest-deep-reasoning-before-write.py` | 파일 쓰기 전 | 심층 추론 리뷰 제안. 크기 규칙(500자)은 **소스 파일에만** 적용된다 — 긴 문서는 설계 결정이 아니다. 경로가 설계처럼 보이면(`DESIGN.md`, `core/`, `schema`) 내용과 무관하게 발동 |
-| `suggest-deep-reasoning-after-plan.py` | Plan 태스크 후 | 계획 리뷰 제안 |
-| `suggest-antigravity-research.py` | 웹 검색/페치 전 | agy 리서치 제안 |
 | `post-test-analysis.py` | 테스트 실패 | 디버깅 분석 제안 |
-| `post-implementation-review.py` | 파일 3개 이상 / 100줄 이상 수정 후 | 코드 리뷰 제안. **세션당 한 번**만 (상태는 세션 id 로 분리) |
 | `log-cli-tools.py` | agy 실행 | I/O 로깅 (`.claude/logs/cli-tools.jsonl`) |
 
 훅은 전부 **제안만** 한다(차단하지 않음). 훅 파일명을 바꾸면 `.claude/settings.json`의 등록 경로를 **같은 커밋에서** 함께 바꿔야 한다 — 어긋나면 PreToolUse 훅 오류로 모든 Edit이 막힌다.
