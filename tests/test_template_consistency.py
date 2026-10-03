@@ -238,7 +238,7 @@ class LargeChangeThresholdTests(unittest.TestCase):
     def test_claude_md_defines_it_and_lists_who_uses_it(self) -> None:
         body = " ".join((REPO / "CLAUDE.md").read_text(encoding="utf-8").split())
         self.assertIn("큰 변경의 기준", body, "there is no single definition site")
-        for consumer in ("프리필터", "/lens-review", "/feature"):
+        for consumer in ("프리필터", "/feature"):
             self.assertIn(consumer, body, f"the definition does not name {consumer}")
 
     def test_the_definition_covers_the_size_independent_case(self) -> None:
@@ -280,7 +280,7 @@ class AlwaysLoadedBudgetTests(unittest.TestCase):
     """
 
     # A ratchet, not a measurement: raise it deliberately, with a reason.
-    BUDGET_BYTES = 53_000
+    BUDGET_BYTES = 35_000
 
     def _always_loaded(self) -> list[Path]:
         files = [REPO / "CLAUDE.md"]
@@ -683,34 +683,6 @@ class ShippedDesignSkeletonTests(unittest.TestCase):
     def test_the_template_keeps_its_own_record(self) -> None:
         text = self.RECORD.read_text(encoding="utf-8")
         self.assertIn("deep-reasoning pins `model: fable`", text)
-
-
-class DesignRecordFormatTests(unittest.TestCase):
-    """Every skill that writes DESIGN.md must write the rows the shipped skeleton
-    has headers for. /update-design used `#### Title (Date)` blocks and
-    `### {Date}` changelog headings while the skeleton has tables."""
-
-    WRITERS = ("design-tracker", "update-design")
-
-    def _skeleton_headers(self) -> list[str]:
-        text = (REPO / ".claude" / "docs" / "DESIGN.md").read_text(encoding="utf-8")
-        return [
-            line
-            for line in text.splitlines()
-            if line.startswith("| Decision |") or line.startswith("| Date |")
-        ]
-
-    def test_the_skeleton_has_both_tables(self) -> None:
-        self.assertEqual(2, len(self._skeleton_headers()))
-
-    def test_each_writer_uses_the_skeleton_tables(self) -> None:
-        for name in self.WRITERS:
-            text = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
-            with self.subTest(skill=name):
-                for header in self._skeleton_headers():
-                    self.assertIn(header, text)
-                self.assertNotIn("#### {Decision Title}", text)
-                self.assertNotIn("### {Date}", text)
 
 
 class VerifiedStateTableTests(unittest.TestCase):

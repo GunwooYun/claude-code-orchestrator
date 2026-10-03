@@ -7,7 +7,7 @@ detect a dead hook. They assert tolerance — exit 0, valid-or-empty stdout,
 survives junk — and empty stdout is a legal contract answer, so a hook that
 reads its payload and returns immediately satisfies every one of them.
 Measured: inserting `sys.exit(0)` after `json.load(sys.stdin)` in
-`agent-router.py` left all 221 tests green. The template's most expensive defect
+a hook (the since-removed `agent-router.py`) left all 221 tests green. The template's most expensive defect
 so far (`lint-on-save.py` read an environment variable Claude Code never sets
 and was a permanent no-op) is exactly that shape.
 
@@ -104,14 +104,10 @@ def context(result: subprocess.CompletedProcess[str]) -> str:
 # Hooks whose effect is asserted below. Keyed by filename so the structural test
 # can compare it against what is on disk.
 COVERED = {
-    "agent-router.py",
     "suggest-deep-reasoning-before-write.py",
-    "suggest-antigravity-research.py",
-    "suggest-deep-reasoning-after-plan.py",
     "post-test-analysis.py",
     "log-cli-tools.py",
     "lint-on-save.py",
-    "post-implementation-review.py",
     "bash-write-check.py",
 }
 
@@ -128,33 +124,6 @@ class CoverageTests(unittest.TestCase):
         )
         stale = COVERED - on_disk
         self.assertEqual(set(), stale, f"{sorted(stale)} is listed but not on disk")
-
-
-class AgentRouterTests(unittest.TestCase):
-    HOOK = HOOKS / "agent-router.py"
-
-    def prompt(self, text: str) -> str:
-        return context(
-            run(self.HOOK, {"hook_event_name": "UserPromptSubmit", "prompt": text})
-        )
-
-    def test_a_debugging_prompt_routes_to_deep_reasoning(self) -> None:
-        emitted = self.prompt("Why does the retry logic fail? Please debug it")
-        self.assertIn("[Agent Routing]", emitted)
-        self.assertIn("deep-reasoning", emitted)
-
-    def test_a_research_prompt_routes_to_antigravity(self) -> None:
-        emitted = self.prompt("Please research the newest library options for parsing")
-        self.assertIn("[Agent Routing]", emitted)
-        self.assertIn("agy", emitted)
-
-    def test_a_plain_edit_request_is_not_routed(self) -> None:
-        self.assertEqual(
-            "", self.prompt("Please rename the variable foo to bar in that one file")
-        )
-
-    def test_a_very_short_prompt_is_not_routed(self) -> None:
-        self.assertEqual("", self.prompt("ok"))
 
 
 class SuggestBeforeWriteTests(unittest.TestCase):
@@ -272,70 +241,6 @@ class SuggestBeforeWriteTests(unittest.TestCase):
         """DESIGN.md is prose, and is exactly what this hook wants seen."""
         emitted = self.edit("/tmp/project/docs/DESIGN.md", "x\n")
         self.assertIn("[Design Review Reminder]", emitted)
-
-
-class SuggestAntigravityTests(unittest.TestCase):
-    HOOK = HOOKS / "suggest-antigravity-research.py"
-
-    def search(self, query: str) -> str:
-        return context(
-            run(
-                self.HOOK,
-                {
-                    "hook_event_name": "PreToolUse",
-                    "tool_name": "WebSearch",
-                    "tool_input": {"query": query},
-                },
-            )
-        )
-
-    def test_a_comparison_query_suggests_agy(self) -> None:
-        emitted = self.search("best practice for retry back-off in async clients")
-        self.assertIn("[Antigravity Research Suggestion]", emitted)
-
-    def test_a_version_lookup_stays_silent(self) -> None:
-        """Exercises the early skip list."""
-        self.assertEqual("", self.search("httpx version"))
-
-    def test_an_ordinary_short_query_stays_silent(self) -> None:
-        """
-        Exercises the fall-through, which the skip-list case does not reach.
-        Found by mutation: making the final `return False` fire always left the
-        suite green while only the early-exit path was covered.
-        """
-        self.assertEqual("", self.search("set the timeout"))
-
-
-class SuggestAfterPlanTests(unittest.TestCase):
-    HOOK = HOOKS / "suggest-deep-reasoning-after-plan.py"
-
-    def task(self, tool_input: dict, tool_name: str = "Task") -> str:
-        return context(
-            run(
-                self.HOOK,
-                {
-                    "hook_event_name": "PostToolUse",
-                    "tool_name": tool_name,
-                    "tool_input": tool_input,
-                    "tool_response": {"content": "done"},
-                },
-            )
-        )
-
-    def test_a_finished_plan_task_suggests_a_review(self) -> None:
-        emitted = self.task({"subagent_type": "Plan", "prompt": "lay out the steps"})
-        self.assertIn("[Plan Review Suggestion]", emitted)
-
-    def test_an_unrelated_subagent_run_stays_silent(self) -> None:
-        self.assertEqual(
-            "",
-            self.task(
-                {"subagent_type": "general-purpose", "prompt": "count the log lines"}
-            ),
-        )
-
-    def test_another_tool_stays_silent(self) -> None:
-        self.assertEqual("", self.task({"subagent_type": "Plan"}, tool_name="Bash"))
 
 
 class PostTestAnalysisTests(unittest.TestCase):
@@ -701,64 +606,6 @@ class BashWriteCheckTests(unittest.TestCase):
         self.call("PreToolUse", "npm test")
         self.touch("a.py")
         self.assertEqual("", self.call("PostToolUse", "npm test"))
-
-
-class PostImplementationReviewTests(unittest.TestCase):
-    HOOK = HOOKS / "post-implementation-review.py"
-
-    def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.project = Path(tmp.name)
-
-    def edit(self, name: str, lines: int = 5, session: str = "s1") -> str:
-        return context(
-            run(
-                self.HOOK,
-                {
-                    "hook_event_name": "PostToolUse",
-                    "session_id": session,
-                    "tool_name": "Edit",
-                    "tool_input": {
-                        "file_path": f"src/{name}",
-                        "new_string": "line\n" * lines,
-                    },
-                },
-                env={"CLAUDE_PROJECT_DIR": str(self.project)},
-                cwd=self.project,
-            )
-        )
-
-    def state_files(self) -> list[Path]:
-        directory = self.project / ".claude" / "logs" / "implementation-state"
-        return sorted(directory.glob("*.json")) if directory.exists() else []
-
-    def test_the_first_edit_records_state_but_stays_silent(self) -> None:
-        self.assertEqual("", self.edit("one.py"))
-        self.assertEqual(1, len(self.state_files()), "no state was written")
-
-    def test_the_third_source_file_triggers_the_suggestion(self) -> None:
-        self.edit("one.py")
-        self.edit("two.py")
-        emitted = self.edit("three.py")
-        self.assertIn("[Code Review Suggestion]", emitted)
-        self.assertIn("3 source files", emitted)
-
-    def test_it_suggests_only_once_per_session(self) -> None:
-        self.edit("one.py")
-        self.edit("two.py")
-        self.edit("three.py")
-        self.assertEqual("", self.edit("four.py"), "it suggested twice")
-
-    def test_a_different_session_starts_from_zero(self) -> None:
-        self.edit("one.py", session="s1")
-        self.edit("two.py", session="s1")
-        self.assertEqual("", self.edit("one.py", session="s2"))
-
-    def test_documents_do_not_count_as_implementation(self) -> None:
-        self.edit("a.md")
-        self.edit("b.md")
-        self.assertEqual("", self.edit("c.md"))
 
 
 if __name__ == "__main__":

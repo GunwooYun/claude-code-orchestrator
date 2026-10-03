@@ -68,7 +68,7 @@ Phase 6: Multi-Session Review (New Session + deep-reasoning)
 ```
 
 종료 코드 0(`READY`)이면 아래 A, 그 외면 B 로 간다. 상태와 그 의미는
-`.claude/rules/antigravity-delegation.md` 의 "agy 가 없을 때"를 따른다.
+`.claude/rules/antigravity-delegation.md` 의 "When agy is unavailable"를 따른다.
 
 ### A. agy 가 READY 일 때
 
@@ -204,7 +204,7 @@ deep-reasoning 이 넓게 읽는 일을 하지 않게 하는 것이 목적이다
 과 사실만 반환하고 판정은 하지 않으며**, deep-reasoning 에게 "걸러진 입력을 받았다,
 부족하면 직접 읽어라"를 프롬프트에 명시한다. 그 아래 크기에서는 왕복 비용이 절약분보다
 크므로 바로 준다. 기준과 절대 규칙:
-`.claude/rules/antigravity-delegation.md` → "라우팅은 주제가 아니라 비용으로 한다".
+`.claude/rules/antigravity-delegation.md` → "What goes to agy — by cost, not topic".
 
 ```
 Task tool parameters:
@@ -428,12 +428,6 @@ Task tool parameters:
 배경에서 도는 동안 메인은 **코드가 아닌 todo** 만 진행한다(완료 보고 준비 등).
 다음 작업 단위를 시작하지 않는다 — 아직 이 단위의 판정이 나오지 않았다.
 
-### 루프 중에 오는 리뷰 제안
-
-`post-implementation-review.py` 훅이 파일 3개·100줄을 넘기면 "deep-reasoning 리뷰를
-고려하라"를 끼워 넣는다. **그것은 Phase 6 Option B 이고, 루프 중에 시작하지
-않는다.** 지금 돌고 있는 짝을 끝내고, Phase 6 에서 처리한다.
-
 ### 구현 중에 결정이 바뀌면
 
 `CLAUDE.md` 의 `### Decisions` 를 **그때 바로** 고친다. 끝에 몰아서 쓰면 무엇을 왜
@@ -486,13 +480,10 @@ Task tool parameters:
 
 ### Option B: deep-reasoning Review (via Subagent)
 
-변경이 크면(파일 5개 또는 500줄 이상, 또는 보안 경계·공개 인터페이스 —
-기준: `CLAUDE.md` 「큰 변경의 기준」) Option B 대신
-**`/lens-review`** 를 쓴다 — 직교하는 관점 3개를 병렬로 돌리고, **관점 간 충돌**을
-드러낸다. 작은 변경에는 아래 단일 호출이 더 싸고 결과도 같다.
+변경이 크면(파일 5개 또는 500줄 이상 — `CLAUDE.md` 「큰 변경의 기준」) 앞단에
+agy 프리필터를 두고, deep-reasoning 에게 걸러진 입력임을 알린다.
 
-어느 쪽도 **Option A(별도 세션)를 대체하지 않는다.** 둘 다 이 세션이 프롬프트를
-쓰므로 편향이 남는다.
+**Option A(별도 세션)를 대체하지 않는다.** 이 세션이 프롬프트를 쓰므로 편향이 남는다.
 
 ```
 Task tool parameters:

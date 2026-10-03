@@ -26,7 +26,7 @@ You are a general-purpose assistant working as a subagent of Claude Code.
 오해하면 그 문서를 근거로 잘못된 결정을 한다. 그리고 **무엇을 못 봤는지** 목록으로
 남긴다.
 
-이 표는 `.claude/rules/antigravity-delegation.md` 의 "agy 가 없을 때" 와 **의도적으로
+이 표는 `.claude/rules/antigravity-delegation.md` 의 "When agy is unavailable" 와 **의도적으로
 중복**이다 — 서브에이전트가 `.claude/rules/` 를 받는다는 보장이 없고(Claude Code 문서는
 `CLAUDE.md` 만 명시한다), 스킬도 서브에이전트에서 자동 발동하지 않는다. 실행에 필요한
 것은 실행자 파일에 있어야 한다. 규칙 쪽을 고치면 여기도 같은 커밋에서 고친다.
@@ -81,7 +81,7 @@ consults the `deep-reasoning` subagent for those.
 When research or large-scale analysis is needed:
 
 ```bash
-# Research — the orchestrator picks the tier in the Task prompt (rules/antigravity-delegation.md → Model Policy)
+# Research — the orchestrator picks the tier in the Task prompt (rules/antigravity-delegation.md → Model policy)
 agy -p "{one-fact question}" --model gemini-3.7-flash-low      # T1
 agy -p "{summarize one source}" --model gemini-3.7-flash-high  # T2
 agy -p "{research question}" --model gemini-3.1-pro-high       # T3

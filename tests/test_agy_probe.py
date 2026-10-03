@@ -260,7 +260,7 @@ class DegradationRuleTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn(
-            "조용히",
+            "Never degrade silently",
             rule,
             "the rule must state that degrading silently is not allowed — a "
             "research document produced without agy has different breadth and "

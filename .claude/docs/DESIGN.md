@@ -1,7 +1,8 @@
 # Project Design Document
 
 > This document tracks design decisions made during conversations.
-> Updated automatically by the `design-tracker` skill.
+> Record a decision here when it outlives the current unit of work; `/feature`
+> keeps a unit's own decisions in `CLAUDE.md` → `## Current Project` → `### Decisions`.
 
 ## Overview
 
