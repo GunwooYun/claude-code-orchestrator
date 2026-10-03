@@ -4,8 +4,8 @@ Loaded on demand from `/feature` Phase 6. The default (A1, `/isolated-review`) a
 
 ## A2 — person-opened session
 
-경계·공개 인터페이스 변경일 때 A1 에 더해 사용자에게 요청한다. A1 은 되묻기가
-불가능하다.
+리포트에 되묻거나 반박해야 할 때, 또는 보안 경계·공개 인터페이스 변경일 때 A1 에 더해
+사용자에게 요청한다. A1 은 되묻기가 불가능하다.
 
 **워크트리는 작업 브랜치에 체크아웃한다.** `main` 에 체크아웃하면 그 안에서
 `HEAD == main` 이므로 `git diff main...HEAD` 가 **아무것도 출력하지 않고**, 리뷰
