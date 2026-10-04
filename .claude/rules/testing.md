@@ -97,74 +97,14 @@ Yocto recipe      bitbake -p 파싱, oelint-adv   이미지 빌드 + testimage/p
 
 ## 테스트 작성
 
-### AAA 패턴
-
-```python
-def test_user_creation() -> None:
-    # Arrange
-    user_data = {"name": "Alice", "email": "alice@example.com"}
-
-    # Act
-    user = create_user(user_data)
-
-    # Assert
-    assert user.name == "Alice"
-```
-
-### 이름
-
-`test_{대상}_{조건}_{기대결과}` — 이름만 읽고 무엇이 깨졌는지 알 수 있게.
-
-```python
-def test_create_user_with_valid_data_returns_user() -> None: ...
-def test_create_user_with_invalid_email_raises_error() -> None: ...
-```
-
-### 케이스 범위
-
-1. **정상 경로**
-2. **경계값** — 최소, 최대, 빈 값
-3. **오류 경로** — 잘못된 입력에서 **실제로 실패하는지**
-4. **엣지** — None, 빈 문자열, 특수문자
-
-### 목(mock)
-
-외부 의존성만 목으로 대체한다. **검증 대상 자체를 목으로 만들면 그 테스트는
-아무것도 검증하지 않는다** — 리뷰에서 가장 흔히 걸리는 실패 유형이다.
-
-```python
-from unittest.mock import patch
-
-
-@patch("module.external_api_call")
-def test_with_mocked_api(mock_api) -> None:
-    mock_api.return_value = {"status": "ok"}
-    assert function_under_test() == expected
-```
-
-### 픽스처
-
-공통 준비는 `conftest.py` 에. 테스트는 서로 독립이어야 하고 실행 순서에
-의존하면 안 된다.
-
-## 커버리지
-
-목표 80% 이상. 단, **커버리지는 실행된 줄을 세는 것이지 검증된 동작을 세는 것이
-아니다.** 커버리지가 높고 단정이 없는 테스트는 커버리지 0과 같다.
-
-## 명령
-
-티어 단위로는 `.claude/scripts/verify-*` 를 쓴다(원칙 3). 개별 테스트를 좁혀
-돌리는 것처럼 스크립트보다 세밀한 작업은 `CLAUDE.md` 의 `공통 명령어` 를 본다.
-
-이 저장소 자신의 구현은 Python + uv 지만, **그것은 이 저장소의 사정이고 계약이
-아니다.** 아래는 참고용이다.
-
-```bash
-uv run pytest -v                                  # 전체
-uv run pytest tests/test_user.py::test_create -v  # 개별
-uv run pytest -x                                  # 첫 실패에서 중단
-```
+- **이름**: `test_{대상}_{조건}_{기대결과}` — 이름만 읽고 무엇이 깨졌는지 알 수 있게.
+- **케이스**: 정상 경로 / 경계값(최소·최대·빈 값) / 오류 경로(잘못된 입력에서 **실제로 실패하는지**) /
+  엣지(None·빈 문자열·특수문자).
+- **목(mock)은 외부 의존성만.** 검증 대상 자체를 목으로 만들면 그 테스트는 아무것도 검증하지 않는다 —
+  리뷰에서 가장 흔히 걸리는 실패 유형이다.
+- 테스트는 서로 독립이고 실행 순서에 의존하지 않는다. 공통 준비는 프로젝트 관례의 픽스처 위치에 둔다.
+- **커버리지는 실행된 줄을 센다, 검증된 동작이 아니다.** 단정이 없는 테스트는 커버리지 0과 같다.
+- 티어 단위 명령은 `.claude/scripts/verify-*`, 더 좁은 범위(개별 테스트)는 `CLAUDE.md` 의 `공통 명령어`.
 
 ## 체크리스트
 

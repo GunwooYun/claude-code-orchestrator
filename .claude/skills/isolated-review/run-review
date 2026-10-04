@@ -259,10 +259,6 @@ def line_counts(root: Path, merge_base: str) -> list[tuple[str, int]]:
     return counts
 
 
-def changed_lines(root: Path, merge_base: str) -> int:
-    return sum(n for _, n in line_counts(root, merge_base))
-
-
 def cap_exclusions(text: str | None) -> list[str]:
     """
     `cap_exclude` from CONFIG_REL: globs whose files do not count toward the

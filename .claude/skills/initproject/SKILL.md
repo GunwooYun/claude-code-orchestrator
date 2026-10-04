@@ -46,7 +46,11 @@ default branch, commit convention.
 ## Step 2 — Ask the user (AskUserQuestion: questions 1–4 in one call, 5 in a second — it takes at most four)
 
 1. **Project overview** — what does it do, in 1–2 sentences (used for
-   `AGENTS.md` and `DESIGN.md`).
+   `AGENTS.md` and `DESIGN.md`), and **what "done" looks like**: the few
+   capabilities that, once working, mean the goal is met. Record them in
+   Step 4 as `완료 지점`; `/feature` checks every unit of work against them.
+   Without it work keeps going after the goal is met — a real project built
+   200+ commits of extras after its two core features were done.
 2. **Repository policy** — commit `.claude/ .agents/ CLAUDE.md` to the repo, or
    keep them local-only? If local-only, append them to `.git/info/exclude`.
    If committed, make sure `.gitignore` covers `.claude/logs/`,
@@ -175,7 +179,7 @@ and framework versions, package manager, quality tools with versions, how the
 project runs (container vs local), a `공통 명령어` block with the **real**
 commands, the commit convention and default branch, then
 `→ 참고: .claude/rules/dev-environment.md`. Add/refresh `## Project Setup`
-with the overview and conventions from Step 2 — that section outlives every
+with the overview, the `완료 지점` list and the conventions from Step 2 — that section outlives every
 single work unit, and `/feature` replaces `## Current Project`, not this one.
 Leave `## Current Project` for `/feature` to write.
 
@@ -264,7 +268,7 @@ in this template checks the contract without assuming any language; copy it.
 | `.claude/rules/dev-environment.md` | Rewrite for the real toolchain: layout table, package manager, how to run, formatter/linter/type-checker table with versions and exact invocations, test commands, pre-commit checklist in the project's commit convention. Add a security-posture section if the domain is sensitive. |
 | `.claude/hooks/lint-on-save.py` | **Usually nothing.** It names no tool — it runs `.claude/scripts/verify-save` (Step 5) and reports what that returns. Edit it only to change hook behaviour itself, not the toolchain. Remove its registration from `settings.json` if the user chose no save-tier check. |
 | `.claude/rules/language.md` | Its defaults (English identifiers and comments, Korean for the user) stay. If the codebase already follows a different convention (e.g. Korean comments, a commit-message language), add a short `Project override` paragraph that names what the code already does and where — do not rewrite the defaults. |
-| `.claude/rules/testing.md` | Principles are stack-agnostic; leave them. The examples are not: `## 테스트 작성` (AAA, names, mocks, `conftest.py` fixtures, the edge-case list's `None`) and `## 명령` are Python — rewrite them in the project's language and test runner. Tier commands live in `.claude/scripts/`, not here. |
+| `.claude/rules/testing.md` | Stack-agnostic; usually leave it. Add a short note only if the project has its own test conventions (fixture location, naming). Tier commands live in `.claude/scripts/`, not here. |
 | `.claude/settings.json` | Ships with template tooling only in `allow` (`git`, `uv`, `python3`, `agy`, `.claude/scripts/*`, read-only helpers) and an `ask` list for consequential commands (`git push`, `docker`, `rm -rf`, `kill`, `sed -i`, …). Add allow rules **only** for tools the detected stack runs directly outside `.claude/scripts/*`, and narrowly (`Bash(npm run test:*)`, not `Bash(npm:*)` or `Bash(npx:*)`, which approve anything they wrap). Remove `Bash(uv:*)` if the stack does not use uv. **Never move an `ask` entry to `allow`** and never add `docker`, `curl` or `kill` to allow; if the machine runs live containers or services, say so in the report. Read-only forms (`docker ps`, `git status`) never prompt anyway. |
 | Rules that do not apply | Suggest removal (e.g. `testing.md` for a repo without tests) — do not delete without confirmation. |
 

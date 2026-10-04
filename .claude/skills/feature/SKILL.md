@@ -97,43 +97,25 @@ Task tool parameters:
 
 ### B. agy 를 쓸 수 없을 때 (MISSING / UNAUTHENTICATED / DEGRADED)
 
-**리서치를 건너뛰지 않는다.** 같은 목적을 Claude 자신의 도구로 달성하되, 더
-좁아진다는 사실을 문서와 사용자에게 남긴다.
-
-```
-Task tool parameters:
-- subagent_type: "general-purpose"
-- run_in_background: true
-- prompt: |
-    Research for: {feature}. agy is unavailable ({state}), so use your own tools.
-
-    1. Repository: use Grep/Glob/Read to find the code this feature touches.
-       This is TARGETED, not exhaustive — record which paths you actually read.
-
-    2. External: use WebSearch/WebFetch only for what the repository cannot
-       answer (library choice, breaking changes). Cite URLs.
-
-    3. Save to .claude/docs/research/{feature}.md, and make the FIRST LINE:
-       > 조사 도구: Claude (WebSearch/Grep) — agy 사용 불가 ({state}, {date}).
-       > 레포 전수 조사가 아니며, 읽은 경로는 아래 "조사 범위"에 적혀 있다.
-
-    4. Add a "조사 범위" section listing the paths read and the queries run.
-
-    5. Return CONCISE summary (5-7 bullets) AND a "못 본 것" list — what a
-       repository-wide sweep would have covered and this did not.
-```
-
-그리고 **사용자에게 한 번 알린다**: 어떤 상태인지, 무엇으로 대체했는지, 무엇이
-불가능해졌는지(영상·음성 분석은 대체 불가). 매번 반복하지 않는다.
-
-Phase 3 의 deep-reasoning 프롬프트에 **"리서치가 좁다"는 사실을 함께 넘긴다** —
-설계 리뷰가 근거의 폭을 감안해서 판단해야 한다.
+**리서치를 건너뛰지 않는다.** general-purpose 서브에이전트가 Grep/Glob/Read 와
+WebSearch/WebFetch 로 대신 조사하고, 산출물 첫 줄에 대체했다는 사실을 남긴다. 사용자에게
+한 번 알리고, Phase 3 프롬프트에 "리서치가 좁다"를 함께 넘긴다.
+프롬프트 전문: `references/research-fallback.md`
 
 ---
 
 ## Phase 2: Requirements Gathering (Claude)
 
 **사용자에게 질문하여 요구 사항을 명확히 한다.**
+
+**먼저 목표와 대조한다.** 질문 전에 두 가지를 확인하고 사용자에게 보여준다.
+
+1. **이 작업은 `## Project Setup` 의 `완료 지점` 중 어느 항목에 필요한가.** 해당 항목이 없거나
+   이미 끝난 항목이면 그렇다고 말하고 **진행할지 묻는다** — 막지는 않는다. `완료 지점` 이
+   없으면 지금 묻고 기록한다. 이 확인이 없어서 핵심 기능이 끝난 뒤에도 부가 작업이 수백 커밋
+   이어진 프로젝트가 있었다.
+2. **기능 이름이 모호하면 같은 이름의 기존 기능부터 찾는다.** ("구글 로그인" → 이미 있는
+   연결 버튼인가, 새 로그인 방식인가.) 해석을 하나 골라 진행하지 않고 사용자에게 확인한다.
 
 **티켓에서 시작한 작업이면 `/ticket` 이 이미 일부를 채워 왔다.** 채워진 항목은 다시
 묻지 않고 값을 보여주며 "이대로 맞습니까"만 확인한다. 티켓이 답하지 못한 것만 묻는다
@@ -458,66 +440,16 @@ Task tool parameters:
 다른 브랜치로 머지하는 작업에서는 틀린 범위를 리뷰한다. 모르면 실행 여부를 물을 때
 같이 묻는다. 절차와 판정은 그 스킬에 있다.
 
-**A2 — 사람이 여는 세션 (아래).** 리포트에 되묻거나 반박해야 할 때, 또는 보안
-경계·공개 인터페이스 변경일 때 A1 에 더해 사용자에게 요청한다. A1 은 되묻기가
-불가능하다.
-
-**워크트리는 작업 브랜치에 체크아웃한다.** `main` 에 체크아웃하면 그 안에서
-`HEAD == main` 이므로 `git diff main...HEAD` 가 **아무것도 출력하지 않고**, 리뷰
-세션은 "변경 없음"을 보고 조용히 끝난다.
-
-1. `git worktree add --detach ../<project>-review <작업 브랜치>` 로 격리하고 그 안에서
-   새 `claude` 세션을 띄운다 (`CLAUDE.md` 운영 주의사항과 같은 방식).
-2. `git diff main...HEAD` 로 변경 전체를 본다 — **1번을 작업 브랜치로 했을 때만
-   내용이 나온다.** 확인: `git rev-parse --short HEAD main` 의 두 값이 달라야 한다.
-3. **"리포트 파일만 작성, 다른 파일 수정 금지"** 로 리뷰를 받고, 원 세션에서 반영한다.
-4. `CLAUDE.md` `### Verification plan` 의 시나리오 ID 와 실제 테스트를 대조하게 한다.
-
-**컨테이너·클라우드 세션이라 대화형 `claude` 를 띄울 수 없으면**, 작업 브랜치를 push
-하고 그 브랜치를 상대로 **새 세션**을 만든다(새 클론 = 격리, 컨텍스트 공유 없음).
-리포트는 별도 리뷰 브랜치로 받고 작업 브랜치에는 push 하지 않는다. 워크트리는 로컬
-방식이고, 격리의 본질은 파일이 아니라 **컨텍스트**다.
+**A2 — 사람이 여는 세션.** 리포트에 되묻거나 반박해야 할 때, 또는 보안 경계·공개
+인터페이스 변경일 때 A1 에 더해 사용자에게 요청한다. 절차(워크트리, `main` 에 체크아웃하면
+안 되는 이유, 컨테이너 환경): `references/review.md`.
 
 ### Option B: deep-reasoning Review (via Subagent)
 
-변경이 크면(파일 5개 또는 500줄 이상 — `CLAUDE.md` 「큰 변경의 기준」) 앞단에
-agy 프리필터를 두고, deep-reasoning 에게 걸러진 입력임을 알린다.
-
-**Option A(별도 세션)를 대체하지 않는다.** 이 세션이 프롬프트를 쓰므로 편향이 남는다.
-
-```
-Task tool parameters:
-- subagent_type: "deep-reasoning"
-- prompt: |
-    Review the implementation for: {feature}
-
-    Run `git diff main...HEAD` to see all changes.
-    (If the diff is large — 5+ files or 500+ lines — the orchestrator may have
-    run an agy pre-filter first and listed the locations to look at. That list
-    is FILTERED, not exhaustive: read anything else you need directly.)
-
-    Verification plan agreed before implementation:
-    {verification plan from Phase 2b, scenario IDs included}
-
-    Check:
-    1. Code quality and patterns
-    2. Potential bugs
-    3. Missing edge cases
-    4. Security concerns
-    5. Verification adequacy — judge the tests, not just their presence:
-       - Every scenario ID in the plan: is there a test for it, and does that
-         test actually assert what the scenario claims?
-       - Does any test pass for the wrong reason (asserts on output that would
-         also appear on failure, mocks the thing under test, no negative case)?
-       - Behaviour in the diff that no scenario covers
-       - Scenarios quietly dropped or weakened during implementation
-
-    Return findings and recommendations.
-```
-
-**여기서 "테스트가 있다"와 "테스트가 검증한다"를 구분한다.** 전자는 기계가 볼 수
-있고, 후자는 사람이나 리뷰어만 판단할 수 있다. 이 프로젝트에서 자동으로 강제할
-수 없는 유일한 항목이므로, 이 단계를 생략하면 검증 체계에 구멍이 남는다.
+세션 안의 가벼운 리뷰. Option A 를 대체하지 않는다(이 세션이 프롬프트를 쓰므로 편향이
+남는다). 큰 변경이면 앞단에 agy 프리필터를 두고 걸러진 입력임을 알린다. 프롬프트:
+`references/review.md`. **"테스트가 있다"와 "테스트가 검증한다"를 구분하게 한다** — 후자는
+리뷰어만 판단할 수 있다.
 
 ### 언제 리뷰 라운드를 끝내는가
 
@@ -527,14 +459,6 @@ Task tool parameters:
 라운드가 끝나지 않는다(실사용 리포트, 2026-10-02: 6라운드). 심각도는 리뷰어가 매긴
 값이 아니라 사용자가 판정한 값으로 본다 — 격리 리뷰는 심각도를 높게 매기는 경향이
 있다.
-
-### Why Multi-Session Review?
-
-- **Fresh perspective**: New session has no bias from implementation
-- **Neutral judgement on its own tests**: the session that wrote a test is the
-  worst judge of whether it proves anything
-- **Different context**: Can focus purely on review, not implementation details
-- **Isolated context**: Deep analysis without context pollution
 
 ---
 
@@ -546,12 +470,3 @@ Task tool parameters:
 | `CLAUDE.md` → `## Current Project` | 승인된 계획 + `### Verification plan` (Phase 6 이 대조하는 근거) |
 | Task list (internal) | 구현/verify 짝의 진행 상황 |
 | 완료 보고 (대화) | 무엇을 돌렸는지·시나리오별 결과·CI 몫 — `/ticket` Step 5 가 그대로 쓴다 |
-
----
-
-## Tips
-
-- **All deep-reasoning/agy work through subagents** to preserve main context
-- **Update CLAUDE.md** to persist context across sessions
-- **Use multi-session review** for better quality assurance
-- **Ctrl+T**: Toggle task list visibility

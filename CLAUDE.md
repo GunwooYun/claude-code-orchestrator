@@ -110,7 +110,7 @@ Bash("agy -p '한 문장으로 답변' --model gemini-3.7-flash-low")   # 아주
 
 | 섹션 | 수명 | 쓰는 쪽 | 갱신 |
 |---|---|---|---|
-| `## Project Setup` | 프로젝트 영구 | `/initproject`, `/jira-setup`(`### Jira`), `/doc-write`(`### Confluence`) | 자기 하위 섹션만 **덧붙인다** |
+| `## Project Setup` | 프로젝트 영구 | `/initproject`(개요·`완료 지점`), `/jira-setup`(`### Jira`), `/doc-write`(`### Confluence`) | 자기 하위 섹션만 **덧붙인다** |
 | `## Current Project` | 작업 단위 | `/feature` Phase 5 | **교체한다** |
 | `## Session History` | 세션 | `/checkpointing` | **덮어쓴다** |
 

@@ -14,75 +14,10 @@ metadata:
 
 # Deep Reasoning — Design & Debugging Partner
 
-**The `deep-reasoning` subagent (Claude Fable, isolated context) is your highly capable supporter for deep reasoning tasks.**
-
-> **상세규칙**: `.claude/rules/deep-reasoning-delegation.md`
-
-## Context Management (CRITICAL)
-
-**서브에이전트로 실행된다**. 분석에 필요한 파일 읽기·긴 추론은 전부 서브에이전트의
-독립 컨텍스트에서 소비되고, 메인에는 간결한 결론만 돌아온다.
-
-| 상황 | 방법 |
-|------|------|
-| 자세한 설계 상담 | deep-reasoning 서브에이전트 |
-| 디버그 분석 | deep-reasoning 서브에이전트 |
-| 짧은 질문 (1-2 문 답변) | 메인이 직접 답변 |
-
-## When to Consult (MUST)
-
-| Situation | Trigger Examples |
-|-----------|------------------|
-| **Design decisions** | "어떻게 설계하지?" "아키텍처" / "How to design?" |
-| **Debugging** | "왜 안 돌아가지?" "오류" / "Debug" "Error" |
-| **Trade-off analysis** | "어느 쪽이 좋은가?" "비교해" / "Compare" "Which?" |
-| **Complex implementation** | "구현 방법" "어떻게 만드는가?" / "How to implement?" |
-| **Refactoring** | "리팩터링" "간단하게" / "Refactor" "Simplify" |
-| **Code review** | "리뷰해 줘" "확인해 줘" / "Review" "Check" |
-
-## When NOT to Consult
-
-- Simple file edits, typo fixes
-- Following explicit user instructions
-- git commit, running tests, linting
-- Tasks with obvious single solutions
-
-## How to Consult
-
-**Use Task tool with `subagent_type: "deep-reasoning"` from the MAIN
-orchestrator** (subagents cannot spawn other subagents).
-
-```
-Task tool parameters:
-- subagent_type: "deep-reasoning"
-- run_in_background: true (optional, for parallel work)
-- prompt: |
-    {Design question / bug / trade-off}
-
-    Relevant files: {paths — the subagent reads them itself}
-
-    Return CONCISE summary (key recommendation + rationale + risks).
-```
-
-### Workflow
-
-1. **Spawn subagent** with the consultation prompt
-2. **Continue your work** → Subagent runs in parallel
-3. **Receive summary** → Subagent returns concise insights
-
-### Access Modes
-
-| Mode | Use Case |
-|------|----------|
-| deep-reasoning subagent (read-only) | Analysis, review, debugging advice |
-| Main Claude / general-purpose subagent | Implementation, refactoring, fixes |
-
-## Language Protocol
-
-1. Prompt the subagent in **English**
-2. Receive analysis in **English**
-3. Execute based on the recommendation (main or general-purpose applies changes)
-4. Report to user in **Korean**
+When to consult, when not, large inputs and the basic prompt shape:
+`.claude/rules/deep-reasoning-delegation.md` (always loaded — not repeated here).
+The subagent is read-only; the main session or a general-purpose subagent applies
+its recommendation. Prompt in English, report to the user in Korean.
 
 ## Task Templates
 
@@ -125,17 +60,8 @@ See: `references/code-review-task.md`
 
 See: `references/refactoring-task.md`
 
-## Integration with Antigravity (agy)
+## With agy
 
-| Task | Use |
-|------|-----|
-| Need research first | agy → then deep-reasoning |
-| Design decision | deep-reasoning directly |
-| Library comparison | agy research → deep-reasoning decision |
-
-## Why deep-reasoning?
-
-- **Deep reasoning**: Claude Fable-level analysis in an isolated context
-- **Code expertise**: Implementation strategies and patterns
-- **Zero extra setup**: No external CLI or account required
-- **Parallel work**: Background execution keeps you productive
+Research first (library comparison, unfamiliar code base) → agy through a
+general-purpose subagent, then deep-reasoning decides. A design decision on
+known code → deep-reasoning directly.
