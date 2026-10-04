@@ -46,7 +46,11 @@ default branch, commit convention.
 ## Step 2 — Ask the user (AskUserQuestion: questions 1–4 in one call, 5 in a second — it takes at most four)
 
 1. **Project overview** — what does it do, in 1–2 sentences (used for
-   `AGENTS.md` and `DESIGN.md`).
+   `AGENTS.md` and `DESIGN.md`), and **what "done" looks like**: the few
+   capabilities that, once working, mean the goal is met. Record them in
+   Step 4 as `완료 지점`; `/feature` checks every unit of work against them.
+   Without it work keeps going after the goal is met — a real project built
+   200+ commits of extras after its two core features were done.
 2. **Repository policy** — commit `.claude/ .agents/ CLAUDE.md` to the repo, or
    keep them local-only? If local-only, append them to `.git/info/exclude`.
    If committed, make sure `.gitignore` covers `.claude/logs/`,
@@ -175,7 +179,7 @@ and framework versions, package manager, quality tools with versions, how the
 project runs (container vs local), a `공통 명령어` block with the **real**
 commands, the commit convention and default branch, then
 `→ 참고: .claude/rules/dev-environment.md`. Add/refresh `## Project Setup`
-with the overview and conventions from Step 2 — that section outlives every
+with the overview, the `완료 지점` list and the conventions from Step 2 — that section outlives every
 single work unit, and `/feature` replaces `## Current Project`, not this one.
 Leave `## Current Project` for `/feature` to write.
 
