@@ -11,9 +11,19 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
-## [Unreleased]
+## [3.0.0] - 2026-10-05
 
-Merged to `develop`, not yet released. A release renames this heading.
+The optimization pass (#25) and the first change driven by the second field
+report: work is checked against the project's goal.
+
+### Added
+- **Goal check.** `/initproject` asks what "done" looks like and records it as
+  `완료 지점` in `## Project Setup`; `/feature` Phase 2 first says which of
+  those items the work serves (or that none does, and asks whether to go on),
+  and resolves an ambiguous feature name against existing features before
+  researching it. From the Immich field report (2026-10-04): 200+ commits of
+  extras after the two core features were done, and "구글 로그인" built as the
+  wrong feature — the same "no definition of done" this repository had.
 
 ### Removed (breaking)
 - Hooks `suggest-deep-reasoning-before-write` and `post-test-analysis` — the
