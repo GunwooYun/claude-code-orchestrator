@@ -11,6 +11,16 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [3.0.1] - 2026-10-05
+
+Documentation only — nothing that ships into a project changed.
+
+### Changed
+- README rewritten for 3.0.0 as a step-by-step adoption guide (copy, commit
+  policy, `/initproject` step by step with its five questions, smoke test,
+  first `/feature`, review, merge), with six diagrams, the upgrade procedure
+  and what is verified (#28).
+
 ## [3.0.0] - 2026-10-05
 
 The optimization pass (#25) and the first change driven by the second field
