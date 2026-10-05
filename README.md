@@ -5,7 +5,7 @@
 
 ![Claude Code Orchestrator](./summary.png)
 
-> 현재 버전: **3.0.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md).
+> 현재 버전: **3.0.1** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 목차
 
