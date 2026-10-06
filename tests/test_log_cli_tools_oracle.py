@@ -44,6 +44,11 @@ REVIEW_INPUTS = (
     "agy -p q; echo EXIT_CODE=$?",
     'agy -p "q"\necho done > marker.txt',
     "cat > run.sh <<'EOF'\nagy -p \"Research X\" --model m\nEOF",
+    # Quotes nested inside "$(…)": bash keeps them inside the substitution,
+    # a flat quote reader does not (isolated review of 0cc9cf0).
+    'agy -p "$(echo "\'")" > out.log; echo EXIT_CODE=$? # \'',
+    'agy -p "$(cat "Tom\'s notes.md")" > a.md; cat "$(echo "Tom\'s notes.md")"',
+    'agy -p "${X:-"it\'s"}" > out.log; echo it\'s',
 )
 
 # Pieces combined at random. Only harmless commands, run in a temp directory.
@@ -61,6 +66,7 @@ PREFIXES = (
 PROMPTS = (
     "q", '"q"', "'q'", '"a #b"', "q#t", "it\\'s", "$'it\\'s'", '"$(echo p)"',
     '"x \\"y\\" #z"', "'C# tips'", '"line1\nline2"', "`echo p`", '$"q"',
+    '"$(echo "\'")"', '"$(echo "a;b")"', '"${X:-"it\'s"}"', "\"$(echo 'q')\"",
 )  # fmt: skip
 MIDDLES = ("", " --model m", " --add-dir ~/c#p", " -x 42", " #c")
 REDIRECTS = (
@@ -85,7 +91,11 @@ def random_commands(count: int) -> list[str]:
     ]
 
 
-@unittest.skipUnless(shutil.which("bash"), "bash is the oracle")
+# Resolved once: the same bash is used for the skip check and for every run.
+BASH = shutil.which("bash")
+
+
+@unittest.skipUnless(BASH, "bash is the oracle")
 class DirectMatchesBashTests(unittest.TestCase):
     def setUp(self) -> None:
         tmp = tempfile.TemporaryDirectory()
@@ -105,7 +115,7 @@ class DirectMatchesBashTests(unittest.TestCase):
 
     def run_bash(self, command: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["bash", "-c", command],
+            [BASH or "bash", "-c", command],
             cwd=self.root,
             env=self.env,
             capture_output=True,

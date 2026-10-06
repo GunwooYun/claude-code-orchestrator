@@ -251,11 +251,13 @@ class SoftDenySuccessTests(unittest.TestCase):
 class AllowlistTargetTests(unittest.TestCase):
     """
     Only one shape is `direct` — the one call whose stdout can be read as agy's
-    answer: a single-line `agy …` on its own, with at most `2>file`, `<file`
-    and a final `| tee …`. Everything else is unknown. Two rounds of parsing
-    every shell shape kept producing new false successes and regressions (an
+    answer and whose stderr reaches the tool: a single-line `agy …` on its
+    own, with at most `<file` and a final `| tee …`, plainly quoted. NOT
+    `2>file` — it hides the soft-deny notice (see
+    test_a_stderr_redirect_is_not_direct). Everything else is unknown. Rounds
+    of parsing every shell shape kept producing new false successes (an
     adopting project logged 10 of 28 calls as successes from `EXIT_CODE=0`
-    echoes); an allowlist can only err toward unknown.
+    echoes); tests/test_log_cli_tools_oracle.py checks each verdict in bash.
     """
 
     def assert_target(self, command: str, expected: str) -> None:
@@ -273,10 +275,8 @@ class AllowlistTargetTests(unittest.TestCase):
             "agy -p q | tee out.md",
             "agy -p q | tee -a out.md",
             "env X=1 agy -p q",
-            'X="$(cat f)" agy -p q',
             "! agy -p q",
             "nohup agy -p q",
-            'agy -p "$(cat f)"',
             'agy -p "line1\nline2"',
             "# T1\nagy -p q",
             "# don't redirect\n\nagy -p q",
@@ -296,6 +296,13 @@ class AllowlistTargetTests(unittest.TestCase):
             "agy -p q \\\n  --model x",
             'agy -p $"q"',
             "agy -p `cat p.txt`",
+            # Isolated review of 0cc9cf0: bash nests quotes inside "$(…)" and
+            # "${…}", a flat quote reader does not — so they are out too.
+            'agy -p "$(echo "\'")" > out.log; echo EXIT_CODE=$? # \'',
+            'agy -p "$(cat "Tom\'s notes.md")" > a.md; cat "$(echo "x")"',
+            'agy -p "$(cat f)"',
+            'X="$(cat f)" agy -p q',
+            'agy -p "${X:-q}"',
         ):
             with self.subTest(command=command):
                 self.assertNotEqual(hook.classify_stdout_target(command), "direct")

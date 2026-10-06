@@ -116,7 +116,8 @@ the response). Need a copy on disk? `agy ... | tee <file>`. Need the outcome?
 `agy …` alone on ONE line in the foreground (copy the templates above as they
 are), optionally after `VAR=x` or `env`/`command`/`exec`/`time`/`!`/`sudo`/
 `nohup`, with at most `<file` and a final `| tee <file>`; no `#` comment, no
-backslash (escaped quote or line continuation), no backtick, `$'` or `$"`, and
+backslash (escaped quote or line continuation), no backtick, `$'`, `$"`, `$(`
+or `${` (put a prompt from a file in the prompt text, not `"$(cat f)"`), and
 stderr left alone. Anything else (including `2>file`, `2>&1`, `cd x && agy`,
 `timeout`, `run_in_background`) is logged as `[UNKNOWN]` with a blank response
 (`stdout_target` says why), never as a success.

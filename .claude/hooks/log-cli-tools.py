@@ -11,8 +11,8 @@ The hook only sees the Bash tool's stdout, so it judges a call only when that
 stdout can be nothing but agy's and its stderr reaches the tool (`direct`): a
 foreground, single-line call, optionally led by `VAR=x` assignments and
 `env`/`command`/`exec`/`time`/`!`/`sudo`/`nohup`, with no `#` outside quotes
-(full-line comments before it are fine), no backslash, backtick, `$'` or `$"`,
-no redirection but `<file`, and no follow-on but a final unredirected
+(full-line comments before it are fine), no backslash, backtick, `$'`, `$"`,
+`$(` or `${`, no redirection but `<file`, and no follow-on but a final unredirected
 `| tee …`. Every other shape is recorded with `success: null` — unknown — and
 a blank response, plus a coarse `stdout_target` (`file:<path>`, `stderr`,
 `pipe:<cmd>`, `substitution`, `background`, `complex`, `unclassified`). A
@@ -21,7 +21,8 @@ left unjudged rather than parsed; tests/test_log_cli_tools_oracle.py checks
 every `direct` verdict against real bash.
 
 Known limits (unknown or unlogged, never a false success): inline comments,
-escaped quotes, line continuations and `2>file` make a call unknown; a quoted
+escaped quotes, line continuations, `$(…)`/`${…}` anywhere (even a prompt read
+from a file) and `2>file` make a call unknown; a quoted
 punctuation-only argument (`agy -p ";"`) reads as an operator; `cd x` on one
 line and `agy …` on the next is not logged; backticks and a quoted
 `"$(agy …)"` are not logged.
@@ -108,7 +109,8 @@ STDERR_FD = "2"
 # The only redirection a `direct` call may carry: input from a file.
 DIRECT_INPUT_OP = "<"
 # Quoting that shlex and bash read differently; a `direct` call has none.
-AMBIGUOUS_QUOTING = ("\\", "`", "$'", '$"')
+# `$(`, `${` and `$[` open a context where bash nests quotes ("$(cat "it's")").
+AMBIGUOUS_QUOTING = ("\\", "`", "$'", '$"', "$(", "${", "$[")
 # stdout_target values (the rest are `file:<path>`, `fd:<n>`, `pipe:<command>`).
 DIRECT = "direct"
 COMPLEX = "complex"
@@ -299,8 +301,9 @@ def is_plain_line(text: str) -> bool:
     Reviews kept finding commands that shlex and bash read differently — a
     mid-word `#` (shlex: comment, bash: a word), `\\'` and `$'…'` (shlex and
     bash disagree on where the quote ends) — each hiding a redirect or a second
-    command, logged as a success. Without backslashes, backticks and `$'`/`$"`,
-    quoting is just `'…'` and `"…"`, which this loop reads exactly; then any
+    command, logged as a success; so does a quote nested in `"$(…)"`/`"${…}"`.
+    Without backslashes, backticks, `$'`, `$"`, `$(` and `${`, quoting is just
+    flat `'…'` and `"…"`, which this loop reads exactly; then any
     `#` or newline outside quotes, or an unclosed quote, means "do not judge".
     """
     if any(mark in text for mark in AMBIGUOUS_QUOTING):

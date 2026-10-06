@@ -219,6 +219,16 @@ review falsified the original profile design; see Key Decisions.
       now runs every judged shape in real bash with a fake `agy` and requires
       stdout to be agy's alone and agy's stderr to reach the tool.
 
+      **Third correction (2026-10-06, isolated review of 0cc9cf0):** the flat
+      quote scanner was still wrong inside `"$(…)"` and `"${…}"`, where bash
+      nests quotes — `agy -p "$(echo "'")" > out.log; echo EXIT_CODE=$? # '`
+      was logged a success, reproduced in bash. The oracle had no nested-quote
+      input, so it could not catch this. `$(` and `${` joined the forbidden
+      list (with the old `$[…]` arithmetic form), and the oracle now generates
+      nested-quote prompts. These are the quote-nesting constructs known to
+      us; the oracle, not this list, is the check that the scanner agrees
+      with bash.
+
 - [x] `post-implementation-review.py` — state is now per project and per session
       under `.claude/logs/implementation-state/`, with stale files pruned after
       7 days and symlinks refused. Which files count is exclusion-based rather

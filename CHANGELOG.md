@@ -19,7 +19,8 @@ project changed, back up a gitignored `.claude/` first).
   `$(...)` or followed by `|| echo` / `; echo EXIT_CODE=$?` was logged with the
   echo as its response and marked a success (an adopting project: 10 of 28
   calls). Only a single-line `agy …` on its own is judged now (`<file` and a
-  final `| tee` allowed; no `2>file`, inline comment, backslash or `$'`);
+  final `| tee` allowed; no `2>file`, inline comment, backslash, `$'`, `$(`
+  or `${`);
   every other shape is `success: null` with a blank response and a
   `stdout_target` saying why. A differential test checks every judged shape
   against real bash (#31).
