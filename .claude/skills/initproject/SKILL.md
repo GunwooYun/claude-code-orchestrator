@@ -43,6 +43,12 @@ Record: languages, package manager, formatter/linter/type-checker **with pinned
 versions**, test runner and how it is invoked (locally or inside a container),
 default branch, commit convention.
 
+For a formatter, record whether the project **has adopted it**, not only whether
+it is installed: a config for it exists, and running its check mode over the
+tracked files passes for (nearly) all of them. Write down the measured count
+(e.g. "black --check: 414 of 555 files would be reformatted, no config" — not
+adopted). Step 5 uses this.
+
 ## Step 2 — Ask the user (AskUserQuestion: questions 1–4 in one call, 5 in a second — it takes at most four)
 
 1. **Project overview** — what does it do, in 1–2 sentences (used for
@@ -233,6 +239,16 @@ than no script: it reports success that was never checked.
   tell that from "nothing to say" (this template's own `verify-save` did exactly
   that). Auto-fixing is a command a person runs on purpose. If a tier must fix
   anyway, it prints what it changed.
+- **A format check goes into a gate only if the project has adopted that
+  formatter** (Step 1's measurement). A format check judges appearance only —
+  skipping it changes no behaviour. On a codebase that does not follow it, it
+  reports every save of an untouched file as a failure. That noise trains people
+  and the model to ignore the hook. Reformatting other people's code to silence
+  it pollutes diffs, breaks intentional layout and causes merge conflicts. If
+  the formatter is not adopted, leave the format check out and tell the user the
+  measured count. Adopting a formatter is the team's decision, made as one
+  separate whole-repository formatting commit, never piecemeal while working.
+  Static checks that find real defects (undefined names, type errors) stay.
 - No destructive actions: nothing commits, pushes, deploys, or creates resources.
 - `verify-full` may chain `verify-unit`; `verify-save` must never chain a slower
   tier, or saving a file starts a build.

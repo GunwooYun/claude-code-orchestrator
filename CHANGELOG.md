@@ -36,6 +36,13 @@ project changed, back up a gitignored `.claude/` first).
   are not set as open-ended absolutes, and an agreed stop condition is not
   reopened by a theoretical finding. Defined in `CLAUDE.md` 운영 주의사항;
   `/feature` and `/isolated-review` point to it (#32).
+- **`/initproject` puts a format check in a gate only if the project has
+  adopted that formatter** — a config exists and (nearly) all tracked files
+  already pass. Otherwise it leaves the check out and reports the measured
+  count. A format check judges appearance only; on an unformatted codebase it
+  fails every save of untouched code, and reformatting other people's code
+  pollutes diffs. Static checks (undefined names, type errors) stay. Measured
+  case recorded in `references/known-pitfalls.md` (414 of 555 files).
 
 ## [3.0.1] - 2026-10-05
 
