@@ -345,6 +345,7 @@ class DocumentedFormatTests(unittest.TestCase):
                 "antigravity": [
                     {"prompt": "MCP vs CLI comparison", "success": True},
                     {"prompt": "a call that failed", "success": False},
+                    {"prompt": "a redirected call", "success": None},
                 ]
             }
         }
@@ -358,9 +359,11 @@ class DocumentedFormatTests(unittest.TestCase):
         rendered = self.rendered()
         self.assertIn("- [OK] ", rendered)
         self.assertIn("- [FAILED] ", rendered)
+        self.assertIn("- [UNKNOWN] ", rendered)
         doc = self.SKILL.read_text(encoding="utf-8")
         self.assertIn("[OK]", doc)
         self.assertIn("[FAILED]", doc, "the failure marker is undocumented")
+        self.assertIn("[UNKNOWN]", doc, "the unknown marker is undocumented")
 
     def test_the_stale_korean_label_is_gone(self) -> None:
         self.assertNotIn("agy조사:", self.SKILL.read_text(encoding="utf-8"))
@@ -397,6 +400,43 @@ class DocumentedFormatTests(unittest.TestCase):
             200,
             "the second heading is mentioned but not tied to the file it belongs to",
         )
+
+
+class UnknownOutcomeTests(unittest.TestCase):
+    """
+    C8 (V12): log-cli-tools writes `success: null` when agy's stdout went to a
+    file, a pipe or `$(...)` and nothing says how the call ended. `bool()` turned
+    that into FAILED (and a string "unknown" would have become OK), so the
+    history claimed an outcome nobody observed.
+    """
+
+    def rendered_status(self, entry: dict) -> str:
+        entry = {
+            "timestamp": "2026-01-26T10:00:00+09:00",
+            "tool": "antigravity",
+            **entry,
+        }
+        history = checkpoint.generate_session_history(
+            checkpoint.summarize_entries([entry])
+        )
+        line = next(ln for ln in history.splitlines() if ln.startswith("- ["))
+        return line.split("]", 1)[0] + "]"
+
+    def test_null_success_renders_unknown(self) -> None:
+        self.assertEqual(
+            self.rendered_status({"prompt": "p", "success": None}), "- [UNKNOWN]"
+        )
+
+    def test_true_and_false_keep_their_markers(self) -> None:
+        self.assertEqual(
+            self.rendered_status({"prompt": "p", "success": True}), "- [OK]"
+        )
+        self.assertEqual(
+            self.rendered_status({"prompt": "p", "success": False}), "- [FAILED]"
+        )
+
+    def test_a_legacy_entry_without_the_field_is_failed(self) -> None:
+        self.assertEqual(self.rendered_status({"prompt": "p"}), "- [FAILED]")
 
 
 class ContextTargetTests(unittest.TestCase):

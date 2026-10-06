@@ -151,6 +151,18 @@ def local_date(timestamp: str) -> str:
     return dt.astimezone().date().isoformat()
 
 
+def success_state(entry: dict) -> bool | None:
+    """The entry's outcome: True, False, or None when the log says unknown.
+
+    A missing field is False, as before: legacy entries always had a flag, so
+    absence means a malformed line, not an unobserved outcome.
+    """
+    if "success" not in entry:
+        return False
+    value = entry["success"]
+    return None if value is None else bool(value)
+
+
 def summarize_entries(entries: list[dict]) -> dict[str, dict[str, list[dict]]]:
     """
     Group entries by local date, then by tool.
@@ -168,7 +180,9 @@ def summarize_entries(entries: list[dict]) -> dict[str, dict[str, list[dict]]]:
             {
                 "prompt": (entry.get("prompt") or "")[:200],
                 "response_preview": (entry.get("response") or "")[:300],
-                "success": bool(entry.get("success", False)),
+                # Tri-state: None is "unknown" (log-cli-tools writes it when agy's
+                # stdout went elsewhere). bool() would render it as FAILED.
+                "success": success_state(entry),
             }
         )
 
@@ -177,6 +191,8 @@ def summarize_entries(entries: list[dict]) -> dict[str, dict[str, list[dict]]]:
 
 # Display names for tools that have one; anything else is shown as logged.
 TOOL_LABELS = {"antigravity": "agy", "claude": "Claude"}
+
+STATUS_LABELS = {True: "OK", False: "FAILED", None: "UNKNOWN"}
 
 MAX_ENTRIES_PER_TOOL_PER_DAY = 5
 PROMPT_SUMMARY_LENGTH = 100
@@ -206,7 +222,7 @@ def generate_session_history(
             lines.append(f"**{TOOL_LABELS.get(tool, tool)}:**")
             for item in items[:MAX_ENTRIES_PER_TOOL_PER_DAY]:
                 summary = item["prompt"][:PROMPT_SUMMARY_LENGTH].replace("\n", " ")
-                status = "OK" if item["success"] else "FAILED"
+                status = STATUS_LABELS[item["success"]]
                 lines.append(f"- [{status}] {summary}")
             remaining = len(items) - MAX_ENTRIES_PER_TOOL_PER_DAY
             if remaining > 0:

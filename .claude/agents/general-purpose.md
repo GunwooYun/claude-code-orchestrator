@@ -82,17 +82,16 @@ When research or large-scale analysis is needed:
 
 ```bash
 # Research — the orchestrator picks the tier in the Task prompt (rules/antigravity-delegation.md → Model policy)
-agy -p "{one-fact question}" --model gemini-3.7-flash-low      # T1
-agy -p "{summarize one source}" --model gemini-3.7-flash-high  # T2
-agy -p "{research question}" --model gemini-3.1-pro-high       # T3
+# T1, T2, T3:
+agy -p "{one-fact question}" --model gemini-3.7-flash-low
+agy -p "{summarize one source}" --model gemini-3.7-flash-high
+agy -p "{research question}" --model gemini-3.1-pro-high
 
 # Codebase analysis (reads repo files → headless flags required; CWD is the workspace)
-agy -p "{question} Do not create or modify any files; return everything in your response." \
-  --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
+agy -p "{question} Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
 
 # Multimodal (image/PDF verified; video/audio untested) — path in prompt; no stdin redirection
-agy -p "Read the file at {absolute_path} and {extraction prompt}. Do not create or modify any files." \
-  --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
+agy -p "Read the file at {absolute_path} and {extraction prompt}. Do not create or modify any files." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # Scripted (soft-deny safe): gate on .status == "SUCCESS"
 agy -p "{question}" --model {slug} --output-format json --print-timeout 10m
@@ -106,6 +105,22 @@ agy's write_file, so the prompt itself must forbid file changes (see the
 templates above) — you, not agy, persist results to `.claude/docs/research/`.
 If a call still returns an empty response with a permission notice on
 stderr, report that to the orchestrator.
+
+Let agy's stdout reach your output. The log hook reads the command's stdout as
+agy's answer, so do not redirect it to a file (`> out.log`), capture it with
+`$(...)`, or put other printing commands in the same call (`|| echo ...`,
+`; echo EXIT_CODE=$?`) — the stdout is then your echo, not agy's answer (seen
+in a real project: 10 of 28 calls logged as a success with `EXIT_CODE=0` as
+the response). Need a copy on disk? `agy ... | tee <file>`. Need the outcome?
+`--output-format json` and read `.status`. The log judges only one shape —
+`agy …` alone on ONE line in the foreground (copy the templates above as they
+are), optionally after `VAR=x` or `env`/`command`/`exec`/`time`/`!`/`sudo`/
+`nohup`, with at most `<file` and a final `| tee <file>`; no `#` comment, no
+backslash (escaped quote or line continuation), no backtick, `$'`, `$"`, `$(`
+or `${` (put a prompt from a file in the prompt text, not `"$(cat f)"`), and
+stderr left alone. Anything else (including `2>file`, `2>&1`, `cd x && agy`,
+`timeout`, `run_in_background`) is logged as `[UNKNOWN]` with a blank response
+(`stdout_target` says why), never as a success.
 
 **When to call agy:**
 - Library research: "Best practices for X in 2025"
