@@ -107,6 +107,15 @@ templates above) — you, not agy, persist results to `.claude/docs/research/`.
 If a call still returns an empty response with a permission notice on
 stderr, report that to the orchestrator.
 
+Let agy's stdout reach your output. The log hook reads the command's stdout as
+agy's answer, so do not redirect it to a file (`> out.log`), capture it with
+`$(...)`, or follow the call with `|| echo ...` / `; echo EXIT_CODE=$?` — the
+log then records your echo instead of agy's answer (seen in a real project: 10
+of 28 calls logged as a success with `EXIT_CODE=0` as the response). Need a
+copy on disk? `agy ... | tee <file>`. Need the outcome? `--output-format json`
+and read `.status`. A redirected call is logged as `[UNKNOWN]`, never as a
+success.
+
 **When to call agy:**
 - Library research: "Best practices for X in 2025"
 - Codebase understanding: "Analyze architecture"

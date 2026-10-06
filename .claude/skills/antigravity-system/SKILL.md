@@ -44,6 +44,10 @@ Task tool parameters:
 
 Directly only for a one-line answer: `agy -p "Brief question" --model gemini-3.7-flash-low`.
 
+Never redirect agy's stdout (`> file`, `$(...)`, `; echo $?`): the log hook reads
+stdout as agy's answer and records a redirected call as `[UNKNOWN]`. For a copy
+on disk use `| tee <file>` (details: `.claude/agents/general-purpose.md`).
+
 Ask agy in **English**; report to the user in **Korean**. Full answers go to
 `.claude/docs/research/{topic}.md` so deep-reasoning can read them later.
 
