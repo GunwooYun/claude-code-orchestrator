@@ -64,6 +64,13 @@ security boundary or a public interface, also ask the user for an A2 review.
    sections exactly as written — no summary, no paraphrase, no ranking. Summarising
    is where this session's view would re-enter. Then, per finding, ask the user:
    fix / dispute / defer.
+   **Before asking, check whether each finding's input occurs in real use** —
+   logs, field reports, or the usage the templates prescribe — and show that
+   next to the finding. A finding with no real occurrence (a usage nobody has,
+   a condition that cannot arise, an input built only in theory) is recommended
+   as defer, whatever its severity label: record it, do not start another
+   implement → review → fix round for it. Rule: `CLAUDE.md` 운영 주의사항
+   「일어나지 않는 조건을 이론만으로 쫓지 않는다」.
 
 ## Verdicts
 
