@@ -8,19 +8,21 @@ commands (grep, echo, heredocs) are ignored.
 Logs are stored in .claude/logs/cli-tools.jsonl
 
 The hook only sees the Bash tool's stdout, so it judges a call only when that
-stdout can be nothing but agy's: a single-line `agy …` on its own, with at most
-`2>file`, `<file` and a final `| tee …` (`direct`). Every other shape is
-recorded with `success: null` — unknown — and a blank response, plus a coarse
-`stdout_target` (`file:<path>`, `stderr`, `pipe:<cmd>`, `substitution`,
-`complex`, `unclassified`). A soft-deny notice on stderr is a failure in any
-shape. An allowlist can only err toward unknown; the two rounds that parsed
-every shell shape before it kept finding new false successes.
+stdout can be nothing but agy's (`direct`): a foreground, single-line call with
+no `#` outside quotes (full-line comments before it are fine), optionally led
+by `VAR=x` assignments and `env`/`command`/`exec`/`time`/`!`/`sudo`/`nohup`,
+whose only redirections are `2>file`, `2>>file` (not to `/dev/stdout`-like
+devices) and `<file`, and whose only follow-on is a final unredirected
+`| tee …`. Every other shape is recorded with `success: null` — unknown — and
+a blank response, plus a coarse `stdout_target` (`file:<path>`, `stderr`,
+`pipe:<cmd>`, `substitution`, `background`, `complex`, `unclassified`). A
+soft-deny notice on stderr is a failure in any shape. Anything doubtful is
+left unjudged rather than parsed.
 
-Known limits: a mid-word `#` (`~/c#proj`) is read as a comment and a quoted
-punctuation-only argument (`agy -p ";"`) as an operator; `agy -p q # don't`
-is unknown (the apostrophe opens a quote in the newline check); `cd x` on one
-line and `agy …` on the next is not logged; backticks and a quoted
-`"$(agy …)"` are not logged.
+Known limits (unknown or unlogged, never a false success): an inline comment
+makes the call unknown; a quoted punctuation-only argument (`agy -p ";"`)
+reads as an operator; `cd x` on one line and `agy …` on the next is not
+logged; backticks and a quoted `"$(agy …)"` are not logged.
 
 All agents (Claude Code, subagents, agy) can read this log.
 """
@@ -111,6 +113,8 @@ DEV_NULL = "/dev/null"
 DIRECT = "direct"
 COMPLEX = "complex"
 UNCLASSIFIED = "unclassified"
+# run_in_background: the Bash tool's stdout is the harness's notice, not agy's.
+BACKGROUND = "background"
 STDERR_TARGET = "stderr"
 SUBSTITUTION = "substitution"
 PIPE_PREFIX = "pipe:"
@@ -128,7 +132,7 @@ def tokenize(command: str) -> list[str]:
     newlines are whitespace (so a heredoc body is never a command of its own).
     An fd is glued onto its operator (`2>`, `2>&`).
     """
-    joined = LINE_CONTINUATION.sub(r"\1 ", command)
+    joined = LINE_CONTINUATION.sub(r"\1 ", command_body(command))
     lexer = shlex.shlex(
         FD_PREFIX.sub(FD_MARK + r"\1", joined), posix=True, punctuation_chars=True
     )
@@ -271,17 +275,26 @@ def redirect_target(tokens: list[str], start: int, end: int) -> str | None:
     return target
 
 
-def has_unquoted_newline(command: str) -> bool:
-    """True when the command has more than one line outside quotes.
+def command_body(command: str) -> str:
+    """The command without its leading full-line comments.
+
+    Comments go first: in bash a comment ends at the newline, so a trailing
+    backslash inside one is not a line continuation.
+    """
+    return LEADING_COMMENTS.sub("", command).strip()
+
+
+def has_unquoted_newline(text: str) -> bool:
+    """True when `text` has more than one line outside quotes.
 
     A separate pass, because tokenize treats newlines as whitespace (that is
     what keeps heredoc bodies from becoming commands). Comments are NOT
     stripped here: `agy -p q # note` + newline + `echo hi` must still show the
-    newline. A quote this pass cannot close (`# don't`) counts as a newline —
-    the call is then unknown, never wrongly direct.
+    newline. A quote this pass cannot close counts as a newline — the call is
+    then unknown, never wrongly direct.
     """
-    text = LEADING_COMMENTS.sub("", LINE_CONTINUATION.sub(r"\1 ", command)).strip()
-    lexer = shlex.shlex(text, posix=True, punctuation_chars="\n")
+    joined = LINE_CONTINUATION.sub(r"\1 ", text)
+    lexer = shlex.shlex(joined, posix=True, punctuation_chars="\n")
     lexer.whitespace = " \t\r"
     lexer.whitespace_split = True
     lexer.commenters = ""
@@ -289,6 +302,35 @@ def has_unquoted_newline(command: str) -> bool:
         return any(token and set(token) == {"\n"} for token in lexer)
     except ValueError:
         return True
+
+
+def has_unquoted_hash(text: str) -> bool:
+    """True when `text` has a `#` outside quotes.
+
+    tokenize lets shlex treat `#` as a comment, but shlex starts one mid-word
+    (`~/c#proj`, `q#tag`) where bash does not, and the dropped rest of the line
+    can be a redirect or `|| echo` — logged as a success (PR #31 review).
+    Rather than reimplement bash's comment rule, a `#` outside quotes leaves the
+    call unjudged. Non-POSIX shlex keeps the quotes, so quoted spans can be
+    skipped; a quote it cannot close counts as a `#`.
+    """
+    lexer = shlex.shlex(text, posix=False)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+        words = list(lexer)
+    except ValueError:
+        return True
+    for word in words:
+        quote = ""
+        for char in word:
+            if quote:
+                quote = "" if char == quote else quote
+            elif char in "\"'":
+                quote = char
+            elif char == "#":
+                return True
+    return False
 
 
 def allowed_redirections(tokens: list[str], start: int, end: int) -> bool:
@@ -314,7 +356,8 @@ def allowed_redirections(tokens: list[str], start: int, end: int) -> bool:
 def is_direct(command: str, tokens: list[str], found: tuple[int, int, int]) -> bool:
     """True only for the one shape whose stdout can be nothing but agy's."""
     segment, head, end = found
-    if segment != 0 or has_unquoted_newline(command):
+    body = command_body(command)
+    if segment != 0 or has_unquoted_newline(body) or has_unquoted_hash(body):
         return False
     for word in tokens[segment:head]:
         if not (ENV_ASSIGNMENT.match(word) or word in DIRECT_PREFIX):
@@ -460,7 +503,9 @@ def log_entry(entry: dict) -> None:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def build_entry(command: str, tool_response: dict) -> dict | None:
+def build_entry(
+    command: str, tool_response: dict, background: bool = False
+) -> dict | None:
     """Build a log entry for an agy command, or None if it is not one."""
     args = find_agy_args(command)
     if args is None:
@@ -471,7 +516,7 @@ def build_entry(command: str, tool_response: dict) -> dict | None:
 
     stdout = tool_response.get("stdout", "") or tool_response.get("content", "") or ""
     stderr = tool_response.get("stderr", "") or ""
-    target = stdout_target(command)
+    target = BACKGROUND if background else stdout_target(command)
     if target == DIRECT:
         response = truncate_text(stdout) if stdout else ""
         success: bool | None = determine_success(stdout, stderr)
@@ -507,7 +552,8 @@ def process_hook_input(hook_input: object) -> dict | None:
     tool_response = hook_input.get("tool_response") or {}
     if not isinstance(tool_response, dict):
         tool_response = {"stdout": str(tool_response)}
-    return build_entry(command, tool_response)
+    background = tool_input.get("run_in_background") is True
+    return build_entry(command, tool_response, background)
 
 
 def main() -> None:

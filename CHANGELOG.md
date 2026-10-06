@@ -11,6 +11,23 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [Unreleased]
+
+### Fixed
+- **`log-cli-tools` no longer logs a false success.** It read the Bash tool's
+  stdout as agy's answer, so a call redirected to a file, captured with
+  `$(...)` or followed by `|| echo` / `; echo EXIT_CODE=$?` was logged with the
+  echo as its response and marked a success (an adopting project: 10 of 28
+  calls). Only a single-line `agy …` on its own (with `2>file`, `<file`, a
+  final `| tee`) is judged now; every other shape is `success: null` with a
+  blank response and a `stdout_target` saying why (#31).
+- `/checkpointing` renders that unknown outcome as `[UNKNOWN]` instead of
+  `[FAILED]` (#31).
+
+### Changed
+- The agent and skill docs ask for one agy call per Bash command, alone, and
+  `| tee <file>` when a copy on disk is needed (#31).
+
 ## [3.0.1] - 2026-10-05
 
 Documentation only — nothing that ships into a project changed.

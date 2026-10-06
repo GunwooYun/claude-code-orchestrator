@@ -264,8 +264,9 @@ class AllowlistTargetTests(unittest.TestCase):
     def test_the_simple_shapes_are_direct(self) -> None:
         for command in (
             'agy -p "q" --model x',
-            'agy -p "q" --model x   # T1',
-            'agy -p "q" # save > later',
+            'agy -p "Issue #42 in C#"',
+            "agy -p 'C# tips'",
+            'X="a#b" agy -p q',
             "agy -p q 2>err.log",
             "agy -p q 2>> err.log",
             "agy -p q 2>/dev/null",
@@ -319,6 +320,35 @@ class AllowlistTargetTests(unittest.TestCase):
         ):
             with self.subTest(command=command):
                 self.assert_target(command, "complex")
+
+    def test_an_unquoted_hash_after_the_command_starts_is_never_direct(self) -> None:
+        # PR #31 review: shlex read a mid-word `#` as a comment where bash does
+        # not, so the rest of the line — a redirect, `|| echo`, a continued
+        # line — vanished and the call was logged as a success. An unquoted `#`
+        # (inline comment included) now leaves the call unjudged; full-line
+        # comments before the command stay allowed.
+        for command in (
+            "agy -p q --add-dir ~/c#proj > out.log; echo EXIT_CODE=$?",
+            "agy -p q#tag || echo FAILED",
+            "agy -p q # note \\\necho hi",
+            'agy -p "q" --model x   # T1',
+            'agy -p "q" # save > later',
+        ):
+            with self.subTest(command=command):
+                self.assertNotEqual(hook.classify_stdout_target(command), "direct")
+
+    def test_truncated_commands_never_raise_and_are_not_direct(self) -> None:
+        for command in (
+            "agy -p q |",
+            "agy -p q 2>",
+            "agy -p q | tee >",
+            "agy -p q )",
+            "x=$(agy -p q",
+            "agy -p q <",
+            "agy -p q |&",
+        ):
+            with self.subTest(command=command):
+                self.assertNotEqual(hook.classify_stdout_target(command), "direct")
 
     def test_coarse_labels_name_the_obvious_destination(self) -> None:
         self.assert_target("agy -p q > out.txt", "file:out.txt")
@@ -394,6 +424,45 @@ class AllowlistEntryTests(unittest.TestCase):
             )["success"],
             True,
         )
+
+    def test_the_mid_word_hash_false_successes_are_unknown(self) -> None:
+        for command, stdout in (
+            ("agy -p q --add-dir ~/c#proj > out.log; echo EXIT_CODE=$?", "EXIT_CODE=0"),
+            ("agy -p q#tag || echo FAILED", "FAILED"),
+            ("agy -p q # note \\\necho hi", "hi"),
+        ):
+            with self.subTest(command=command):
+                entry = self.entry(command, stdout)
+                self.assertIsNone(entry["success"])
+                self.assertEqual(entry["response"], "")
+
+    def test_a_background_call_is_unknown(self) -> None:
+        # run_in_background: stdout is the harness's "running in background"
+        # notice, not agy's output (PR #31 review).
+        entry = hook.process_hook_input(
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "agy -p q", "run_in_background": True},
+                "tool_response": {
+                    "stdout": "Command running in background",
+                    "stderr": "",
+                },
+            }
+        )
+        self.assertIsNotNone(entry)
+        assert entry is not None
+        self.assertEqual(entry["stdout_target"], "background")
+        self.assertIsNone(entry["success"])
+        self.assertEqual(entry["response"], "")
+        foreground = hook.process_hook_input(
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "agy -p q", "run_in_background": False},
+                "tool_response": {"stdout": "answer", "stderr": ""},
+            }
+        )
+        assert foreground is not None
+        self.assertIs(foreground["success"], True)
 
     def test_a_parser_gap_is_unknown(self) -> None:
         # Fault injection: the classifier is replaced only to make it raise.

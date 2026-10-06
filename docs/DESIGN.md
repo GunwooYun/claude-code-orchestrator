@@ -194,6 +194,19 @@ review falsified the original profile design; see Key Decisions.
       Cost: complex calls with a real answer are `[UNKNOWN]`; the agent docs
       already ask for one agy call per Bash command.
 
+      **Correction (2026-10-06, PR #31 review):** "any parser mistake errs
+      toward unknown" above was false when written. Detection kept shlex's `#`
+      comments, and shlex starts a comment mid-word (`~/c#proj`, `q#tag`) where
+      bash does not, so the dropped rest of the line (`> out.log; echo
+      EXIT_CODE=$?`, `|| echo FAILED`, a backslash-continued `echo`) was never
+      seen and three such calls were logged `direct`, success true — reproduced
+      before the fix. Instead of a bash-accurate comment stripper (the
+      shell-parsing path the allowlist replaced), a `#` outside quotes now
+      leaves the call unjudged; inline comments become unknown. Also from that
+      review: `run_in_background` calls are `background` (stdout is the
+      harness's notice), and leading comments are removed before
+      backslash-newline joining.
+
 - [x] `post-implementation-review.py` — state is now per project and per session
       under `.claude/logs/implementation-state/`, with stale files pruned after
       7 days and symlinks refused. Which files count is exclusion-based rather

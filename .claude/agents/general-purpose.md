@@ -114,10 +114,12 @@ agy's answer, so do not redirect it to a file (`> out.log`), capture it with
 in a real project: 10 of 28 calls logged as a success with `EXIT_CODE=0` as
 the response). Need a copy on disk? `agy ... | tee <file>`. Need the outcome?
 `--output-format json` and read `.status`. The log judges only one shape —
-`agy …` alone on one line, with at most `2>file`, `<file` and a final
-`| tee <file>`; anything else (including `2>&1`, `cd x && agy`, `timeout`) is
-logged as `[UNKNOWN]` with a blank response (`stdout_target` says why), never
-as a success.
+`agy …` alone on one line in the foreground, optionally after `VAR=x` or
+`env`/`command`/`exec`/`time`/`!`/`sudo`/`nohup`, with at most `2>file`,
+`2>>file`, `<file` and a final `| tee <file>`, and no `#` comment on the line;
+anything else (including `2>&1`, `cd x && agy`, `timeout`, `run_in_background`)
+is logged as `[UNKNOWN]` with a blank response (`stdout_target` says why),
+never as a success.
 
 **When to call agy:**
 - Library research: "Best practices for X in 2025"
