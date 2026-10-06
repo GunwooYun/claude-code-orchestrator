@@ -36,7 +36,10 @@ Task tool parameters:
 - prompt: |
     Research: {topic}
 
-    agy -p "{research question}" --model {slug}   # the orchestrator fills the slug per tier
+    agy -p "{research question}" --model {slug}
+
+    (The orchestrator fills {slug} per tier. Run the line as it is — one agy
+    call, alone, no inline comment — or the log records it as [UNKNOWN].)
 
     Save full output to: .claude/docs/research/{topic}.md
     Return CONCISE summary (5-7 bullet points).

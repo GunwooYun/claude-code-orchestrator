@@ -18,9 +18,11 @@ project changed, back up a gitignored `.claude/` first).
   stdout as agy's answer, so a call redirected to a file, captured with
   `$(...)` or followed by `|| echo` / `; echo EXIT_CODE=$?` was logged with the
   echo as its response and marked a success (an adopting project: 10 of 28
-  calls). Only a single-line `agy …` on its own (with `2>file`, `<file`, a
-  final `| tee`) is judged now; every other shape is `success: null` with a
-  blank response and a `stdout_target` saying why (#31).
+  calls). Only a single-line `agy …` on its own is judged now (`<file` and a
+  final `| tee` allowed; no `2>file`, inline comment, backslash or `$'`);
+  every other shape is `success: null` with a blank response and a
+  `stdout_target` saying why. A differential test checks every judged shape
+  against real bash (#31).
 - `/checkpointing` renders that unknown outcome as `[UNKNOWN]` instead of
   `[FAILED]` (#31).
 

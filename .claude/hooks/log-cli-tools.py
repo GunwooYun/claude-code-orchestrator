@@ -8,21 +8,23 @@ commands (grep, echo, heredocs) are ignored.
 Logs are stored in .claude/logs/cli-tools.jsonl
 
 The hook only sees the Bash tool's stdout, so it judges a call only when that
-stdout can be nothing but agy's (`direct`): a foreground, single-line call with
-no `#` outside quotes (full-line comments before it are fine), optionally led
-by `VAR=x` assignments and `env`/`command`/`exec`/`time`/`!`/`sudo`/`nohup`,
-whose only redirections are `2>file`, `2>>file` (not to `/dev/stdout`-like
-devices) and `<file`, and whose only follow-on is a final unredirected
+stdout can be nothing but agy's and its stderr reaches the tool (`direct`): a
+foreground, single-line call, optionally led by `VAR=x` assignments and
+`env`/`command`/`exec`/`time`/`!`/`sudo`/`nohup`, with no `#` outside quotes
+(full-line comments before it are fine), no backslash, backtick, `$'` or `$"`,
+no redirection but `<file`, and no follow-on but a final unredirected
 `| tee …`. Every other shape is recorded with `success: null` — unknown — and
 a blank response, plus a coarse `stdout_target` (`file:<path>`, `stderr`,
 `pipe:<cmd>`, `substitution`, `background`, `complex`, `unclassified`). A
 soft-deny notice on stderr is a failure in any shape. Anything doubtful is
-left unjudged rather than parsed.
+left unjudged rather than parsed; tests/test_log_cli_tools_oracle.py checks
+every `direct` verdict against real bash.
 
-Known limits (unknown or unlogged, never a false success): an inline comment
-makes the call unknown; a quoted punctuation-only argument (`agy -p ";"`)
-reads as an operator; `cd x` on one line and `agy …` on the next is not
-logged; backticks and a quoted `"$(agy …)"` are not logged.
+Known limits (unknown or unlogged, never a false success): inline comments,
+escaped quotes, line continuations and `2>file` make a call unknown; a quoted
+punctuation-only argument (`agy -p ";"`) reads as an operator; `cd x` on one
+line and `agy …` on the next is not logged; backticks and a quoted
+`"$(agy …)"` are not logged.
 
 All agents (Claude Code, subagents, agy) can read this log.
 """
@@ -103,12 +105,10 @@ OUTPUT_REDIRECTS = frozenset({">", ">>", ">|"})
 BOTH_REDIRECTS = frozenset({"&>", "&>>"})
 STDOUT_FD = "1"
 STDERR_FD = "2"
-# Redirections a `direct` call may carry: stderr to a file, input from a file.
-DIRECT_STDERR_OPS = frozenset({"2>", "2>>"})
+# The only redirection a `direct` call may carry: input from a file.
 DIRECT_INPUT_OP = "<"
-# A stderr target that is really stdout (`2>/dev/stdout`, `2>/dev/fd/1`).
-DEVICE_PREFIXES = ("/dev/", "/proc/")
-DEV_NULL = "/dev/null"
+# Quoting that shlex and bash read differently; a `direct` call has none.
+AMBIGUOUS_QUOTING = ("\\", "`", "$'", '$"')
 # stdout_target values (the rest are `file:<path>`, `fd:<n>`, `pipe:<command>`).
 DIRECT = "direct"
 COMPLEX = "complex"
@@ -221,7 +221,16 @@ def find_agy_args(command: str) -> list[str] | None:
     if found is None:
         return None
     _, head, end = found
-    return tokens[head:end]
+    # Redirections and their operands are not argv (`agy 2>err.log -p q`).
+    args: list[str] = []
+    index = head
+    while index < end:
+        if REDIRECTION_TOKEN.match(tokens[index]):
+            index += 2
+            continue
+        args.append(tokens[index])
+        index += 1
+    return args
 
 
 def next_operator(tokens: list[str], start: int) -> int:
@@ -284,57 +293,36 @@ def command_body(command: str) -> str:
     return LEADING_COMMENTS.sub("", command).strip()
 
 
-def has_unquoted_newline(text: str) -> bool:
-    """True when `text` has more than one line outside quotes.
+def is_plain_line(text: str) -> bool:
+    """True when `text` is one line whose quoting this scanner reads as bash does.
 
-    A separate pass, because tokenize treats newlines as whitespace (that is
-    what keeps heredoc bodies from becoming commands). Comments are NOT
-    stripped here: `agy -p q # note` + newline + `echo hi` must still show the
-    newline. A quote this pass cannot close counts as a newline — the call is
-    then unknown, never wrongly direct.
+    Reviews kept finding commands that shlex and bash read differently — a
+    mid-word `#` (shlex: comment, bash: a word), `\\'` and `$'…'` (shlex and
+    bash disagree on where the quote ends) — each hiding a redirect or a second
+    command, logged as a success. Without backslashes, backticks and `$'`/`$"`,
+    quoting is just `'…'` and `"…"`, which this loop reads exactly; then any
+    `#` or newline outside quotes, or an unclosed quote, means "do not judge".
     """
-    joined = LINE_CONTINUATION.sub(r"\1 ", text)
-    lexer = shlex.shlex(joined, posix=True, punctuation_chars="\n")
-    lexer.whitespace = " \t\r"
-    lexer.whitespace_split = True
-    lexer.commenters = ""
-    try:
-        return any(token and set(token) == {"\n"} for token in lexer)
-    except ValueError:
-        return True
-
-
-def has_unquoted_hash(text: str) -> bool:
-    """True when `text` has a `#` outside quotes.
-
-    tokenize lets shlex treat `#` as a comment, but shlex starts one mid-word
-    (`~/c#proj`, `q#tag`) where bash does not, and the dropped rest of the line
-    can be a redirect or `|| echo` — logged as a success (PR #31 review).
-    Rather than reimplement bash's comment rule, a `#` outside quotes leaves the
-    call unjudged. Non-POSIX shlex keeps the quotes, so quoted spans can be
-    skipped; a quote it cannot close counts as a `#`.
-    """
-    lexer = shlex.shlex(text, posix=False)
-    lexer.whitespace_split = True
-    lexer.commenters = ""
-    try:
-        words = list(lexer)
-    except ValueError:
-        return True
-    for word in words:
-        quote = ""
-        for char in word:
-            if quote:
-                quote = "" if char == quote else quote
-            elif char in "\"'":
-                quote = char
-            elif char == "#":
-                return True
-    return False
+    if any(mark in text for mark in AMBIGUOUS_QUOTING):
+        return False
+    quote = ""
+    for char in text:
+        if quote:
+            if char == quote:
+                quote = ""
+        elif char in "'\"":
+            quote = char
+        elif char in "#\n":
+            return False
+    return not quote
 
 
 def allowed_redirections(tokens: list[str], start: int, end: int) -> bool:
-    """True when agy's own redirections are only `2>file`, `2>>file`, `<file`."""
+    """True when agy's only redirection is input from a file (`<file`).
+
+    stderr must reach the Bash tool: a soft-deny notice is the one failure
+    signal agy gives, and `2>file` would hide it from the hook.
+    """
     index = start
     while index < end:
         token = tokens[index]
@@ -342,12 +330,7 @@ def allowed_redirections(tokens: list[str], start: int, end: int) -> bool:
             index += 1
             continue
         operand = tokens[index + 1] if index + 1 < end else ""
-        if not operand or REDIRECTION_TOKEN.match(operand):
-            return False
-        if token in DIRECT_STDERR_OPS:
-            if operand.startswith(DEVICE_PREFIXES) and operand != DEV_NULL:
-                return False  # `2>/dev/stdout` merges stderr into stdout
-        elif token != DIRECT_INPUT_OP:
+        if token != DIRECT_INPUT_OP or not operand or REDIRECTION_TOKEN.match(operand):
             return False
         index += 2
     return True
@@ -356,8 +339,7 @@ def allowed_redirections(tokens: list[str], start: int, end: int) -> bool:
 def is_direct(command: str, tokens: list[str], found: tuple[int, int, int]) -> bool:
     """True only for the one shape whose stdout can be nothing but agy's."""
     segment, head, end = found
-    body = command_body(command)
-    if segment != 0 or has_unquoted_newline(body) or has_unquoted_hash(body):
+    if segment != 0 or not is_plain_line(command_body(command)):
         return False
     for word in tokens[segment:head]:
         if not (ENV_ASSIGNMENT.match(word) or word in DIRECT_PREFIX):

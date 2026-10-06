@@ -267,9 +267,8 @@ class AllowlistTargetTests(unittest.TestCase):
             'agy -p "Issue #42 in C#"',
             "agy -p 'C# tips'",
             'X="a#b" agy -p q',
-            "agy -p q 2>err.log",
-            "agy -p q 2>> err.log",
-            "agy -p q 2>/dev/null",
+            'agy --prompt="Issue #42"',
+            'X="a b#c" agy -p q',
             "agy -p q < in.txt",
             "agy -p q | tee out.md",
             "agy -p q | tee -a out.md",
@@ -281,10 +280,36 @@ class AllowlistTargetTests(unittest.TestCase):
             'agy -p "line1\nline2"',
             "# T1\nagy -p q",
             "# don't redirect\n\nagy -p q",
-            "agy -p q \\\n  --model x",
         ):
             with self.subTest(command=command):
                 self.assert_target(command, "direct")
+
+    def test_characters_that_make_quoting_ambiguous_are_never_direct(self) -> None:
+        # Isolated review of 84cdf2b: shlex and bash disagree on backslash
+        # escapes and `$'…'`, which hid a redirect and `; echo` inside what
+        # shlex took for a quoted word — two false successes. A backslash,
+        # `$'`, `$"` or a backtick now leaves the call unjudged.
+        for command in (
+            "agy -p q --add-dir ~/it\\'s#1 > out.log; echo EXIT_CODE=$?",
+            "agy -p $'it\\'s' > out.log; echo it\\'s",
+            'agy -p "Explain \\"foo\\" in C#"',
+            "agy -p q \\\n  --model x",
+            'agy -p $"q"',
+            "agy -p `cat p.txt`",
+        ):
+            with self.subTest(command=command):
+                self.assertNotEqual(hook.classify_stdout_target(command), "direct")
+
+    def test_a_stderr_redirect_is_not_direct(self) -> None:
+        # Isolated review of 84cdf2b: with stderr in a file the hook cannot see
+        # a soft-deny notice, so a denied call that printed text would pass.
+        for command in (
+            "agy -p q 2>err.log",
+            "agy -p q 2>> err.log",
+            "agy -p q 2>/dev/null",
+        ):
+            with self.subTest(command=command):
+                self.assert_target(command, "complex")
 
     def test_stderr_merged_into_stdout_is_not_direct(self) -> None:
         for command in (
@@ -379,7 +404,7 @@ class AllowlistEntryTests(unittest.TestCase):
         return built or {}
 
     def test_direct_keeps_the_answer_and_judges_it(self) -> None:
-        entry = self.entry("agy -p q 2>err.log", "answer")
+        entry = self.entry("agy -p q < in.txt", "answer")
         self.assertIs(entry["success"], True)
         self.assertEqual(entry["response"], "answer")
         self.assertEqual(entry["stdout_target"], "direct")
@@ -473,6 +498,19 @@ class AllowlistEntryTests(unittest.TestCase):
         self.assertEqual(entry["stdout_target"], "unclassified")
         self.assertIsNone(entry["success"])
         self.assertEqual(entry["response"], "")
+
+
+class PromptWithRedirectionsTests(unittest.TestCase):
+    def test_redirections_are_not_read_as_the_prompt(self) -> None:
+        # Isolated review of 84cdf2b: `agy 2>err.log -p "q"` logged `2>`.
+        for command in (
+            'agy 2>err.log -p "q"',
+            'agy < in.txt -p "q"',
+            'agy -p "q" > o',
+        ):
+            with self.subTest(command=command):
+                args = hook.find_agy_args(command)
+                self.assertEqual(hook.extract_agy_prompt(args or []), "q")
 
 
 class BuildEntryTests(unittest.TestCase):

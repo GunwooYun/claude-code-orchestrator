@@ -207,6 +207,18 @@ review falsified the original profile design; see Key Decisions.
       harness's notice), and leading comments are removed before
       backslash-newline joining.
 
+      **Second correction (2026-10-06, isolated review of 84cdf2b):** the `#`
+      check above still let two false successes through — an escaped quote
+      (`~/it\'s#1`) and bash `$'…'` quoting, which shlex reads differently from
+      bash and which hid a redirect and `; echo`. Instead of teaching the
+      checker bash's escape rules, a `direct` call may not contain a backslash,
+      backtick, `$'` or `$"`; without them quoting is plain `'…'`/`"…"`, and a
+      ten-line scanner finds an unquoted `#` or newline exactly. `2>file` left
+      the allowlist too: it hides the soft-deny notice. Since reading the code
+      did not settle this three times, `tests/test_log_cli_tools_oracle.py`
+      now runs every judged shape in real bash with a fake `agy` and requires
+      stdout to be agy's alone and agy's stderr to reach the tool.
+
 - [x] `post-implementation-review.py` — state is now per project and per session
       under `.claude/logs/implementation-state/`, with stale files pruned after
       7 days and symlinks refused. Which files count is exclusion-based rather
