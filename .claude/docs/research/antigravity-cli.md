@@ -94,9 +94,11 @@ echo "$result" | jq -r .response
 ```
 
 That pattern is for CI scripts. Inside a Claude Code session the
-`log-cli-tools` hook only sees the Bash tool's stdout, so a `$(...)` capture is
-logged with `success: null` (`[UNKNOWN]` in the session history) unless the
-envelope itself is printed; call agy directly, or `| tee <file>` for a copy.
+`log-cli-tools` hook only sees the Bash tool's stdout, so an unquoted
+`result=$(agy ...)` capture is logged with `success: null` (`[UNKNOWN]` in the
+session history) unless the envelope itself is printed. The quoted variant,
+`result="$(agy ...)"`, is not logged at all — the hook does not look inside a
+quoted word (known gap). Call agy directly, or `| tee <file>` for a copy.
 
 ## 4. Models (`agy models`, 2026-08-29)
 

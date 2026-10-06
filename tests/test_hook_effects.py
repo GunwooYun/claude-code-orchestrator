@@ -159,6 +159,18 @@ class LogCliToolsTests(unittest.TestCase):
         self.assertEqual("gemini-3.7-flash-low", entry["model"])
         self.assertIn("cli-tools.jsonl", context(result))
 
+    def test_a_redirected_call_is_logged_as_unknown(self) -> None:
+        """
+        V20: the unknown outcome must survive the JSONL round trip — `null`, not
+        a dropped key or `false` — because checkpoint.py renders it from there.
+        """
+        self.bash('agy -p "q" > out.log; echo EXIT_CODE=$?')
+        entry = json.loads(self.log.read_text(encoding="utf-8").splitlines()[-1])
+        self.assertIn("success", entry)
+        self.assertIsNone(entry["success"])
+        self.assertEqual("file:out.log", entry["stdout_target"])
+        self.assertEqual("", entry["response"])
+
     def test_another_binary_with_a_p_flag_is_not_logged(self) -> None:
         """
         `-p` means "prompt" only for agy. Found by mutation: with the quoted

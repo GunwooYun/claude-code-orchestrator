@@ -172,6 +172,13 @@ review falsified the original profile design; see Key Decisions.
       `## Consultation History`. `DocumentedFormatTests` asserts the document
       against *generated* output rather than against a copy of the format, so the
       two cannot drift apart in either direction.
+- [x] `checkpoint.py` C8 — tri-state outcome. `log-cli-tools` now writes
+      `success: null` when agy's stdout did not reach the Bash tool unaltered
+      (redirected, piped, captured) and nothing else says how the call ended;
+      `bool()` rendered that as `[FAILED]`. It now renders `[UNKNOWN]`; a missing
+      field stays `[FAILED]` (`UnknownOutcomeTests`). Origin: an adopting
+      project's log where 10 of 28 agy calls were the caller's own
+      `EXIT_CODE=0` echo, logged as successes.
 
 - [x] `post-implementation-review.py` — state is now per project and per session
       under `.claude/logs/implementation-state/`, with stale files pruned after
