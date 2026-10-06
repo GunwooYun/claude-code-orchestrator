@@ -20,8 +20,7 @@ project changed, back up a gitignored `.claude/` first).
   echo as its response and marked a success (an adopting project: 10 of 28
   calls). Only a single-line `agy …` on its own is judged now (`<file` and a
   final `| tee` allowed; no `2>file`, inline comment, backslash, `$'`, `$(`
-  or `${`);
-  every other shape is `success: null` with a blank response and a
+  or `${`); every other shape is `success: null` with a blank response and a
   `stdout_target` saying why. A differential test checks every judged shape
   against real bash (#31).
 - `/checkpointing` renders that unknown outcome as `[UNKNOWN]` instead of
@@ -30,6 +29,13 @@ project changed, back up a gitignored `.claude/` first).
 ### Changed
 - The agent and skill docs ask for one agy call per Bash command, alone, and
   `| tee <file>` when a copy on disk is needed (#31).
+- **Review findings are filtered by real occurrence.** A finding whose input
+  does not occur in real use — a usage nobody has, a condition that cannot
+  arise, an input built only in theory — is recorded, not fixed, whatever its
+  severity, and never starts another implement → review → fix round. Goals
+  are not set as open-ended absolutes, and an agreed stop condition is not
+  reopened by a theoretical finding. Defined in `CLAUDE.md` 운영 주의사항;
+  `/feature` and `/isolated-review` point to it (#32).
 
 ## [3.0.1] - 2026-10-05
 
