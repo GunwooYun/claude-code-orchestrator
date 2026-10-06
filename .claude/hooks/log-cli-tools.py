@@ -7,13 +7,20 @@ Triggers after Bash tool calls that actually invoke `agy` in print mode
 commands (grep, echo, heredocs) are ignored.
 Logs are stored in .claude/logs/cli-tools.jsonl
 
-The hook only sees the Bash tool's stdout. Each entry records where agy's
-stdout went (`stdout_target`); when it did not reach the Bash tool unaltered
-(`> file`, `| jq`, `$(...)`), or another command in the call may have written
-beside it (`mixed`: `agy … || echo FETCH FAILED`), `success` is null — unknown
-— unless a JSON envelope or a soft-deny notice says how the call ended. A
-parser gap is `unclassified`, also unknown. Not supported: `case … esac`,
-backticks, and a quoted `"$(agy …)"` (not logged at all).
+The hook only sees the Bash tool's stdout, so it judges a call only when that
+stdout can be nothing but agy's: a single-line `agy …` on its own, with at most
+`2>file`, `<file` and a final `| tee …` (`direct`). Every other shape is
+recorded with `success: null` — unknown — and a blank response, plus a coarse
+`stdout_target` (`file:<path>`, `stderr`, `pipe:<cmd>`, `substitution`,
+`complex`, `unclassified`). A soft-deny notice on stderr is a failure in any
+shape. An allowlist can only err toward unknown; the two rounds that parsed
+every shell shape before it kept finding new false successes.
+
+Known limits: a mid-word `#` (`~/c#proj`) is read as a comment and a quoted
+punctuation-only argument (`agy -p ";"`) as an operator; `agy -p q # don't`
+is unknown (the apostrophe opens a quote in the newline check); `cd x` on one
+line and `agy …` on the next is not logged; backticks and a quoted
+`"$(agy …)"` are not logged.
 
 All agents (Claude Code, subagents, agy) can read this log.
 """
@@ -64,15 +71,21 @@ WRAPPER_COMMANDS = {
     "{",
     "!",
 }
+# The wrappers a `direct` call may start with: none of them write to stdout or
+# end the call early (`timeout` can leave a partial answer that looks whole).
+DIRECT_PREFIX = frozenset({"env", "command", "exec", "time", "!", "sudo", "nohup"})
 ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
-# shlex's punctuation characters (newline included: it separates commands), and
-# how a glued run of them splits back into operators and redirections (longest
-# alternatives first).
-PUNCTUATION = "();<>|&\n"
-PUNCTUATION_SPLIT = re.compile(r"&>>|&>|>>|>&|>\||\|\||&&|\|&|;;|<<|[();<>|&\n]")
-CONTROL_OPERATORS = frozenset({";", "&", "|", "||", "&&", "|&", ";;", "(", ")", "\n"})
+# shlex's punctuation characters, and how a glued run of them splits back into
+# operators and redirections (longest alternatives first).
+PUNCTUATION = "();<>|&"
+PUNCTUATION_SPLIT = re.compile(r"&>>|&>|>>|>&|>\||\|\||&&|\|&|;;|<<|[();<>|&]")
+CONTROL_OPERATORS = frozenset({";", "&", "|", "||", "&&", "|&", ";;", "(", ")"})
 PIPES = frozenset({"|", "|&"})
-LINE_CONTINUATION = re.compile(r"\\\n")
+# A backslash-newline continues the line, unless the backslash is itself escaped.
+LINE_CONTINUATION = re.compile(r"(?<!\\)((?:\\\\)*)\\\n")
+# Full-line comments and blank lines before the command: nothing precedes them,
+# so no quote or heredoc can be open there.
+LEADING_COMMENTS = re.compile(r"\A(?:[ \t]*(?:#[^\n]*)?\n)+")
 # An unquoted run of digits touching a redirection operator is its fd (`2>err`,
 # not `--conversation 42 > f` and not `"2" > f`). shlex drops the spacing that
 # tells them apart, so the fd is marked in the raw text first and glued back
@@ -80,36 +93,23 @@ LINE_CONTINUATION = re.compile(r"\\\n")
 FD_PREFIX = re.compile(r"(?<![^\s;|()])(\d+)(?=>>|>\||>&|>|<)")
 FD_MARK = "\x00"
 FD_TOKEN = re.compile(r"^\x00(\d+)$")
-# A redirection token: optional fd glued on, then the operator.
-REDIRECTION = re.compile(r"^(\d*)(&>>|&>|>>|>\||>&|>)$")
-# Redirections that send the stream on their left (stdout unless an fd prefix
-# says otherwise) somewhere other than the Bash tool's stdout.
+# Any redirection token, fd glued on or not.
+REDIRECTION_TOKEN = re.compile(r"^\d*(&>>|&>|>>|>\||>&|>|<<|<&|<>|<)$")
+# The output redirections, split into fd and operator.
+OUTPUT_REDIRECTION = re.compile(r"^(\d*)(&>>|&>|>>|>\||>&|>)$")
 OUTPUT_REDIRECTS = frozenset({">", ">>", ">|"})
 BOTH_REDIRECTS = frozenset({"&>", "&>>"})
 STDOUT_FD = "1"
 STDERR_FD = "2"
-# Compound commands, recognised at command-start position only. Openers count
-# toward depth so a later construct is skipped whole; a closer at depth 0
-# closes the construct around agy, and its redirections apply to agy. `for`,
-# `while` and `until` open with `do`; `then`/`else`/`elif` neither open nor
-# close. `case … esac` is not supported: its `pat)` patterns read as groups.
-KEYWORD_OPENERS = frozenset({"if", "do", "{"})
-KEYWORD_CLOSERS = frozenset({"fi", "done", "}"})
-# Commands that write nothing to stdout in their usual use, so a neighbour that
-# runs one does not make agy's stdout `mixed`. Wrong inclusions are unsafe (a
-# writer counted as silent); omissions are safe (a silent command reads as
-# `mixed`, i.e. unknown). Structural words appear because they head segments.
-SILENT_COMMANDS = frozenset(
-    {
-        "cd", "export", "unset", "set", "true", "false", ":", "mkdir", "rm",
-        "cp", "mv", "touch", "sleep", "exit", "return", "shift", "trap",
-        "umask", "break", "continue", "[", "test", "for", "select", "case",
-        "in", "function", "done", "fi", "esac", "}",
-    }
-)  # fmt: skip
+# Redirections a `direct` call may carry: stderr to a file, input from a file.
+DIRECT_STDERR_OPS = frozenset({"2>", "2>>"})
+DIRECT_INPUT_OP = "<"
+# A stderr target that is really stdout (`2>/dev/stdout`, `2>/dev/fd/1`).
+DEVICE_PREFIXES = ("/dev/", "/proc/")
+DEV_NULL = "/dev/null"
 # stdout_target values (the rest are `file:<path>`, `fd:<n>`, `pipe:<command>`).
 DIRECT = "direct"
-MIXED = "mixed"
+COMPLEX = "complex"
 UNCLASSIFIED = "unclassified"
 STDERR_TARGET = "stderr"
 SUBSTITUTION = "substitution"
@@ -124,18 +124,15 @@ def tokenize(command: str) -> list[str]:
 
     shlex glues adjacent punctuation into one token (`);`, `)|`, `2>&1|` gives
     `>&` then `|`), so every all-punctuation token is split into operators and
-    redirections. Quoted strings stay single tokens. An unquoted newline is a
-    command separator; a backslash-newline is a continuation; `#` is not
-    treated as a comment (shlex would swallow the next line with it), so a
-    comment only adds words to its own command. An fd is glued onto its
-    operator (`2>`, `1>&`). Known limit: a quoted string made only of
-    punctuation (`agy -p ";"`) is read as an operator.
+    redirections. Quoted strings stay single tokens; `#` starts a comment;
+    newlines are whitespace (so a heredoc body is never a command of its own).
+    An fd is glued onto its operator (`2>`, `2>&`).
     """
-    marked = FD_PREFIX.sub(FD_MARK + r"\1", LINE_CONTINUATION.sub(" ", command))
-    lexer = shlex.shlex(marked, posix=True, punctuation_chars=PUNCTUATION)
-    lexer.whitespace = " \t\r"
+    joined = LINE_CONTINUATION.sub(r"\1 ", command)
+    lexer = shlex.shlex(
+        FD_PREFIX.sub(FD_MARK + r"\1", joined), posix=True, punctuation_chars=True
+    )
     lexer.whitespace_split = True
-    lexer.commenters = ""
     try:
         raw = list(lexer)
     except ValueError:
@@ -204,12 +201,12 @@ def is_agy(word: str) -> bool:
     return word == "agy" or word.endswith("/agy")
 
 
-def find_agy_segment(tokens: list[str]) -> tuple[int, int] | None:
-    """[command word, end) of the first real agy invocation, or None."""
+def find_agy_segment(tokens: list[str]) -> tuple[int, int, int] | None:
+    """(segment start, command word, end) of the first real agy invocation."""
     for start, end in segment_bounds(tokens):
         head = command_start(tokens, start, end)
         if head < end and is_agy(tokens[head]):
-            return head, end
+            return start, head, end
     return None
 
 
@@ -219,8 +216,8 @@ def find_agy_args(command: str) -> list[str] | None:
     found = find_agy_segment(tokens)
     if found is None:
         return None
-    start, end = found
-    return tokens[start:end]
+    _, head, end = found
+    return tokens[head:end]
 
 
 def next_operator(tokens: list[str], start: int) -> int:
@@ -231,52 +228,27 @@ def next_operator(tokens: list[str], start: int) -> int:
     return len(tokens)
 
 
-def at_command_start(tokens: list[str], index: int) -> bool:
-    return index == 0 or tokens[index - 1] in CONTROL_OPERATORS
-
-
-def compound_close(tokens: list[str], start: int) -> int:
-    """Index of the `)` or keyword closer ending the construct `start` is in.
-
-    Any closer reached at depth 0 closes a construct that contains `start`,
-    because constructs opened after `start` raise the depth first. Returns
-    the end of the tokens when nothing encloses `start`.
-    """
-    depth = 0
-    for index in range(start, len(tokens)):
-        token = tokens[index]
-        keyword = at_command_start(tokens, index)
-        if token == "(" or (keyword and token in KEYWORD_OPENERS):
-            depth += 1
-        elif token == ")" or (keyword and token in KEYWORD_CLOSERS):
-            if depth == 0:
-                return index
-            depth -= 1
-    return len(tokens)
-
-
-def open_groups(tokens: list[str], end: int) -> list[bool]:
-    """Groups open at tokens[end], innermost last: True for `$(`, False for `(`."""
+def inside_substitution(tokens: list[str], end: int) -> bool:
+    """True when tokens[end] sits inside an open `$(`."""
     stack: list[bool] = []
     for index in range(end):
         if tokens[index] == "(":
             stack.append(index > 0 and tokens[index - 1].endswith("$"))
         elif tokens[index] == ")" and stack:
             stack.pop()
-    return stack
+    return any(stack)
 
 
 def redirect_target(tokens: list[str], start: int, end: int) -> str | None:
     """Where the redirections in tokens[start:end] send stdout; None = unchanged.
 
-    Redirections apply left to right, so the last one touching stdout wins
-    (`2>&1 >/dev/null` discards stdout). tokenize glues an fd onto its
-    operator (`2>`), so a separate digit token is always an argument.
+    Only labels a call that is already not `direct`, for a person reading the
+    log. The last redirection touching stdout wins.
     """
     target: str | None = None
     index = start
     while index < end:
-        redirection = REDIRECTION.match(tokens[index])
+        redirection = OUTPUT_REDIRECTION.match(tokens[index])
         if not redirection:
             index += 1
             continue
@@ -299,104 +271,95 @@ def redirect_target(tokens: list[str], start: int, end: int) -> str | None:
     return target
 
 
+def has_unquoted_newline(command: str) -> bool:
+    """True when the command has more than one line outside quotes.
+
+    A separate pass, because tokenize treats newlines as whitespace (that is
+    what keeps heredoc bodies from becoming commands). Comments are NOT
+    stripped here: `agy -p q # note` + newline + `echo hi` must still show the
+    newline. A quote this pass cannot close (`# don't`) counts as a newline —
+    the call is then unknown, never wrongly direct.
+    """
+    text = LEADING_COMMENTS.sub("", LINE_CONTINUATION.sub(r"\1 ", command)).strip()
+    lexer = shlex.shlex(text, posix=True, punctuation_chars="\n")
+    lexer.whitespace = " \t\r"
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+        return any(token and set(token) == {"\n"} for token in lexer)
+    except ValueError:
+        return True
+
+
+def allowed_redirections(tokens: list[str], start: int, end: int) -> bool:
+    """True when agy's own redirections are only `2>file`, `2>>file`, `<file`."""
+    index = start
+    while index < end:
+        token = tokens[index]
+        if not REDIRECTION_TOKEN.match(token):
+            index += 1
+            continue
+        operand = tokens[index + 1] if index + 1 < end else ""
+        if not operand or REDIRECTION_TOKEN.match(operand):
+            return False
+        if token in DIRECT_STDERR_OPS:
+            if operand.startswith(DEVICE_PREFIXES) and operand != DEV_NULL:
+                return False  # `2>/dev/stdout` merges stderr into stdout
+        elif token != DIRECT_INPUT_OP:
+            return False
+        index += 2
+    return True
+
+
+def is_direct(command: str, tokens: list[str], found: tuple[int, int, int]) -> bool:
+    """True only for the one shape whose stdout can be nothing but agy's."""
+    segment, head, end = found
+    if segment != 0 or has_unquoted_newline(command):
+        return False
+    for word in tokens[segment:head]:
+        if not (ENV_ASSIGNMENT.match(word) or word in DIRECT_PREFIX):
+            return False
+    if not allowed_redirections(tokens, head, end):
+        return False
+    if end == len(tokens):
+        return True
+    # The only follow-on allowed: `| tee [args]` as the last command, unredirected.
+    tee_start = end + 1
+    if tokens[end] != "|" or tee_start >= len(tokens):
+        return False
+    if next_operator(tokens, tee_start) != len(tokens):
+        return False
+    if command_name(tokens[tee_start]) != "tee":
+        return False
+    return not any(REDIRECTION_TOKEN.match(token) for token in tokens[tee_start:])
+
+
 def command_name(word: str) -> str:
     return word.rsplit("/", 1)[-1]
 
 
-def follow_stdout(tokens: list[str], start: int, end: int) -> tuple[str, set[int]]:
-    """Walk agy's stdout from its segment tokens[start:end] to where it ends up.
-
-    Returns the target and the start indices of the pipe consumers walked
-    through. Every consumer is followed (its own redirections, the construct
-    around it), so `| jq > a.txt` is a file and `$(agy | jq)` a substitution;
-    the first non-tee consumer only names the result when the walk ends at the
-    Bash tool's stdout.
-    """
-    groups = open_groups(tokens, start)
-    consumer = ""
-    visited: set[int] = set()
-    while True:
-        target = redirect_target(tokens, start, end)
-        if target is not None:
-            return target, visited
-        position = end
-        piped = False
-        while position < len(tokens):
-            operator = tokens[position]
-            if operator in PIPES:
-                # Hop to the consumer: its redirections and what follows it decide.
-                start = position + 1
-                end = next_operator(tokens, start)
-                visited.add(start)
-                head = command_start(tokens, start, end)
-                if head < end:
-                    name = command_name(tokens[head])
-                    if name != "tee" and not consumer:
-                        consumer = name
-                    start = head
-                piped = True
-                break
-            if operator == ")" or operator in KEYWORD_CLOSERS:
-                if operator == ")":
-                    if not groups:
-                        break  # unbalanced: nothing more is known
-                    if groups.pop():
-                        return SUBSTITUTION, visited
-                # A closed construct: its redirections apply to everything inside.
-                after = next_operator(tokens, position + 1)
-                target = redirect_target(tokens, position + 1, after)
-                if target is not None:
-                    return target, visited
-                position = after
-                continue
-            if operator == "(":
-                break
-            # `;` `&&` `||` `&` newline: this command's stdout is its construct's.
-            position = compound_close(tokens, position + 1)
-        if not piped:
-            break
-    return (f"{PIPE_PREFIX}{consumer}" if consumer else DIRECT), visited
-
-
-def has_other_writer(tokens: list[str], agy_start: int, skipped: set[int]) -> bool:
-    """True when another command in the call may write to the same stdout.
-
-    Over-approximates on purpose: a writer inside `$(...)` or a redirected
-    group still counts, which only turns `direct` into `mixed` (unknown).
-    """
-    bounds = segment_bounds(tokens)
-    for start, end in bounds:
-        if start <= agy_start < end or start in skipped:
-            continue
-        if end < len(tokens) and tokens[end] in PIPES:
-            continue  # a producer feeding a pipe, e.g. `cat f | agy`
-        if redirect_target(tokens, start, end) is not None:
-            continue
-        head = command_start(tokens, start, end)
-        if head >= end or command_name(tokens[head]) in SILENT_COMMANDS:
-            continue
-        return True
-    return False
-
-
 def classify_stdout_target(command: str) -> str:
-    """Where the first agy invocation's stdout goes.
-
-    `direct` means it reaches the Bash tool's stdout unaltered and nothing
-    else writes there, the only case where that stdout can be read as agy's
-    answer. Otherwise: `file:<path>`, `stderr`, `fd:<n>`, `pipe:<command>`,
-    `substitution`, or `mixed` (agy's stdout arrives, but another command may
-    write beside it — `agy || echo FETCH FAILED`).
-    """
+    """`direct` for the allowlisted shape; otherwise a coarse label."""
     tokens = tokenize(command)
     found = find_agy_segment(tokens)
     if found is None:
+        return COMPLEX
+    _, head, end = found
+    target = redirect_target(tokens, head, end)
+    if target is not None:
+        return target
+    if inside_substitution(tokens, head):
+        return SUBSTITUTION
+    if end < len(tokens) and tokens[end] in PIPES:
+        consumer = end + 1
+        consumer_end = next_operator(tokens, consumer)
+        word = command_start(tokens, consumer, consumer_end)
+        name = command_name(tokens[word]) if word < consumer_end else ""
+        if name != "tee":
+            return f"{PIPE_PREFIX}{name}"
+    if is_direct(command, tokens, found):
         return DIRECT
-    start, end = found
-    target, visited = follow_stdout(tokens, start, end)
-    if target == DIRECT and has_other_writer(tokens, start, visited):
-        return MIXED
-    return target
+    return COMPLEX
 
 
 def stdout_target(command: str) -> str:
@@ -449,42 +412,37 @@ def extract_model(args: list[str]) -> str | None:
 
 
 def _parse_result_payload(stdout: str) -> dict | None:
-    """Parse agy's JSON envelope from stdout.
+    """Parse agy's JSON envelope; for stream-json use the last non-empty line.
 
-    Tries the whole stdout, then every non-empty line from the last one up: the
-    last envelope is the stream-json result, and lines after it (`; echo
-    EXIT_CODE=$?`) are not agy's. Trying only the last line judged an ERROR
-    envelope by the echo that followed it. An envelope carries both `status`
-    and `response`; a `{"status": "ok"}` line inside a plain answer is not one.
+    Only called for `direct` calls, whose stdout is agy's alone, so nothing can
+    follow the envelope.
     """
+    candidates = [stdout.strip()]
     lines = [ln for ln in stdout.strip().splitlines() if ln.strip()]
-    candidates = [stdout.strip(), *reversed(lines)]
+    if lines:
+        candidates.append(lines[-1])
     for text in candidates:
         try:
             payload = json.loads(text)
         except (json.JSONDecodeError, TypeError):
             continue
-        if isinstance(payload, dict) and "status" in payload and "response" in payload:
+        if isinstance(payload, dict) and "status" in payload:
             return payload
     return None
 
 
-def determine_success(
-    stdout: str, stderr: str, stdout_is_agys: bool = True
-) -> bool | None:
-    """Best-effort success flag that reflects agy's headless soft-deny.
-
-    None means unknown: agy's stdout went elsewhere (stdout_is_agys False) and
-    neither a soft-deny notice nor a JSON envelope says how the call ended.
-    """
+def soft_denied(stderr: str) -> bool:
     stderr_lower = (stderr or "").lower()
-    if any(marker in stderr_lower for marker in SOFT_DENY_MARKERS):
+    return any(marker in stderr_lower for marker in SOFT_DENY_MARKERS)
+
+
+def determine_success(stdout: str, stderr: str) -> bool:
+    """Best-effort success flag for a `direct` call, reflecting soft-deny."""
+    if soft_denied(stderr):
         return False
     payload = _parse_result_payload(stdout or "")
     if payload is not None:
         return payload.get("status") == "SUCCESS" and bool(payload.get("response"))
-    if not stdout_is_agys:
-        return None
     return bool((stdout or "").strip())
 
 
@@ -514,21 +472,22 @@ def build_entry(command: str, tool_response: dict) -> dict | None:
     stdout = tool_response.get("stdout", "") or tool_response.get("content", "") or ""
     stderr = tool_response.get("stderr", "") or ""
     target = stdout_target(command)
-    # Kept when agy's output is in stdout, alone (direct), beside other output
-    # (mixed, unclassified) or transformed (`| jq -r .response`); a file,
-    # stderr or `$(...)` target leaves stdout to whatever ran next. Only
-    # `direct` lets non-empty stdout count as success.
-    keep_response = target in (DIRECT, MIXED, UNCLASSIFIED) or target.startswith(
-        PIPE_PREFIX
-    )
+    if target == DIRECT:
+        response = truncate_text(stdout) if stdout else ""
+        success: bool | None = determine_success(stdout, stderr)
+    else:
+        # stdout may be anyone's: no answer, no verdict — except a soft-deny,
+        # which is a failure wherever stdout went.
+        response = ""
+        success = False if soft_denied(stderr) else None
     return {
         # Local time with offset so checkpoint day-grouping matches the user's calendar.
         "timestamp": datetime.now(UTC).astimezone().isoformat(),
         "tool": "antigravity",
         "model": extract_model(args) or "default",
         "prompt": truncate_text(prompt),
-        "response": truncate_text(stdout) if stdout and keep_response else "",
-        "success": determine_success(stdout, stderr, target == DIRECT),
+        "response": response,
+        "success": success,
         "stdout_target": target,
     }
 

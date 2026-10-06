@@ -41,9 +41,10 @@ metadata:
 - [UNKNOWN] a call whose stdout went to a file
 ```
 
-`[UNKNOWN]` 은 agy 의 stdout 이 파일·파이프·`$(...)` 로 갔거나, 같은 명령의 다른 출력(`|| echo` 등)과
-섞여서 훅이 결과를 볼 수 없었던 호출이다
-(로그의 `success: null`, 행선지는 `stdout_target`). 실패로 세지도, 성공으로 세지도 않는다.
+`[UNKNOWN]` 은 훅이 결과를 판정할 수 없는 모양으로 부른 호출이다 — 훅은 `agy …` 를 한 줄에 단독으로
+부른 호출(`2>파일`, `<파일`, 끝의 `| tee 파일` 까지만 허용)만 판정하고, 파일·파이프·`$(...)`·
+`|| echo`·`2>&1` 등 나머지는 전부 여기로 간다(로그의 `success: null`, 사유는 `stdout_target`).
+실패로 세지도, 성공으로 세지도 않는다.
 
 위 예시가 코드 펜스 안에 있는 것은 의도다 — `checkpoint.py` 는 펜스 안의 헤딩을 섹션 경계로 보지 않는다.
 

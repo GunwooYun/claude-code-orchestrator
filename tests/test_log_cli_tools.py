@@ -248,327 +248,162 @@ class SoftDenySuccessTests(unittest.TestCase):
         )
 
 
-class EnvelopeWithTrailingLinesTests(unittest.TestCase):
+class AllowlistTargetTests(unittest.TestCase):
     """
-    V9: `agy ... --output-format json; echo EXIT_CODE=$?` puts a line after the
-    envelope. The verdict must come from the envelope, not the trailing text —
-    an earlier version tried only the whole stdout and its last line, so an
-    ERROR envelope followed by `EXIT_CODE=1` was logged as a success.
-    """
-
-    def test_error_envelope_followed_by_echo_is_failure(self) -> None:
-        stdout = '{"status":"ERROR","response":""}\nEXIT_CODE=1'
-        self.assertFalse(hook.determine_success(stdout, ""))
-
-    def test_empty_success_envelope_followed_by_echo_is_failure(self) -> None:
-        stdout = '{"status":"SUCCESS","response":""}\nEXIT_CODE=0\n'
-        self.assertFalse(hook.determine_success(stdout, ""))
-
-    def test_success_envelope_followed_by_echo_is_success(self) -> None:
-        stdout = '{"status":"SUCCESS","response":"answer"}\nEXIT_CODE=0'
-        self.assertTrue(hook.determine_success(stdout, ""))
-
-
-class StdoutTargetTests(unittest.TestCase):
-    """
-    Whether the Bash tool's stdout IS agy's stdout. When it is not, the hook
-    must not read it as agy's answer: an adopting project's log held 28 calls,
-    of which 10 were `EXIT_CODE=0`-style text from a redirected call marked as
-    a success.
+    Only one shape is `direct` — the one call whose stdout can be read as agy's
+    answer: a single-line `agy …` on its own, with at most `2>file`, `<file`
+    and a final `| tee …`. Everything else is unknown. Two rounds of parsing
+    every shell shape kept producing new false successes and regressions (an
+    adopting project logged 10 of 28 calls as successes from `EXIT_CODE=0`
+    echoes); an allowlist can only err toward unknown.
     """
 
     def assert_target(self, command: str, expected: str) -> None:
         self.assertEqual(hook.classify_stdout_target(command), expected, command)
 
-    # V1, V2
-    def test_stdout_file_redirects(self) -> None:
-        self.assert_target('agy -p "q" > out.log; echo EXIT_CODE=$?', "file:out.log")
-        self.assert_target('agy -p "q" >out.log', "file:out.log")
-        self.assert_target('agy -p "q" >> out.log', "file:out.log")
-        self.assert_target('agy -p "q" >| out.log', "file:out.log")
-        self.assert_target('agy -p "q" &> all.log', "file:all.log")
-        self.assert_target('agy -p "q" &>> all.log', "file:all.log")
-        self.assert_target('agy -p "q" 1> out.log', "file:out.log")
-        self.assert_target('agy -p "q" >& out.log', "file:out.log")
-
-    # V3
-    def test_stderr_and_input_redirects_keep_stdout_direct(self) -> None:
-        self.assert_target('agy -p "q" 2> err.log', "direct")
-        self.assert_target('agy -p "q" 2>err.log', "direct")
-        self.assert_target('agy -p "q" 2>> err.log', "direct")
-        self.assert_target('agy -p "q" 2>&1', "direct")
-        self.assert_target('agy -p "q" < in.txt', "direct")
-        self.assert_target('agy -p "q"', "direct")
-
-    # V4
-    def test_stdout_to_stderr_and_redirect_order(self) -> None:
-        self.assert_target('agy -p "q" >&2', "stderr")
-        self.assert_target('agy -p "q" 1>&2', "stderr")
-        self.assert_target('agy -p "q" 2>&1 >/dev/null', "file:/dev/null")
-        self.assert_target('agy -p "q" >/dev/null 2>&1', "file:/dev/null")
-        # The last redirection touching stdout wins.
-        self.assert_target('agy -p "q" > a.log > b.log', "file:b.log")
-        self.assert_target('agy -p "q" >&2 > out.log', "file:out.log")
-        self.assert_target('agy -p "q" > out.log >&2', "stderr")
-
-    # V5
-    def test_command_substitution_and_subshell(self) -> None:
-        self.assert_target('result=$(agy -p "q")', "substitution")
-        self.assert_target('result=$(agy -p "q"); echo "$result"', "substitution")
-        self.assert_target('echo $(agy -p "q")', "substitution")
-        self.assert_target('x=$(cd /tmp && agy -p "q"; echo done)', "substitution")
-        self.assert_target('( agy -p "q" )', "direct")
-        self.assert_target('(cd /tmp && agy -p "q")', "direct")
-        self.assert_target('(cd /tmp && agy -p "q"; echo done)', "mixed")
-        self.assert_target('( agy -p "q" ) > out.log', "file:out.log")
-
-    # V6
-    def test_pipes_and_tee(self) -> None:
-        self.assert_target(
-            'agy -p "q" --output-format json | jq -r .response', "pipe:jq"
-        )
-        self.assert_target('agy -p "q" |& jq .', "pipe:jq")
-        self.assert_target('(agy -p "q")|jq .', "pipe:jq")
-        self.assert_target('agy -p "q" | tee out.log', "direct")
-        self.assert_target('agy -p "q" | tee -a out.log', "direct")
-        self.assert_target('agy -p "q" 2>&1 | tee out.log', "direct")
-        self.assert_target('agy -p "q" | tee out.log > /dev/null', "file:/dev/null")
-        self.assert_target('agy -p "q" | tee out.log | head', "pipe:head")
-        self.assert_target('agy -p "q" > out.log | jq .', "file:out.log")
-        self.assert_target('agy -p "q" | FOO=1 timeout 9 jq .', "pipe:jq")
-
-    # V7
-    def test_follow_on_commands_split_correctly(self) -> None:
-        # Round 1 pinned these as `direct`; the isolated review showed that
-        # `agy || echo FETCH FAILED` then logs the echo as a success, so a
-        # follow-on writer now makes the stdout `mixed` (V18).
-        self.assert_target('agy -p "q" || echo FETCH FAILED', "mixed")
-        self.assert_target('agy -p "q" && echo done', "mixed")
-        self.assert_target('agy -p "q"; echo next', "mixed")
-        self.assert_target('agy -p "q" &', "direct")
-
-    # V11
-    def test_malformed_input_never_raises(self) -> None:
+    def test_the_simple_shapes_are_direct(self) -> None:
         for command in (
-            'agy -p "q" >',
-            'x=$(agy -p "q"',
-            'agy -p "q" ) ) > f',
-            'agy -p "unbalanced > f',
-            "",
-        ):
-            with self.subTest(command=command):
-                self.assertIsInstance(hook.classify_stdout_target(command), str)
-
-
-class NotDirectEntryTests(unittest.TestCase):
-    """build_entry when agy's stdout did not reach the Bash tool unaltered."""
-
-    def test_file_redirect_is_unknown_with_blank_response(self) -> None:
-        entry = hook.build_entry(
-            'agy -p "q" > out.log; echo EXIT_CODE=$?',
-            {"stdout": "EXIT_CODE=0", "stderr": ""},
-        )
-        self.assertIsNone(entry["success"])
-        self.assertEqual(entry["response"], "")
-        self.assertEqual(entry["stdout_target"], "file:out.log")
-
-    def test_failed_call_behind_redirect_is_not_a_success(self) -> None:
-        entry = hook.build_entry(
-            'agy -p "q" > out.log 2> err.log; echo EXIT_CODE=$?',
-            {"stdout": "EXIT_CODE=1", "stderr": ""},
-        )
-        self.assertIsNone(entry["success"])
-
-    def test_substitution_is_unknown_with_blank_response(self) -> None:
-        entry = hook.build_entry(
-            'r=$(agy -p "q"); echo FETCH FAILED', {"stdout": "FETCH FAILED"}
-        )
-        self.assertIsNone(entry["success"])
-        self.assertEqual(entry["response"], "")
-
-    # V6 (response policy)
-    def test_pipe_keeps_response_but_is_unknown(self) -> None:
-        entry = hook.build_entry(
-            'agy -p "q" --output-format json | jq -r .response', {"stdout": "answer"}
-        )
-        self.assertIsNone(entry["success"])
-        self.assertEqual(entry["response"], "answer")
-        self.assertEqual(entry["stdout_target"], "pipe:jq")
-
-    def test_direct_call_records_its_target(self) -> None:
-        entry = hook.build_entry('agy -p "q"', {"stdout": "answer"})
-        self.assertTrue(entry["success"])
-        self.assertEqual(entry["stdout_target"], "direct")
-
-    # V8
-    def test_soft_deny_is_a_failure_even_when_not_direct(self) -> None:
-        entry = hook.build_entry(
-            'agy -p "q" > out.log',
-            {"stdout": "", "stderr": "warning: auto-denied read_file"},
-        )
-        self.assertIs(entry["success"], False)
-
-    # V10
-    def test_envelope_decides_whatever_the_target(self) -> None:
-        ok = hook.build_entry(
-            'agy -p "q" --output-format json > f.json; cat f.json',
-            {"stdout": '{"status":"SUCCESS","response":"answer"}'},
-        )
-        self.assertIs(ok["success"], True)
-        failed = hook.build_entry(
-            'agy -p "q" --output-format json > f.json; cat f.json',
-            {"stdout": '{"status":"ERROR","response":""}'},
-        )
-        self.assertIs(failed["success"], False)
-
-    # V20
-    def test_classification_error_is_unknown_not_direct(self) -> None:
-        # Fault injection: the classifier is replaced only to make it raise.
-        # Falling back to `direct` (round 1) logged the follow-on echo as a
-        # success; a parser gap must fail closed, to unknown.
-        broken = mock.Mock(side_effect=RuntimeError("parser gap"))
-        with mock.patch.object(hook, "classify_stdout_target", broken):
-            entry = hook.build_entry('agy -p "q" > out.log', {"stdout": "A"})
-        broken.assert_called_once()
-        self.assertIsNotNone(entry)
-        self.assertEqual(entry["stdout_target"], "unclassified")
-        self.assertIsNone(entry["success"])
-        self.assertEqual(entry["response"], "A")
-
-
-class ReviewRoundTwoTargetTests(unittest.TestCase):
-    """
-    Round 2: each case was found by the isolated review of round 1 and
-    reproduced by running the hook before the fix.
-    """
-
-    def assert_target(self, command: str, expected: str) -> None:
-        self.assertEqual(hook.classify_stdout_target(command), expected, command)
-
-    # V14
-    def test_newline_separates_commands(self) -> None:
-        self.assert_target('agy -p "q"\necho done > marker.txt', "direct")
-        self.assert_target('agy -p "q"\n\necho done > marker.txt', "direct")
-        self.assert_target('agy -p "q" # note\necho done > m.txt', "direct")
-        self.assert_target('agy -p "q"\necho done', "mixed")
-
-    def test_newline_inside_quotes_and_continuations_are_not_separators(self) -> None:
-        args = hook.find_agy_args('agy -p "Line one\nLine two" > out.log')
-        self.assertEqual(hook.extract_agy_prompt(args or []), "Line one\nLine two")
-        args = hook.find_agy_args('agy -p "q" \\\n  --model m2 > out.log')
-        self.assertEqual(hook.extract_model(args or []), "m2")
-        self.assert_target('agy -p "q" \\\n  > out.log', "file:out.log")
-
-    # V15
-    def test_pipe_consumer_redirect_and_substitution_decide(self) -> None:
-        self.assert_target(
-            'agy -p "q" --output-format json | jq -r .response > a.txt; echo EXIT_CODE=$?',
-            "file:a.txt",
-        )
-        self.assert_target(
-            'r=$(agy -p "q" | jq -r .response); echo EXIT_CODE=$?', "substitution"
-        )
-        self.assert_target('agy -p "q" | jq .', "pipe:jq")
-        self.assert_target('agy -p "q" | jq . | tee out.json', "pipe:jq")
-
-    # V16
-    def test_compound_closers_carry_redirect_and_pipe(self) -> None:
-        self.assert_target(
-            'for f in a b; do agy -p "Sum $f"; done > out.log; echo EXIT_CODE=$?',
-            "file:out.log",
-        )
-        self.assert_target('{ agy -p "q"; } > out.log', "file:out.log")
-        self.assert_target("while true; do agy -p q; done | jq .", "pipe:jq")
-        self.assert_target("x=$(for f in a; do agy -p q; done)", "substitution")
-        self.assert_target(
-            "if test -f a; then agy -p q; else echo no; fi > o.log", "file:o.log"
-        )
-        self.assert_target(
-            "for f in a; do for g in b; do agy -p q; done; done > out.log",
-            "file:out.log",
-        )
-        self.assert_target(
-            "( for f in a; do agy -p q; done ) > out.log", "file:out.log"
-        )
-
-    def test_a_closed_loop_does_not_take_a_later_redirect(self) -> None:
-        self.assert_target("for f in a; do agy -p q; done; echo x > f.log", "direct")
-        self.assert_target(
-            "for f in a; do agy -p q; done; for g in b; do true; done > out.log",
-            "direct",
-        )
-
-    def test_compound_bodies_are_detected(self) -> None:
-        for command in ('{ agy -p "q"; }', 'if agy -p "q"; then echo; fi'):
-            with self.subTest(command=command):
-                args = hook.find_agy_args(command)
-                self.assertEqual(hook.extract_agy_prompt(args or []), "q")
-
-    # V17
-    def test_a_digit_is_an_fd_only_when_unquoted_and_touching(self) -> None:
-        self.assert_target('agy -p "q" --conversation 42 > out.log', "file:out.log")
-        self.assert_target('agy -p "42" > out.log', "file:out.log")
-        self.assert_target('agy -p "2" > out.log 2>err', "file:out.log")
-        self.assert_target('agy -p "see 2>err" > out.log', "file:out.log")
-        self.assert_target('agy -p "q" 2> err', "direct")
-        self.assert_target('agy -p "q" 2>err', "direct")
-        self.assert_target('agy -p "q" 2>&1', "direct")
-
-    def test_the_fd_marker_never_leaks_into_argv(self) -> None:
-        args = hook.find_agy_args('agy -p "see 2>err" 2>err')
-        self.assertEqual(hook.extract_agy_prompt(args or []), "see 2>err")
-        self.assertFalse(any("\x00" in token for token in args or []))
-
-    # V18
-    def test_another_writer_makes_stdout_mixed(self) -> None:
-        self.assert_target('echo start; agy -p "q"', "mixed")
-        self.assert_target('agy -p "q"; printf done', "mixed")
-
-    def test_silent_and_redirected_neighbours_keep_stdout_direct(self) -> None:
-        for command in (
-            'cd /tmp && agy -p "q"',
-            'export X=1; agy -p "q"',
-            'cat f | agy -p "q"',
-            'agy -p "q"; echo done > f.log',
-            'agy -p "q"; echo x >&2',
-            'mkdir -p d && agy -p "q"',
-            'X=1; agy -p "q"',
+            'agy -p "q" --model x',
+            'agy -p "q" --model x   # T1',
+            'agy -p "q" # save > later',
+            "agy -p q 2>err.log",
+            "agy -p q 2>> err.log",
+            "agy -p q 2>/dev/null",
+            "agy -p q < in.txt",
+            "agy -p q | tee out.md",
+            "agy -p q | tee -a out.md",
+            "env X=1 agy -p q",
+            'X="$(cat f)" agy -p q',
+            "! agy -p q",
+            "nohup agy -p q",
+            'agy -p "$(cat f)"',
+            'agy -p "line1\nline2"',
+            "# T1\nagy -p q",
+            "# don't redirect\n\nagy -p q",
+            "agy -p q \\\n  --model x",
         ):
             with self.subTest(command=command):
                 self.assert_target(command, "direct")
 
-    def test_mixed_never_overrides_a_non_direct_target(self) -> None:
-        self.assert_target('agy -p "q" > f.log; echo done', "file:f.log")
-        self.assert_target('echo a; agy -p "q" | jq .', "pipe:jq")
+    def test_stderr_merged_into_stdout_is_not_direct(self) -> None:
+        for command in (
+            "agy -p q 2>&1",
+            "agy -p q 2>/dev/stdout",
+            "agy -p q 2>/dev/fd/1",
+            "agy -p q 2>/proc/self/fd/1",
+            "agy -p q 2>&1 | tee f",
+            "agy -p q |& tee f",
+        ):
+            with self.subTest(command=command):
+                self.assert_target(command, "complex")
+
+    def test_other_commands_in_the_call_are_complex(self) -> None:
+        for command in (
+            "agy -p q; echo EXIT_CODE=$?",
+            "agy -p q || echo FETCH FAILED",
+            "agy -p q && echo done",
+            "cd /tmp && agy -p q",
+            "agy -p q\necho hi",
+            "agy -p q # c\necho hi",
+            "agy -p q \\\\\necho hi",
+            "agy -p q &",
+            "nohup agy -p q &",
+            "timeout 60 agy -p q",
+            "agy -p q | tee f | cat",
+            "agy -p q | tee f > g",
+            "for f in a; do agy -p q; done",
+            "{ agy -p q; }",
+            "agy -p q <<< text",
+            "agy -p q <<EOF\nx\nEOF",
+            "agy -p q # don't",
+        ):
+            with self.subTest(command=command):
+                self.assert_target(command, "complex")
+
+    def test_coarse_labels_name_the_obvious_destination(self) -> None:
+        self.assert_target("agy -p q > out.txt", "file:out.txt")
+        self.assert_target("agy -p q &> all.log", "file:all.log")
+        self.assert_target("agy -p q >&2", "stderr")
+        self.assert_target("agy -p q | jq .response", "pipe:jq")
+        self.assert_target("echo $(agy -p q)", "substitution")
+        self.assert_target("r=$(agy -p q); echo $r", "substitution")
+
+    def test_an_unquoted_digit_before_a_redirect_is_an_argument(self) -> None:
+        self.assert_target("agy -p 2 >err", "file:err")
+        self.assert_target('agy -p "2">err', "file:err")
+        self.assert_target("agy -p q --conversation 42 > out.log", "file:out.log")
+
+    def test_text_that_only_mentions_agy_is_not_a_call(self) -> None:
+        for command in (
+            "cat > run.sh <<'EOF'\nagy -p \"Research X\" --model m\nEOF",
+            'echo "$(agy -p q)"',
+        ):
+            with self.subTest(command=command):
+                self.assertIsNone(hook.find_agy_args(command))
 
 
-class ReviewRoundTwoEntryTests(unittest.TestCase):
-    # V18
-    def test_or_echo_after_a_silent_agy_is_not_a_success(self) -> None:
-        entry = hook.build_entry(
-            'agy -p "q" || echo FETCH FAILED', {"stdout": "FETCH FAILED"}
+class AllowlistEntryTests(unittest.TestCase):
+    def entry(self, command: str, stdout: str, stderr: str = "") -> dict:
+        built = hook.build_entry(command, {"stdout": stdout, "stderr": stderr})
+        self.assertIsNotNone(built, command)
+        return built or {}
+
+    def test_direct_keeps_the_answer_and_judges_it(self) -> None:
+        entry = self.entry("agy -p q 2>err.log", "answer")
+        self.assertIs(entry["success"], True)
+        self.assertEqual(entry["response"], "answer")
+        self.assertEqual(entry["stdout_target"], "direct")
+        self.assertIs(self.entry("agy -p q", "")["success"], False)
+
+    def test_not_direct_is_unknown_with_a_blank_response(self) -> None:
+        for command, stdout in (
+            ("agy -p q > out.txt; echo EXIT_CODE=$?", "EXIT_CODE=0"),
+            ("agy -p q || echo FETCH FAILED", "FETCH FAILED"),
+            ("agy -p q | jq -r .response", "answer"),
+            ("agy -p q 2>&1", "warning: auto-denied read_file"),
+            ("agy -p q 2>/dev/stdout", "no output produced"),
+        ):
+            with self.subTest(command=command):
+                entry = self.entry(command, stdout)
+                self.assertIsNone(entry["success"])
+                self.assertEqual(entry["response"], "")
+
+    def test_an_envelope_does_not_rescue_a_non_direct_call(self) -> None:
+        # It may come from another command or another agy call in the same
+        # Bash call; "never a success when not direct" is what the docs promise.
+        entry = self.entry(
+            "agy -p A --output-format json > a.json; agy -p B --output-format json",
+            '{"status":"SUCCESS","response":"b"}',
         )
         self.assertIsNone(entry["success"])
-        self.assertEqual(entry["response"], "FETCH FAILED")
-        self.assertEqual(entry["stdout_target"], "mixed")
 
-    def test_mixed_with_an_envelope_is_judged_by_it(self) -> None:
-        entry = hook.build_entry(
-            'agy -p "q" --output-format json; echo EXIT_CODE=$?',
-            {"stdout": '{"status":"ERROR","response":""}\nEXIT_CODE=1'},
-        )
+    def test_soft_deny_on_stderr_is_a_failure_whatever_the_target(self) -> None:
+        entry = self.entry("agy -p q | jq .", "", "warning: auto-denied read_file")
         self.assertIs(entry["success"], False)
 
-    # V19
-    def test_a_status_line_in_a_plain_answer_is_not_an_envelope(self) -> None:
-        stdout = 'Call it like this:\n{"status": "ok", "id": 1}'
-        self.assertTrue(hook.determine_success(stdout, ""))
-        self.assertTrue(
-            hook.determine_success(
-                '{"status":"SUCCESS","response":"x"}\nEXIT_CODE=0', ""
-            )
+    def test_direct_envelope_rules(self) -> None:
+        self.assertIs(
+            self.entry("agy -p q", '{"status":"SUCCESS","response":"x"}')["success"],
+            True,
         )
-        self.assertFalse(hook.determine_success('{"status":"ERROR","response":""}', ""))
+        self.assertIs(self.entry("agy -p q", '{"status":"ERROR"}')["success"], False)
+        # A plain answer that merely contains a JSON example mid-text is plain text.
+        self.assertIs(
+            self.entry(
+                "agy -p q", 'Example:\n{"status":"ERROR","response":""}\nThat is all.'
+            )["success"],
+            True,
+        )
+
+    def test_a_parser_gap_is_unknown(self) -> None:
+        # Fault injection: the classifier is replaced only to make it raise.
+        broken = mock.Mock(side_effect=RuntimeError("parser gap"))
+        with mock.patch.object(hook, "classify_stdout_target", broken):
+            entry = self.entry("agy -p q", "A")
+        broken.assert_called_once()
+        self.assertEqual(entry["stdout_target"], "unclassified")
+        self.assertIsNone(entry["success"])
+        self.assertEqual(entry["response"], "")
 
 
 class BuildEntryTests(unittest.TestCase):

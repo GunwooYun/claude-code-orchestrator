@@ -113,9 +113,11 @@ agy's answer, so do not redirect it to a file (`> out.log`), capture it with
 `; echo EXIT_CODE=$?`) — the stdout is then your echo, not agy's answer (seen
 in a real project: 10 of 28 calls logged as a success with `EXIT_CODE=0` as
 the response). Need a copy on disk? `agy ... | tee <file>`. Need the outcome?
-`--output-format json` and read `.status`. Such a call is logged as
-`[UNKNOWN]` (`stdout_target` says why), never as a success; one agy call per
-Bash command, alone, is the call the log can judge.
+`--output-format json` and read `.status`. The log judges only one shape —
+`agy …` alone on one line, with at most `2>file`, `<file` and a final
+`| tee <file>`; anything else (including `2>&1`, `cd x && agy`, `timeout`) is
+logged as `[UNKNOWN]` with a blank response (`stdout_target` says why), never
+as a success.
 
 **When to call agy:**
 - Library research: "Best practices for X in 2025"

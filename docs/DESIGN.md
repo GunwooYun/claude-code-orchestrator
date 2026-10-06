@@ -179,6 +179,20 @@ review falsified the original profile design; see Key Decisions.
       field stays `[FAILED]` (`UnknownOutcomeTests`). Origin: an adopting
       project's log where 10 of 28 agy calls were the caller's own
       `EXIT_CODE=0` echo, logged as successes.
+- [x] `log-cli-tools` judges by allowlist, not by parsing (2026-10-06). Two
+      rounds classified every shell shape (redirects, pipes, compound commands,
+      fds, newlines, comments); each isolated review found new false successes
+      and round 2 introduced three regressions (heredoc bodies logged as calls,
+      comments with an apostrophe dropping the call). The goal is narrower —
+      never log a false success — so only one shape is judged: a single-line
+      `agy …` alone, with at most `2>file`, `<file`, a final `| tee`. Every
+      other shape is `success: null` with a blank response; envelopes are
+      ignored outside that shape (they may belong to another command). Any
+      parser mistake therefore errs toward unknown. Dropped with it: the
+      trailing-line envelope scan (a trailing line implies a second command,
+      so that shape is never judged) and the `mixed` / compound-command logic.
+      Cost: complex calls with a real answer are `[UNKNOWN]`; the agent docs
+      already ask for one agy call per Bash command.
 
 - [x] `post-implementation-review.py` — state is now per project and per session
       under `.claude/logs/implementation-state/`, with stale files pruned after
