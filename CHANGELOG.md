@@ -11,7 +11,11 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
-## [Unreleased]
+## [3.1.0] - 2026-10-07
+
+The first change driven by a handoff report from an adopting project. The agy
+log no longer records false successes. The rules now cover how review findings
+are weighed, how files are edited, and what a format check may demand.
 
 ### Fixed
 - **`log-cli-tools` no longer logs a false success.** It read the Bash tool's
@@ -78,6 +82,15 @@ project changed, back up a gitignored `.claude/` first).
 - **Bash output with known lines is filtered before it is delegated**
   (`tail`, `grep`), with the full output kept in a file and the exit code as
   the verdict; output that needs understanding still goes to a subagent.
+- **README** updated for 3.1.0:
+  - Separate Linux / macOS and Windows (PowerShell) commands for the template
+    copy, backup, local-only exclude and smoke test. The Windows commands are
+    marked unverified.
+  - Directory changes are written as instructions, not as `cd` inside code blocks.
+  - Upgrade checks compare git content hashes. `diff` reports a file as changed
+    when only its execute bit differs.
+  - The hook, review, verification and pitfall sections describe this release's
+    behaviour.
 
 ## [3.0.1] - 2026-10-05
 

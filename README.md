@@ -5,7 +5,7 @@
 
 ![Claude Code Orchestrator](./summary.png)
 
-> 현재 버전: **3.0.1** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md).
+> 현재 버전: **3.1.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 목차
 
@@ -91,7 +91,7 @@ your-project/
 ├── .agents/
 │   └── rules/AGENTS.md            # agy 가 읽는 프로젝트 설명
 └── .claude/
-    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 3.0.0)
+    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 3.1.0)
     ├── settings.json              # 훅 등록 + 권한(allow / ask / deny)
     ├── agents/                    # 서브에이전트 정의 (deep-reasoning, general-purpose)
     ├── skills/                    # 슬래시 커맨드 (아래 표)
@@ -119,9 +119,9 @@ your-project/
 
 | 훅 | 언제 | 하는 일 |
 |---|---|---|
-| `lint-on-save.py` | 파일을 Edit/Write 로 저장할 때 | `.claude/scripts/verify-save <파일>` 을 돌려 결과를 Claude 에게 알린다 |
-| `bash-write-check.py` | Bash 명령 전후 | `sed -i`·리다이렉션처럼 Bash 로 쓴 파일도 같은 검사를 돌린다 |
-| `log-cli-tools.py` | Bash 로 agy 를 부른 뒤 | agy 입출력을 `.claude/logs/cli-tools.jsonl` 에 기록 |
+| `lint-on-save.py` | Claude 가 Edit/Write 로 파일을 고칠 때 | 그 파일 하나에 `.claude/scripts/verify-save <파일>` 을 돌려 결과를 Claude 에게 알린다 |
+| `bash-write-check.py` | Bash 명령 전후 | `sed -i`·리다이렉션처럼 Bash 로 쓴 파일(최대 5개)에도 같은 검사를 돌린다 — 안전망 |
+| `log-cli-tools.py` | Bash 로 agy 를 부른 뒤 | agy 입출력을 `.claude/logs/cli-tools.jsonl` 에 기록. **한 줄에 단독으로 부른 호출만** 성공·실패를 판정하고, 나머지(리다이렉트·`\|\| echo`·여러 줄 등)는 `success: null`(UNKNOWN)과 그 이유(`stdout_target`)로 남긴다 |
 | `_savecheck.py` | (공용 모듈) | 위 두 검사 훅이 함께 쓰는 코드 |
 
 훅은 **아무것도 막지 않는다** — 알리기만 한다.
@@ -132,10 +132,10 @@ your-project/
 
 | 도구 | 필요한가 | 설치 |
 |---|---|---|
-| **Claude Code** | 필수 | `curl -fsSL https://claude.ai/install.sh \| bash` → `claude` 로 로그인 |
+| **Claude Code** | 필수 | Linux / macOS: `curl -fsSL https://claude.ai/install.sh \| bash` → `claude` 로 로그인. Windows: Claude Code 공식 설치 안내를 따른다 |
 | **git** | 필수 | — |
 | **Python 3.10 이상** (`python3`) | 필수 — 훅과 스크립트가 쓴다 | OS 패키지 |
-| **Antigravity CLI (`agy`)** | 권장 — 없으면 Claude 도구로 대신 조사한다 | `curl -fsSL https://antigravity.google/cli/install.sh \| bash` → `agy` 로 Google 로그인 → `agy models` |
+| **Antigravity CLI (`agy`)** | 권장 — 없으면 Claude 도구로 대신 조사한다 | Linux / macOS: `curl -fsSL https://antigravity.google/cli/install.sh \| bash` → `agy` 로 Google 로그인 → `agy models`. Windows: Antigravity 공식 안내를 따른다 |
 | **GitHub CLI (`gh`)** | 선택 — PR·머지를 Claude 에게 맡길 때 | `gh auth login` |
 | **Claude Fable 접근권** | `/isolated-review` 에 필요 — 없으면 사람이 여는 리뷰 세션을 쓴다 | — |
 
@@ -170,26 +170,55 @@ flowchart TD
 
 ### 1단계 — 템플릿 복사 (1분)
 
-적용할 프로젝트의 **루트 폴더**에서 실행한다.
+먼저 터미널에서 **적용할 프로젝트의 루트 폴더로 이동**한다(`cd <your-project>`). 아래 명령은 모두 그
+폴더 안에서 실행한다.
+
+이미 `CLAUDE.md` 나 `.claude/` 가 있는 프로젝트라면, 복사하기 전에 **다른 이름으로 옮겨 백업**한다.
+기존 내용은 `/initproject` 가 끝난 뒤 필요한 것만 옮겨 온다.
+
+| OS | 백업 명령 |
+|---|---|
+| Linux / macOS | `mv .claude .claude.bak && mv CLAUDE.md CLAUDE.md.bak` |
+| Windows (PowerShell) | `Rename-Item .claude .claude.bak; Rename-Item CLAUDE.md CLAUDE.md.bak` |
+
+**Linux / macOS** (bash·zsh)
 
 ```bash
-cd <your-project>
-git clone --depth 1 --branch main https://github.com/GunwooYun/claude-code-orchestrator.git .starter \
-  && cp -r .starter/.claude .starter/.agents .starter/CLAUDE.md . && rm -rf .starter
+git clone --depth 1 --branch main https://github.com/GunwooYun/claude-code-orchestrator.git .starter
+cp -r .starter/.claude .starter/.agents .starter/CLAUDE.md .
+rm -rf .starter
+```
+
+**Windows** (PowerShell)
+
+```powershell
+git clone --depth 1 --branch main https://github.com/GunwooYun/claude-code-orchestrator.git .starter
+Copy-Item -Recurse -Force .starter\.claude, .starter\.agents, .starter\CLAUDE.md .
+Remove-Item -Recurse -Force .starter
 ```
 
 - **`--branch main` 을 꼭 붙인다.** `main` 에는 릴리스된 버전만 있다. 기본 브랜치 `develop` 에는 아직
   검증 중인 변경이 들어 있다.
 - 받은 버전은 `.claude/ORCHESTRATOR_VERSION` 에 기록된다.
-- 이미 `CLAUDE.md` 나 `.claude/` 가 있는 프로젝트라면 **덮어쓰기 전에 백업**한다
-  (`cp -r .claude .claude.bak` 등). 기존 내용은 `/initproject` 가 끝난 뒤 필요한 것만 옮긴다.
+- **Windows 는 아직 실제로 검증하지 않았다**([12장](#12-지금-무엇이-검증됐나)). 훅은 `python3` 명령으로
+  등록돼 있으므로, PowerShell 에서 `python3 --version` 이 Python 3.10 이상을 출력하는지 먼저 확인한다
+  (Microsoft Store 설치 안내 창이 뜨면 `python3` 이 실제 Python 을 가리키지 않는 것이다).
+  `verify-*` 는 sh 셸 스크립트라 PowerShell·cmd 에서 직접 실행되지 않는다 — `/initproject` 에 Windows 라고
+  알려 주면 이 프로젝트에 맞는 형태로 작성한다(미검증).
 
 ### 2단계 — 커밋할지 정하기
 
 | 선택 | 방법 | 언제 고르나 |
 |---|---|---|
 | **저장소에 커밋** | 아래 줄들을 `.gitignore` 에 추가한 뒤 브랜치에서 커밋 | 팀 전체가 같은 규칙·훅을 쓰기로 했을 때 |
-| **로컬 전용** | `printf '%s\n' .claude/ .agents/ CLAUDE.md >> .git/info/exclude` | 혼자 먼저 써 볼 때, 회사 저장소에서 합의 전일 때 |
+| **로컬 전용** | 아래 명령으로 `.git/info/exclude` 에 추가(이 클론에만 적용, 커밋되지 않음) | 혼자 먼저 써 볼 때, 회사 저장소에서 합의 전일 때 |
+
+로컬 전용으로 할 때:
+
+| OS | 명령 |
+|---|---|
+| Linux / macOS | `printf '%s\n' .claude/ .agents/ CLAUDE.md >> .git/info/exclude` |
+| Windows (PowerShell) | `Add-Content .git\info\exclude ".claude/", ".agents/", "CLAUDE.md"` |
 
 커밋한다면 `.gitignore` 에 넣을 것 (실행 중에 생기는 파일들):
 
@@ -253,10 +282,13 @@ flowchart LR
 `READY`(정상) / `MISSING`(설치 안 됨) / `UNAUTHENTICATED`(로그인 필요) / `DEGRADED`(응답이 빔).
 
 **Step 4 — `CLAUDE.md` 갱신.** 맨 위 제목을 프로젝트 이름으로 바꾸고, `## 기술 스택` 에 실제 명령을 적고,
-`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v3.0.0`)을 기록한다.
+`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v3.1.0`)을 기록한다.
 
 **Step 5 — 검증 스크립트 작성.** Step 2 의 답으로 `.claude/scripts/verify-save`, `verify-task` 등을 만든다.
-이것이 이후 모든 검증의 기준이 된다 ([8장](#8-검증-계약--verify--스크립트)).
+이것이 이후 모든 검증의 기준이 된다 ([8장](#8-검증-계약--verify--스크립트)). **포매터(black 등)는 프로젝트가
+이미 채택한 경우에만** 검사에 넣는다 — 설정 파일이 있고 대부분의 파일이 이미 통과할 때. 채택하지 않은
+저장소에 넣으면 손대지 않은 코드까지 저장할 때마다 실패로 나온다. 정의 안 된 이름·타입 오류 같은 정적
+검사는 그대로 넣는다.
 
 **Step 6 — 규칙 문서 맞춤.** `.claude/rules/dev-environment.md` 를 실제 도구로 다시 쓰고,
 `settings.json` 의 `allow` 에 프로젝트 명령을 **좁게** 추가한다(예: `Bash(npm run test:*)`).
@@ -268,7 +300,9 @@ flowchart LR
 
 ### 4단계 — 결과 확인 (스모크 테스트)
 
-`/initproject` 가 끝나면 직접 한 번 확인한다. 5분이면 된다.
+`/initproject` 가 끝나면 직접 한 번 확인한다. 5분이면 된다. 프로젝트 루트에서 실행한다.
+
+**Linux / macOS**
 
 ```bash
 # 1) 버전이 기록됐나
@@ -283,6 +317,20 @@ cat .claude/ORCHESTRATOR_VERSION
 # 4) 검사 스크립트가 파일을 고치지 않았는지
 git status
 ```
+
+**Windows** (PowerShell)
+
+```powershell
+# 1) 버전이 기록됐나
+Get-Content .claude\ORCHESTRATOR_VERSION
+
+# 4) 검사 스크립트가 파일을 고치지 않았는지
+git status
+```
+
+2)·3)은 sh 스크립트라 PowerShell 에서 바로 실행되지 않는다. Claude 세션 안에서 시킨다:
+"`agy-probe` 를 실행해서 결과를 보여 줘", "이 파일을 일부러 깨뜨리고 `verify-save` 가 0 이 아닌 종료 코드를
+내는지 확인해 줘".
 
 Claude 세션 안에서는 `/deep-reasoning`, `/antigravity-system` 이 스킬 목록에 보이는지 확인한다.
 
@@ -307,7 +355,9 @@ claude
 ### 7단계 — 머지, 그리고 반복
 
 리뷰에서 나온 것 중 **Medium 이상만 고치고** 머지한다. Low·nit 은 기록만 해 두고 다음 작업에 묶는다 —
-그렇지 않으면 리뷰가 끝나지 않는다. 다음 작업은 다시 5단계부터.
+그렇지 않으면 리뷰가 끝나지 않는다. **실제 사용에서 일어나지 않는 조건**(아무도 쓰지 않는 방식, 이론으로만
+만든 입력)은 심각도가 high 여도 고치지 않고 기록만 한다 — 그것 때문에 구현→리뷰→수정을 반복하지 않는다.
+다음 작업은 다시 5단계부터.
 
 ---
 
@@ -321,7 +371,7 @@ flowchart TD
     P3 --> P4["Phase 4 · 할 일 목록<br/>구현 태스크마다 verify 태스크 짝"]
     P4 --> P4b{"Phase 4b · 사용자 승인"}
     P4b -- "수정" --> P4
-    P4b -- "승인" --> P5["Phase 5 · CLAUDE.md 의<br/>## Current Project 에 계획 기록"]
+    P4b -- "승인" --> P5["Phase 5 · CLAUDE.md 의<br/>## Current Project 에 계획 기록<br/>(Status: 진행 중 → 끝나면 완료)"]
     P5 --> L["구현 루프<br/>태스크 → verify:task → 다음 태스크"]
     L --> P6["Phase 6 · 리뷰<br/>/isolated-review (기본)"]
 ```
@@ -369,14 +419,17 @@ sequenceDiagram
     M->>R: run-review --base develop (백그라운드)
     Note over R: 실행 전 프로브로 격리를 확인<br/>diff + 변경 파일 + 검증 계획만 받음
     R-->>M: 리포트 (Findings / Tests / Coverage / Not reviewed)
-    M->>U: 리포트를 요약 없이 그대로 보여 줌
+    M->>U: 리포트를 요약 없이 그대로 보여 줌 + 사용자 언어로 전체 번역
     U->>M: 발견마다 고침 / 반박 / 미룸
 ```
 
 **실행 조건**
 
-- 작업 트리가 **깨끗해야** 한다(모두 커밋).
+- 작업 트리가 **깨끗해야** 한다(모두 커밋). 커밋하지 않을 로컬 문서(계획·메모)는 `.gitignore` 나
+  `.git/info/exclude`(이 클론에만 적용)에 넣는다 — 거부 메시지도 그렇게 안내한다.
 - 기준 브랜치와 차이가 있어야 한다. **기준 브랜치에서 직접 작업하면 거부된다** — 작업 브랜치를 따서 쓴다.
+- 기준 브랜치를 `develop` 처럼 이름만 주면 원격의 `origin/develop` 을 기준으로 쓴다(PR 이 실제로 머지될
+  곳이고, 로컬 브랜치가 없거나 오래돼도 범위가 틀어지지 않는다). 로컬 브랜치로 하려면 `refs/heads/develop`.
 - 변경이 3000줄 이하여야 한다. 문서·증거 파일 때문에 넘는다면 `.claude/isolated-review.json` 에
   `{"cap_exclude": ["docs/**"]}` 처럼 상한 계산에서만 뺄 경로를 적는다(그 파일들도 리뷰는 받는다).
 - 리뷰가 도는 동안 파일을 고치거나 커밋하지 않는다.
@@ -396,11 +449,17 @@ sequenceDiagram
 
 **알아 둘 한계:** 리뷰어는 코드를 **실행하지 못한다.** 실제로 돌려 봐야 드러나는 결함(변이 테스트,
 라이브러리 실제 동작)은 놓친다. 대신 낡은 주석·문서·테스트 공백은 잘 찾는다. 그래서 보안 경계나 공개
-인터페이스를 바꾸는 변경이면 **사람이 여는 리뷰 세션도 함께** 쓴다:
+인터페이스를 바꾸는 변경이면 **사람이 여는 리뷰 세션도 함께** 쓴다.
+
+먼저 리뷰용 워크트리를 만든다(`main` 에 체크아웃하지 않는다):
 
 ```bash
-git worktree add --detach ../<project>-review <작업 브랜치>   # main 에 체크아웃하지 않는다
-cd ../<project>-review && claude
+git worktree add --detach ../<project>-review <작업 브랜치>
+```
+
+만든 폴더 `../<project>-review` 로 이동한 뒤 `claude` 를 실행하고 이렇게 요청한다:
+
+```text
 > git diff <기준 브랜치>...HEAD 를 리뷰해서 리포트 파일 하나에만 써 줘. 다른 파일은 고치지 마.
 ```
 
@@ -413,13 +472,15 @@ cd ../<project>-review && claude
 
 | 스크립트 | 걸리는 시간 | 언제 도나 | 누가 부르나 |
 |---|---|---|---|
-| `verify-save <파일>` | 초 단위 | 파일을 저장할 때마다 | 훅 (알리기만 함) |
+| `verify-save <파일>` | 초 단위 | Claude 가 파일을 고칠 때마다 (그 파일 하나) | 훅 (알리기만 함) |
 | `verify-task` | ≤5분 | 태스크 하나가 끝날 때마다 | 메인 Claude |
 | `verify-unit` | 5~60분 | 작업 단위당 한 번 | 서브에이전트가 백그라운드로 |
 | `verify-full` | 제한 없음 | CI 또는 사람이 직접 | **자동으로 돌지 않는다** |
 
 - 네 개를 다 만들 필요는 없다. **스크립트가 없으면 그 티어는 이 프로젝트에 없는 것**이다.
 - 스크립트는 **읽기만** 해야 한다. 자동 수정(`--fix`, 포매터)을 넣으면 실패할 수가 없어서 검사가 아니다.
+- 서식 검사(`black --check` 등)는 **프로젝트가 그 포매터를 채택했을 때만** 넣는다. 서식은 겉모양만
+  판정하고, 채택하지 않은 저장소에서는 저장할 때마다 손대지 않은 코드까지 실패로 나온다.
 - 사람도 그대로 돌려 볼 수 있다: `.claude/scripts/verify-task; echo $?`
 
 ---
@@ -449,8 +510,10 @@ flowchart TD
     F --> G
 ```
 
-- "프로젝트가 고쳤나"는 그 파일을 **내 버전의 원본과 바이트 단위로 비교**해서 판단한다:
-  `git -C <템플릿 클론> show v<내 버전>:<경로> | diff - <경로>`
+- "프로젝트가 고쳤나"는 그 파일을 **내 버전의 원본과 내용으로 비교**해서 판단한다. git 의 내용 해시를
+  쓰면 Linux·macOS·Windows(PowerShell·cmd) 어디서나 같은 명령이고, 파일 권한 차이에 속지 않는다:
+  `git -C <템플릿 클론> rev-parse v<내 버전>:<경로>` 와 `git hash-object <경로>` 의 출력이 **같으면 안 고친 것**이다.
+  (`diff` 나 `git diff --no-index` 는 내용이 같아도 실행 권한 차이만으로 "다르다"고 나온다.)
 - 대개 그대로 교체해도 되는 것(템플릿 소유): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`,
   `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
   `rules/security.md`, `rules/language.md` — 단, 프로젝트가 고친 흔적이 있으면 병합한다.
@@ -495,6 +558,11 @@ flowchart TD
 - **deep-reasoning 의 "읽기 전용"은 도구를 빼고 지시한 것이지 샌드박스가 아니다.** 커밋 전에 `git status` 를 본다.
 - **서브에이전트는 서브에이전트를 못 띄운다.** 조사 중에 설계 판단이 필요하면 메인으로 돌아와 deep-reasoning 을 부른다.
 - **agy 헤드리스 호출이 빈 답을 주면 실패다**(exit 0 이어도). 조용히 넘어가지 않는다.
+- **agy 는 한 줄에 단독으로, Bash 도구 `timeout: 600000` 으로 부른다.** Bash 기본 제한(2분)을 넘으면
+  명령이 백그라운드로 옮겨지고, 정상 완료돼도 로그에는 `[FAILED]` 로 남는다(측정됨). 리다이렉트·`|| echo`·
+  인라인 주석을 붙이면 로그는 결과를 판정하지 못하고 `[UNKNOWN]` 으로 남긴다.
+- **파일 편집은 Edit/Write 로 한다.** Bash(`sed -i`·heredoc)로 고치면 저장 검사가 바로 돌지 않는다.
+  예외: 컨테이너·원격·권한 필요 파일, 바이너리, 도구 실행 결과, 대량 치환.
 - **`verify-save` 가 조용하다고 동작하는 것은 아니다.** 다루지 않는 파일에는 침묵하는 게 계약이다.
   검사 대상 파일을 일부러 깨뜨려 0 이외가 나오는지 본다.
 - **리뷰용 워크트리를 `main` 에 체크아웃하지 않는다.** `git diff main...HEAD` 가 비어서 리뷰가 아무것도 안 한다.
@@ -520,8 +588,9 @@ flowchart TD
 | `/deep-reasoning`, `/antigravity-system` | 실사용 중 (agy 18회 이상 호출). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
 | `/orchestrator-version` | 업그레이드에 사용 |
 | 훅 4개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
+| `log-cli-tools` 의 판정 | 판정하는 모든 모양을 실제 bash 로 돌려 대조하는 테스트(무작위 600개 + 리뷰 지적 입력)로 확인. Bash 시간 제한·백그라운드 동작은 가짜 agy 로 실측 |
 | `/checkpointing`, `/doc-write`, `/jira-setup`, `/ticket` | **아직 실제로 돌려 본 적 없다** |
-| Windows | **미확인.** 훅이 `python3` 로 등록돼 있다 |
+| Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다 |
 
 ---
 
