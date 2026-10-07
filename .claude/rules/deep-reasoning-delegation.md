@@ -51,7 +51,11 @@ Task tool parameters:
     - Key recommendation
     - Main rationale (2-3 points)
     - Any concerns or risks
+    Mark each factual claim [verified: …] / [inference] / [unverified].
 ```
 
 Prompt in **English**; the subagent answers in English; the main session reports
 to the user in **Korean**.
+
+**Acting on the answer:** check yourself every `[unverified]` claim and every
+claim a decision rests on; leave the rest as marked (marks: the agent file).

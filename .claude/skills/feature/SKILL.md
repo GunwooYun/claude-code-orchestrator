@@ -327,6 +327,8 @@ rewritten by `/checkpointing`; anything placed after it is lost). Replace an exi
 
 ## Current Project: {feature}
 
+- Status: 진행 중
+
 ### Context
 - Goal: {1-2 sentences}
 - Key files: {list}
@@ -418,6 +420,11 @@ Task tool parameters:
 ### 루프의 끝 — 완료 보고
 
 마지막 티어의 결과가 오면 보고한다. `/ticket` Step 5 가 이것을 그대로 쓴다.
+
+**보고와 함께 `## Current Project` 의 `- Status:` 를 `완료 (YYYY-MM-DD)` 로 바꾼다.**
+블록은 다음 `/feature` 가 교체할 때까지 남는다. 표시가 없으면 그 사이에 열린 세션이
+끝난 작업을 진행 중으로 읽는다(실사용 인계 리포트, 2026-10-06 — 끝난 티켓의 블록을
+새 세션이 현재 작업으로 읽고 시작했다). 그 일을 사용자가 알아채기는 어렵다.
 
 - **무엇을 돌렸는가**: 티어와 명령, 그리고 결과(통과/실패)
 - **시나리오별 결과**: 계획의 ID 마다 대응하는 테스트와 그 결과
