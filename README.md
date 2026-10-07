@@ -98,6 +98,7 @@ your-project/
     ├── hooks/                     # 자동 검사 훅 (아래 표)
     ├── rules/                     # 매 세션 읽히는 세부 규칙
     ├── scripts/                   # 검증 계약: verify-save, verify-task (+README)
+    ├── bin/                       # agy-probe — agy 를 지금 쓸 수 있는지 확인
     └── docs/                      # 설계 기록·조사 결과·작성 가이드
 ```
 

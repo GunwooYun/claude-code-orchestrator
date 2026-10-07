@@ -11,6 +11,28 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [Unreleased]
+
+### Removed
+- **`/deep-reasoning`, `/antigravity-system` and `/checkpointing` skills.** Recorded
+  use (9 sessions, 3 projects) invoked none of them, while the deep-reasoning
+  subagent ran 30 times and agy 79 times without them. Calling deep-reasoning
+  and agy works as before: the rules and the agent files already carried how.
+  The agy prompt templates (pre-implementation research, one library) moved to
+  `.claude/agents/general-purpose.md`. `/checkpointing` is gone with its tests;
+  the `log-cli-tools` hook and `.claude/logs/cli-tools.jsonl` stay.
+
+### Changed
+- **`agy-probe` moved to `.claude/bin/agy-probe`.** Update the `settings.json`
+  allow entry when upgrading a copy.
+
+### Upgrading
+- Delete `.claude/skills/deep-reasoning/`, `.claude/skills/antigravity-system/`
+  and `.claude/skills/checkpointing/` from the copy. A `## Session History`
+  section an earlier `/checkpointing` wrote into `CLAUDE.md` (or
+  `## Consultation History` in `.agents/rules/AGENTS.md`) is no longer
+  rewritten; delete it by hand if it is there.
+
 ## [3.1.0] - 2026-10-07
 
 The first change driven by a handoff report from an adopting project. The agy
