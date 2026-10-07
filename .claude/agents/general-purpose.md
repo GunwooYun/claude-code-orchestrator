@@ -88,14 +88,22 @@ agy -p "{summarize one source}" --model gemini-3.7-flash-high
 agy -p "{research question}" --model gemini-3.1-pro-high
 
 # Codebase analysis (reads repo files → headless flags required; CWD is the workspace)
-agy -p "{question} Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
+agy -p "{question} Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 9m
 
 # Multimodal (image/PDF verified; video/audio untested) — path in prompt; no stdin redirection
 agy -p "Read the file at {absolute_path} and {extraction prompt}. Do not create or modify any files." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
 
 # Scripted (soft-deny safe): gate on .status == "SUCCESS"
-agy -p "{question}" --model {slug} --output-format json --print-timeout 10m
+agy -p "{question}" --model {slug} --output-format json --print-timeout 9m
 ```
+
+**Run every agy call with the Bash tool's `timeout` set to `600000`** (10 min,
+the foreground maximum), and keep `--print-timeout` at `9m` or less (agy's
+default is 5m). The Bash tool's default limit is 2 min. A command still running
+then is moved to the background, not stopped: it finishes, but the log hook
+already recorded it, with empty stdout, as `[FAILED]`, and it does not fire
+again. This was measured on 2026-10-07. With agy's own limit under the Bash
+tool's limit, agy finishes or fails in the foreground and the log can judge it.
 
 Do not redirect stderr to /dev/null — it carries soft-deny notices when a
 tool was skipped for lack of permission (the run still exits 0). File reads

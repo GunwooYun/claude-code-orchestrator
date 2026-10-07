@@ -745,5 +745,45 @@ class CommitAttributionTests(unittest.TestCase):
         self.assertIn("Co-Authored-By", text)
 
 
+class AgyFitsTheBashTimeoutTests(unittest.TestCase):
+    """
+    An agy call must end before the Bash tool's limit. Past it (default 2 min),
+    the command is moved to the background, the log hook records the empty
+    stdout as a failure, and it never fires again — measured 2026-10-07: a call
+    that completed was logged `[FAILED]`. The foreground maximum is 10 min, so
+    templates keep agy's own `--print-timeout` at 9 min or less and tell the
+    caller to pass `timeout: 600000`.
+    """
+
+    BASH_MAX_MINUTES = 10
+    TEMPLATES = (
+        REPO / ".claude" / "agents" / "general-purpose.md",
+        REPO / ".claude" / "rules" / "antigravity-delegation.md",
+        SKILLS / "feature" / "SKILL.md",
+        SKILLS / "antigravity-system" / "SKILL.md",
+    )
+    PRINT_TIMEOUT = re.compile(r"--print-timeout[ =](\d+)(m|s)\b")
+
+    def test_print_timeouts_stay_below_the_bash_maximum(self) -> None:
+        found = 0
+        for path in self.TEMPLATES:
+            for value, unit in self.PRINT_TIMEOUT.findall(
+                path.read_text(encoding="utf-8")
+            ):
+                found += 1
+                minutes = int(value) / 60 if unit == "s" else int(value)
+                with self.subTest(file=path.name, value=f"{value}{unit}"):
+                    self.assertLess(minutes, self.BASH_MAX_MINUTES)
+        self.assertGreater(
+            found, 0, "no --print-timeout found; the check tests nothing"
+        )
+
+    def test_the_agent_running_agy_is_told_the_bash_timeout(self) -> None:
+        text = (REPO / ".claude" / "agents" / "general-purpose.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("600000", text)
+
+
 if __name__ == "__main__":
     unittest.main()

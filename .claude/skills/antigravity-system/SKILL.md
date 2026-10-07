@@ -49,7 +49,9 @@ Directly only for a one-line answer: `agy -p "Brief question" --model gemini-3.7
 
 Call agy alone, one call per Bash command (`> file`, `$(...)`, `; echo $?`,
 `2>&1` all make the call `[UNKNOWN]` in the log). For a copy on disk use
-`| tee <file>` (details: `.claude/agents/general-purpose.md`).
+`| tee <file>`. Give the Bash tool `timeout: 600000` and keep `--print-timeout`
+at 9m or less, or a call past 2 min is backgrounded and logged `[FAILED]`
+(details: `.claude/agents/general-purpose.md`).
 
 Ask agy in **English**; report to the user in **Korean**. Full answers go to
 `.claude/docs/research/{topic}.md` so deep-reasoning can read them later.
