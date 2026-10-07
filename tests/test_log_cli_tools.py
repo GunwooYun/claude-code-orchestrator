@@ -211,8 +211,8 @@ class SoftDenySuccessTests(unittest.TestCase):
     """
     The success flag must reflect agy's headless soft-deny.
 
-    This is not just a log field: checkpoint.py renders it as [OK] / [FAILED] in
-    the session history. A regression records a DENIED agy call as a success, so
+    This is not just a log field: the log is read back later (usage reports,
+    a later session). A regression records a DENIED agy call as a success, so
     a later session reads "we researched that" when nothing was researched — the
     exact failure `CLAUDE.md` 운영 주의사항 singles out. Measured by an
     independent review: removing the soft-deny branch left all 312 tests green.

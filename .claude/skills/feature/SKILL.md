@@ -321,8 +321,7 @@ Present final plan to user (in Korean):
 
 **프로젝트 관련 정보를 CLAUDE.md에 추가한다.**
 
-Add to CLAUDE.md — **before** any existing `## Session History` section (that section is
-rewritten by `/checkpointing`; anything placed after it is lost). Replace an existing
+Add to CLAUDE.md, after `## Project Setup` if there is one. Replace an existing
 `## Current Project` block instead of appending a second one:
 
 ```markdown

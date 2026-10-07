@@ -162,7 +162,7 @@ class LogCliToolsTests(unittest.TestCase):
     def test_a_redirected_call_is_logged_as_unknown(self) -> None:
         """
         V20: the unknown outcome must survive the JSONL round trip — `null`, not
-        a dropped key or `false` — because checkpoint.py renders it from there.
+        a dropped key or `false` — because whoever reads the log back relies on it.
         """
         self.bash('agy -p "q" > out.log; echo EXIT_CODE=$?')
         entry = json.loads(self.log.read_text(encoding="utf-8").splitlines()[-1])

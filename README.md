@@ -110,7 +110,6 @@ your-project/
 | **`/isolated-review`** | 구현을 커밋한 뒤 | 이 세션과 무관한 격리된 리뷰어가 읽기 전용으로 리뷰한다 |
 | `/antigravity-system` | 조사·레포 분석·멀티모달 | agy 를 부르는 방법과 프롬프트 템플릿 |
 | `/orchestrator-version` | 버전이 궁금할 때 | 설치된 버전과 최신 릴리스를 비교 |
-| `/checkpointing` | 세션 기록을 남길 때 | agy 상담 이력을 `CLAUDE.md` 의 `## Session History` 에 기록 |
 | `/jira-setup`, `/ticket` | Jira 를 쓰는 팀 | Jira 연결 설정, 티켓에서 작업 시작 |
 | `/doc-write` | Confluence·문서 작성 | 작성 규칙에 맞춰 문서를 쓰고 발행 |
 
@@ -552,8 +551,6 @@ flowchart TD
 
 - **템플릿을 다시 통째로 복사하지 않는다.** 맞춤화가 사라진다 → [9장 업그레이드 절차](#업그레이드-절차).
 - **훅 파일명을 바꾸거나 지우면 `settings.json` 등록도 같은 커밋에서 바꾼다.** 어긋나면 모든 편집이 막힌다.
-- **`/checkpointing` 은 `CLAUDE.md` 의 `## Session History` 를 덮어쓴다.** 실행 전에 커밋한다.
-  `CLAUDE.md` 섹션 순서는 `## Project Setup` → `## Current Project` → `## Session History`(항상 마지막).
 - **deep-reasoning 의 "읽기 전용"은 도구를 빼고 지시한 것이지 샌드박스가 아니다.** 커밋 전에 `git status` 를 본다.
 - **서브에이전트는 서브에이전트를 못 띄운다.** 조사 중에 설계 판단이 필요하면 메인으로 돌아와 deep-reasoning 을 부른다.
 - **agy 헤드리스 호출이 빈 답을 주면 실패다**(exit 0 이어도). 조용히 넘어가지 않는다.
@@ -588,7 +585,7 @@ flowchart TD
 | `/orchestrator-version` | 업그레이드에 사용 |
 | 훅 4개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `log-cli-tools` 의 판정 | 판정하는 모든 모양을 실제 bash 로 돌려 대조하는 테스트(무작위 600개 + 리뷰 지적 입력)로 확인. Bash 시간 제한·백그라운드 동작은 가짜 agy 로 실측 |
-| `/checkpointing`, `/doc-write`, `/jira-setup`, `/ticket` | **아직 실제로 돌려 본 적 없다** |
+| `/doc-write`, `/jira-setup`, `/ticket` | **아직 실제로 돌려 본 적 없다** |
 | Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다 |
 
 ---

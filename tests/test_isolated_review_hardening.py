@@ -584,7 +584,7 @@ class RoundFiveTests(IsolatedReviewCase):
         return json.loads(argv[argv.index("--settings") + 1])["permissions"]["deny"]
 
     def test_f1_the_implementers_other_notes_are_denied(self) -> None:
-        # /checkpointing writes the session's history to .agents/rules/AGENTS.md
+        # Older copies wrote a session history to .agents/rules/AGENTS.md
         # too; nested CLAUDE.md files are context files like the root one.
         box = self.sandbox()
         box.run()

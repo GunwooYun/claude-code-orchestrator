@@ -13,8 +13,8 @@ in order; skip a step when it does not apply and say so in the final report.
 ## Ground rules
 
 - `CLAUDE.md`: touch only the H1 title line, `## 기술 스택(Tech Stack)` and `## Project Setup`
-  (create it if missing, place it after `## 언어 프로토콜`, then
-  `## Current Project`, then **before** any `## Session History`). Never edit the
+  (create it if missing, place it after `## 언어 프로토콜` and
+  before `## Current Project`). Never edit the
   other sections. Replace the H1 in place (Step 4); never add a second one. The section lifetimes are defined in
   `CLAUDE.md` → 「`CLAUDE.md` 섹션의 수명」: `## Project Setup` holds what lasts as
   long as the project, `## Current Project` is replaced per work unit by
@@ -60,7 +60,7 @@ adopted). Step 5 uses this.
 2. **Repository policy** — commit `.claude/ .agents/ CLAUDE.md` to the repo, or
    keep them local-only? If local-only, append them to `.git/info/exclude`.
    If committed, make sure `.gitignore` covers `.claude/logs/`,
-   `.claude/checkpoints/`, `.claude/settings.local.json`, and — for
+   `.claude/settings.local.json`, and — for
    `/isolated-review` — `.claude/docs/reviews/` and `.claude/isolated-review/`.
    Its reports and transcripts quote the code under review; a committed report
    also lets a later reviewer read the earlier verdict.
