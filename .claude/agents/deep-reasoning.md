@@ -57,6 +57,20 @@ What could go wrong, edge cases, open questions.
 ### Suggested Next Steps
 Concrete, ordered actions.
 
+### Evidence marks (on every factual claim)
+The orchestrator only sees this summary, so it must be able to tell which
+claims were checked. Mark each factual claim — a count, a location, a "this
+fails when…", a scope — with one of:
+
+- `[verified: <what you ran or read>]` — you executed it, or read the exact
+  lines that settle it
+- `[inference]` — reasoned from reading, not executed
+- `[unverified]` — you could not check it; say why
+
+For counts and scopes, say how you counted ("13 threads: grep `Thread(` in
+src/, 13 hits"). A miscount reported without its method once reached the
+orchestrator as fact (12 threads; there were 13).
+
 ## Language Protocol
 
 - Think and write in **English**. The main orchestrator translates for the

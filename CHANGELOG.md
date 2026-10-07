@@ -42,7 +42,23 @@ project changed, back up a gitignored `.claude/` first).
   count. A format check judges appearance only; on an unformatted codebase it
   fails every save of untouched code, and reformatting other people's code
   pollutes diffs. Static checks (undefined names, type errors) stay. Measured
-  case recorded in `references/known-pitfalls.md` (414 of 555 files).
+  case recorded in `references/known-pitfalls.md` (414 of 555 files) (#34).
+- **"Edit with Edit/Write" now states its priority and exceptions.** It wins
+  over other instructions that allow sed/heredoc edits (auto mode says so),
+  because a Bash edit skips the save check (a whole session's hooks never ran
+  in an adopting project). Bash stays the tool for files in a container, on a
+  remote device or needing privileges, binary files, tool output and bulk
+  replacement — written for the shell where it runs, then re-read and checked.
+- **deep-reasoning marks every factual claim** `[verified: …]` /
+  `[inference]` / `[unverified]`, and the orchestrator re-checks the
+  unverified ones and those a decision rests on — a count reported without its
+  method was off by one, and a "judged by reading" finding was wider in scope.
+- **`/feature` marks the Current Project block `Status: 완료 (date)`** when the
+  unit ends, so a session opened before the next `/feature` does not read a
+  finished unit as current.
+- **Bash output with known lines is filtered before it is delegated**
+  (`tail`, `grep`), with the full output kept in a file and the exit code as
+  the verdict; output that needs understanding still goes to a subagent.
 
 ## [3.0.1] - 2026-10-05
 

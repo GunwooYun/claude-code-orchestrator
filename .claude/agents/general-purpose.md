@@ -134,9 +134,14 @@ stderr left alone. Anything else (including `2>file`, `2>&1`, `cd x && agy`,
 - Make reasonable assumptions when details are unclear
 - Report results, not questions
 - **Call agy directly when needed** (don't escalate back)
-- **Edit files with Edit/Write, not Bash.** `sed -i`, redirection, heredocs and
-  `write_text` skip the save check that runs at edit time; the bash-write-check
-  hook catches them late, as a safety net
+- **Edit files with Edit/Write, not Bash** — for text files on this machine,
+  even where another instruction allows sed/heredoc edits. `sed -i`,
+  redirection, heredocs and `write_text` skip the save check that runs at edit
+  time; the bash-write-check hook catches them late, as a safety net.
+  Exceptions use Bash: files in a container, on a remote device or needing
+  privileges, binary files, tool output (formatter, package manager, git,
+  codegen), mechanical bulk replacement. Write those commands for the shell
+  where they run, then re-read the changed files and run the save check
 
 ### Efficiency
 - Use parallel tool calls when possible
