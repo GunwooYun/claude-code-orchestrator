@@ -203,8 +203,20 @@ def dirty_paths(root: Path) -> list[str]:
 
 
 def resolve_base(root: Path, base: str | None) -> str:
+    """The ref to review against; a bare branch name means its `origin/` copy.
+
+    `--base develop` refused in a clone that had only `origin/develop`, and a
+    stale local branch would widen the range to work already merged. The
+    remote copy is what the PR merges into. Any other ref (`origin/x`,
+    `refs/heads/x`, a commit) is used as given. The report header records it.
+    """
     if base:
-        return base
+        if "/" in base:
+            return base
+        remote = f"origin/{base}"
+        verify = ("rev-parse", "--verify", "--quiet", f"{remote}^{{commit}}")
+        found = git(root, *verify, check=False).strip()
+        return remote if found else base
     ref = git(root, "rev-parse", "--abbrev-ref", "origin/HEAD", check=False).strip()
     if not ref or ref == "origin/HEAD":
         raise Refused("no --base given and origin/HEAD is not set")
@@ -986,7 +998,10 @@ def check_preconditions(
     base = resolve_base(root, args.base)
     dirty = dirty_paths(root)
     if dirty:
-        raise Refused(f"the working tree must be clean (commit first): {dirty[:5]}")
+        raise Refused(
+            f"the working tree must be clean (commit first): {dirty[:5]} — commit "
+            "them, or list local-only files in .gitignore or .git/info/exclude"
+        )
     head = git(root, "rev-parse", "HEAD").strip()
     merge_base = git(root, "merge-base", "HEAD", base).strip()
     if head == merge_base:
