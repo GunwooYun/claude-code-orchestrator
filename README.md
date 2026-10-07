@@ -108,7 +108,6 @@ your-project/
 | **`/initproject`** | 복사 직후 **프로젝트당 한 번** | 스택을 감지하고 템플릿을 이 프로젝트에 맞게 고친다 |
 | **`/feature <기능명>`** | **작업 하나마다** | 조사 → 요구사항 → 검증 계획 → 설계 리뷰 → 할 일 목록 → 승인 → 구현 → 리뷰 |
 | **`/isolated-review`** | 구현을 커밋한 뒤 | 이 세션과 무관한 격리된 리뷰어가 읽기 전용으로 리뷰한다 |
-| `/deep-reasoning` | 설계·디버깅 판단이 필요할 때 | deep-reasoning 서브에이전트에게 묻는 템플릿 |
 | `/antigravity-system` | 조사·레포 분석·멀티모달 | agy 를 부르는 방법과 프롬프트 템플릿 |
 | `/orchestrator-version` | 버전이 궁금할 때 | 설치된 버전과 최신 릴리스를 비교 |
 | `/checkpointing` | 세션 기록을 남길 때 | agy 상담 이력을 `CLAUDE.md` 의 `## Session History` 에 기록 |
@@ -332,7 +331,7 @@ git status
 "`agy-probe` 를 실행해서 결과를 보여 줘", "이 파일을 일부러 깨뜨리고 `verify-save` 가 0 이 아닌 종료 코드를
 내는지 확인해 줘".
 
-Claude 세션 안에서는 `/deep-reasoning`, `/antigravity-system` 이 스킬 목록에 보이는지 확인한다.
+Claude 세션 안에서는 `/feature`, `/isolated-review` 가 스킬 목록에 보이는지 확인한다.
 
 ### 5단계 — 첫 작업: `/feature`
 
@@ -585,7 +584,7 @@ flowchart TD
 | `/initproject` | 실제 프로젝트 두 곳(Node/TS 모노레포, Python+TS 포크)에서 대화형으로 완주 |
 | `/feature` | 실제 프로젝트에서 여러 작업 단위를 끝까지 진행 |
 | `/isolated-review` | 실작업 3회 + 지난 작업 6건 재검증. 사람이 연 리뷰가 놓친 진짜 문제를 찾았고 오탐은 없었다. 실행이 필요한 결함은 놓친다 |
-| `/deep-reasoning`, `/antigravity-system` | 실사용 중 (agy 18회 이상 호출). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
+| deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중 (2026-10-07 측정: deep-reasoning 30회, agy 79회). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
 | `/orchestrator-version` | 업그레이드에 사용 |
 | 훅 4개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `log-cli-tools` 의 판정 | 판정하는 모든 모양을 실제 bash 로 돌려 대조하는 테스트(무작위 600개 + 리뷰 지적 입력)로 확인. Bash 시간 제한·백그라운드 동작은 가짜 agy 로 실측 |

@@ -131,8 +131,7 @@ Procedure:
    cost split. Record the choice either way.
 5. Whenever a value changes, update the comment in the agent file and any prose
    that names a model (`CLAUDE.md`, `README.md`,
-   `.claude/rules/deep-reasoning-delegation.md`,
-   `.claude/skills/deep-reasoning/SKILL.md`) so no document claims a model that
+   `.claude/rules/deep-reasoning-delegation.md`) so no document claims a model that
    is not pinned. This drift is what the step exists to prevent.
 
 ### Step 3b — agy: installed? logged in?
@@ -320,7 +319,7 @@ the bug this step exists to prevent.
 
 ## Step 8 — Smoke test and report
 
-- Skills list shows `/deep-reasoning`, `/antigravity-system`, `/feature`.
+- Skills list shows `/feature`, `/isolated-review`.
 - `grep -n '^model:' .claude/agents/*.md` matches the matrix agreed in Step 3,
   and no prose names a model that is not pinned.
 - Each verification script written in Step 5 runs by hand and honours the
