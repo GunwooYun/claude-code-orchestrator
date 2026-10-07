@@ -64,7 +64,7 @@ Phase 6: Multi-Session Review (New Session + deep-reasoning)
 결과를 이 작업 내내 재사용한다.
 
 ```sh
-.claude/skills/antigravity-system/agy-probe
+.claude/bin/agy-probe
 ```
 
 종료 코드 0(`READY`)이면 아래 A, 그 외면 B 로 간다. 상태와 그 의미는

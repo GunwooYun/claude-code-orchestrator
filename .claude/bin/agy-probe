@@ -1,8 +1,8 @@
 #!/bin/sh
 # Report whether Antigravity CLI (agy) is usable right now.
 #
-# Owned by the antigravity-system skill, not by .claude/scripts/ — that directory
-# is the project's verification contract and nothing else belongs in it.
+# Lives in .claude/bin/, not .claude/scripts/ — that directory is the project's
+# verification contract and nothing else belongs in it.
 #
 # Usage: agy-probe [--quiet]
 #

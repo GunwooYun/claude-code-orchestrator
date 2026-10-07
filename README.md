@@ -108,7 +108,6 @@ your-project/
 | **`/initproject`** | 복사 직후 **프로젝트당 한 번** | 스택을 감지하고 템플릿을 이 프로젝트에 맞게 고친다 |
 | **`/feature <기능명>`** | **작업 하나마다** | 조사 → 요구사항 → 검증 계획 → 설계 리뷰 → 할 일 목록 → 승인 → 구현 → 리뷰 |
 | **`/isolated-review`** | 구현을 커밋한 뒤 | 이 세션과 무관한 격리된 리뷰어가 읽기 전용으로 리뷰한다 |
-| `/antigravity-system` | 조사·레포 분석·멀티모달 | agy 를 부르는 방법과 프롬프트 템플릿 |
 | `/orchestrator-version` | 버전이 궁금할 때 | 설치된 버전과 최신 릴리스를 비교 |
 | `/jira-setup`, `/ticket` | Jira 를 쓰는 팀 | Jira 연결 설정, 티켓에서 작업 시작 |
 | `/doc-write` | Confluence·문서 작성 | 작성 규칙에 맞춰 문서를 쓰고 발행 |
@@ -307,7 +306,7 @@ flowchart LR
 cat .claude/ORCHESTRATOR_VERSION
 
 # 2) agy 상태 (READY 가 아니면 첫 단어가 상태다)
-.claude/skills/antigravity-system/agy-probe
+.claude/bin/agy-probe
 
 # 3) 저장 검사가 "말을 하는지" — 검사 대상 파일 하나를 일부러 깨뜨려 본다
 .claude/scripts/verify-save path/to/broken-file ; echo "exit=$?"    # 0 이 아니어야 정상

@@ -760,7 +760,6 @@ class AgyFitsTheBashTimeoutTests(unittest.TestCase):
         REPO / ".claude" / "agents" / "general-purpose.md",
         REPO / ".claude" / "rules" / "antigravity-delegation.md",
         SKILLS / "feature" / "SKILL.md",
-        SKILLS / "antigravity-system" / "SKILL.md",
     )
     PRINT_TIMEOUT = re.compile(r"--print-timeout[ =](\d+)(m|s)\b")
 

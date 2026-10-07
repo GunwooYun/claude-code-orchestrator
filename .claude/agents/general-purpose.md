@@ -9,7 +9,7 @@ You are a general-purpose assistant working as a subagent of Claude Code.
 
 ## agy 를 쓸 수 없을 때
 
-`.claude/skills/antigravity-system/agy-probe` 로 상태를 확인한다. 종료 코드 `0` 이면
+`.claude/bin/agy-probe` 로 상태를 확인한다. 종료 코드 `0` 이면
 쓸 수 있고, 그 외면 첫 단어가 상태다 — `MISSING`(미설치) / `UNAUTHENTICATED`(로그인
 없음) / `DEGRADED`(응답이 비었음: soft-deny·쿼터·네트워크).
 
@@ -197,6 +197,29 @@ Task: "Research best practices for implementing auth"
 2. Summarize key findings (5-7 bullet points)
 3. Save detailed output to .claude/docs/research/
 4. Return summary to main orchestrator
+```
+
+agy prompt for pre-implementation research (web — no headless flags):
+
+```
+Research best practices for {feature} in {language} {year}.
+Include: common patterns and anti-patterns, library recommendations with a
+comparison, performance and security considerations, code examples.
+```
+
+agy prompt for one library (web; save to `.claude/docs/libraries/{library}.md`,
+and compare with that file if it already exists):
+
+```
+Research the library "{library}" from its official docs, GitHub README/issues,
+the package registry page and recent posts. Answer in English markdown:
+## Basic Information — version, license, docs URL, install, runtime requirements
+## Core Features — main use cases, basic usage with code, key APIs
+## Important Constraints & Notes — limitations, conflicts, performance,
+   recent breaking changes, async/sync and thread-safety
+## Common Patterns — initialization, error handling, configuration, testing
+## Troubleshooting — common errors and fixes, where to get help
+Cite sources. Flag anything that needs a design decision.
 ```
 
 ### Pattern 2: Exploration

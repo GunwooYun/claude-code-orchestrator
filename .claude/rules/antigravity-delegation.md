@@ -11,13 +11,13 @@ flags and prompt templates live elsewhere:
 | What | Where |
 |---|---|
 | Exact commands, headless flags, soft-deny handling | `.claude/agents/general-purpose.md` (the subagent that runs agy — rules files are not guaranteed to reach subagents, so it carries what it needs) |
-| Task prompt templates and examples | `.claude/skills/antigravity-system/SKILL.md` |
+| agy prompt templates | `.claude/agents/general-purpose.md` → "Common Task Patterns" |
 | Measured CLI facts | `.claude/docs/research/antigravity-cli.md` |
 
 ## When agy is unavailable (CRITICAL)
 
 Check once per unit of work (`/feature` Phase 1), not per call:
-`.claude/skills/antigravity-system/agy-probe` — exit 0 = `READY`; otherwise the
+`.claude/bin/agy-probe` — exit 0 = `READY`; otherwise the
 first word is the state: `MISSING` (not on PATH), `UNAUTHENTICATED` (log in),
 `DEGRADED` (empty answers: soft-deny, quota, network).
 

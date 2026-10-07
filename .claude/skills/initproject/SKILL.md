@@ -141,7 +141,7 @@ checking **here**, while a person is present and can act on it — during a work
 session nobody can be asked to log in.
 
 ```sh
-.claude/skills/antigravity-system/agy-probe
+.claude/bin/agy-probe
 ```
 
 Branch on the first word it prints:
@@ -325,7 +325,7 @@ the bug this step exists to prevent.
 - Each verification script written in Step 5 runs by hand and honours the
   contract (0 = pass and silent, non-zero = fail with a reason); the gate has
   been seen to fail once on an injected violation.
-- `.claude/skills/antigravity-system/agy-probe` prints the state agreed in
+- `.claude/bin/agy-probe` prints the state agreed in
   Step 3b. `READY` exits 0; any other state must already be recorded in
   `DESIGN.md` Open Questions with today's date.
 - Report in Korean: detected stack, the final model matrix, agy's state and
