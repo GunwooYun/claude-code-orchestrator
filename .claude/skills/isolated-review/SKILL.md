@@ -31,7 +31,11 @@ security boundary or a public interface, also ask the user for an A2 review.
    committed and clean working tree; the branch differs from its base; the
    branch does not change `.claude/skills/isolated-review/` itself; at most 3000
    changed lines. If refused, tell the user the reason verbatim. Do not work
-   around it (do not commit "just to make it clean" without asking).
+   around it (do not commit "just to make it clean" without asking). An
+   untracked file counts as dirty: if it is a local-only document (a plan or
+   research note that must not be committed), offer to list it in
+   `.git/info/exclude` (this clone only) or `.gitignore` (everyone) — the
+   refusal message says so.
 
    **Docs and evidence files that inflate the count** can be left out of the
    cap — and only the cap — with a committed `.claude/isolated-review.json`:
@@ -55,15 +59,23 @@ security boundary or a public interface, also ask the user for an A2 review.
    target, ask the user in the same question as step 2. The base is not read
    from `CLAUDE.md` on purpose: that file is written by the implementing
    session, and it must not set the review's scope. The report header records
-   the base used.
+   the base used. A bare branch name (`--base develop`) means its remote copy,
+   `origin/develop`, when that exists: it is what the PR merges into, and a
+   stale or missing local branch would widen the range or refuse. To review
+   against a local branch, pass `refs/heads/<name>`.
    `--budget` and `--timeout` can only LOWER the ceilings. There is no way to
    add instructions for the reviewer, by design.
 4. **While it runs, do not edit files and do not commit.** A tree that changes
    during the review makes the report INVALID.
 5. **Show the report verbatim.** Print the `## Findings` and `## Not reviewed`
    sections exactly as written — no summary, no paraphrase, no ranking. Summarising
-   is where this session's view would re-enter. Then, per finding, ask the user:
-   fix / dispute / defer.
+   is where this session's view would re-enter. **Then add a complete
+   translation into the user's language** (`CLAUDE.md` language protocol) when
+   it differs from the report's — every finding and every not-reviewed item,
+   in order, nothing merged or dropped. It is a translation, not a summary; the
+   verbatim original stays above it so the user can check it. The user is the
+   one who judges each finding, so they must be able to read it. Then, per
+   finding, ask the user: fix / dispute / defer.
    **Before asking, check whether each finding's input occurs in real use** —
    logs, field reports, or the usage the templates prescribe — and show that
    next to the finding. A finding with no real occurrence (a usage nobody has,

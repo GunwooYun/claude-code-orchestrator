@@ -32,6 +32,13 @@ project changed, back up a gitignored `.claude/` first).
   to pass the Bash tool `timeout: 600000`, and keep `--print-timeout` at 9m,
   under that 10-minute foreground maximum. A consistency test keeps every
   template's limit below it.
+- **`/isolated-review` usability.** `--base develop` now means `origin/develop`
+  when that exists. It refused in a clone with only the remote branch, and a
+  stale local branch would widen the range; pass `refs/heads/<name>` for a
+  local one. A dirty-tree refusal now says to commit the files or list
+  local-only ones in `.gitignore` / `.git/info/exclude`. After the verbatim
+  report, the session adds a complete translation into the user's language,
+  since the user judges each finding.
 
 ### Changed
 - The agent and skill docs ask for one agy call per Bash command, alone, and

@@ -498,6 +498,58 @@ class ReasonShapeDriftTests(IsolatedReviewCase):
                 )
 
 
+class UsabilityTests(unittest.TestCase):
+    """
+    Two refusals seen in real use (2026-10-06), each fixed by hand: a base that
+    existed only as `origin/develop`, and an untracked local-only document with
+    no hint how to keep it out of the way.
+    """
+
+    def setUp(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        for args in (
+            ("init", "-q", "-b", "main"),
+            ("config", "user.email", "t@example.com"),
+            ("config", "user.name", "t"),
+        ):
+            subprocess.run(["git", *args], cwd=self.root, check=True)
+        (self.root / "a.txt").write_text("a\n", encoding="utf-8")
+        subprocess.run(["git", "add", "a.txt"], cwd=self.root, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "a"], cwd=self.root, check=True)
+        head = RR.git(self.root, "rev-parse", "HEAD").strip()
+        RR.git(self.root, "update-ref", "refs/remotes/origin/develop", head)
+
+    def test_a_branch_name_resolves_to_its_remote_copy(self) -> None:
+        # Only origin/develop exists here, as in the clone that refused.
+        self.assertEqual("origin/develop", RR.resolve_base(self.root, "develop"))
+        # With a local develop too, the remote one wins: it is what the PR targets,
+        # and a stale local branch would widen the reviewed range.
+        RR.git(self.root, "branch", "develop")
+        self.assertEqual("origin/develop", RR.resolve_base(self.root, "develop"))
+
+    def test_explicit_refs_are_kept(self) -> None:
+        for base in ("origin/develop", "refs/heads/main", "HEAD", "main"):
+            with self.subTest(base=base):
+                self.assertEqual(base, RR.resolve_base(self.root, base))
+
+    def test_a_dirty_tree_refusal_says_how_to_keep_local_files_out(self) -> None:
+        (self.root / "notes.md").write_text("local\n", encoding="utf-8")
+        args = mock.Mock(base="HEAD", budget=1.0, timeout=1.0)
+        with self.assertRaises(RR.Refused) as caught:
+            RR.check_preconditions(self.root, args)
+        reason = str(caught.exception)
+        self.assertTrue(
+            reason.startswith("the working tree must be clean (commit first):")
+        )
+        self.assertIn(".git/info/exclude", reason)
+        field_report = load_field_report()
+        self.assertNotEqual(
+            field_report.HIDDEN, field_report.hide_reason(reason, False)
+        )
+
+
 class DocumentedNumbersTests(unittest.TestCase):
     """#11: the numbers the orchestrator quotes to the user are the script's."""
 
