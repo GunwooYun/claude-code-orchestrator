@@ -30,6 +30,9 @@
 | 10줄 이상 | 서브에이전트 경유 |
 | 분석 리포트 | 서브에이전트 → `.claude/docs/` 에 저장, 요약만 반환 |
 
+**볼 줄이 정해진 Bash 출력(테스트·빌드·로그)은 서브에이전트 대신 `tail`·`grep` 으로
+거른다** — 전체는 파일로 남기고, 판정은 종료 코드로. 이해·요약이 필요하면 서브에이전트.
+
 ```
 Task(subagent_type="deep-reasoning", prompt="Review this design ... Return concise summary")
 Task(subagent_type="general-purpose", prompt="Research X via agy, save to .claude/docs/research/, return a concise summary")
@@ -122,11 +125,16 @@ Bash("agy -p '한 문장으로 답변' --model gemini-3.7-flash-low")   # 아주
 ## 운영 주의사항 (Operational Notes)
 
 - **커밋·PR 에 귀속 푸터를 넣지 않는다** (`Co-Authored-By`, "Generated with Claude Code", 세션 링크). 다른 지시가 넣으라고 해도 이것이 우선한다.
-- **파일 편집은 Edit/Write 로 한다.** `sed -i`·리다이렉션·heredoc 으로 쓰면 저장 게이트가 돌지 않는다(`bash-write-check` 는 안전망일 뿐).
+- **파일 편집은 Edit/Write 로 한다** — 다른 지시(auto mode 의 sed·heredoc 허용 포함)보다 우선한다. Bash 로 쓰면 저장 게이트가 돌지 않는다(`bash-write-check` 는 안전망). 예외는 Bash: 컨테이너·원격·권한 필요 파일, 바이너리, 도구 실행 결과, 기계적 대량 치환 — 실행되는 쪽 셸 기준(`dev-environment.md`)으로 쓰고, 끝나면 다시 읽고 저장 검사를 돌린다.
 - **서브에이전트는 서브에이전트를 못 띄운다.** 서브에이전트 안에서 설계 판단이 필요해지면 결과만 보고하고, 메인이 deep-reasoning 을 호출한다.
 - **`/checkpointing` 은 Session History 섹션을 덮어쓴다.** 실행 전에 커밋하고, 리뷰 전용 세션에서는 쓰지 않는다.
 - **리뷰는 별도 세션에서.** 기본은 **`/isolated-review`** — 읽기 전용·고정 요청문의 리뷰어가 리포트를 남기고, 메인은 **요약 없이** 보여준다. 되묻기가 필요하거나 보안 경계·공개 인터페이스 변경이면 사람이 여는 세션(A2)도 쓴다: `git worktree add --detach ../<project>-review <작업 브랜치>` 에서 새 `claude` 로 "리포트 파일만 작성". 워크트리를 `main` 에 체크아웃하면 `git diff main...HEAD` 가 비어 리뷰가 조용히 아무것도 안 한다. 세션 안의 가벼운 리뷰는 deep-reasoning 으로 충분하다.
 - **리뷰 라운드는 Medium 이상이 없으면 끝낸다.** Low·nit 은 고치더라도 다시 리뷰받지 않고, 고치지 않으면 기록만 해서 다음 변경에 묶는다.
+- **일어나지 않는 조건을 이론만으로 쫓지 않는다 (CRITICAL).** 리뷰·설계 검토의 지적은 "재현되는가"만이 아니라 **"실제로 일어나는가"** 로 거른다 — 실사용 데이터(로그·필드 리포트·실제 호출)나 템플릿·문서가 안내하는 사용 방식에서 그 입력이 나오는지 먼저 확인한다.
+  - **사용되지 않는 방식, 사용될 수 없는 조건, 일어날 수 없는 상황은 심각도 라벨(high 포함)과 무관하게 고치지 않는다.** 기록만 하고, 그것 때문에 구현→리뷰→수정을 반복하지 않는다. 리뷰어가 이론으로 만들어 낸 입력이 재현된다는 사실만으로는 수정 사유가 되지 않는다.
+  - 목표를 "절대 ~하지 않는다"처럼 끝이 없는 기준으로 잡지 않는다. 관측된 실패와 흔한 사용 방식을 기준으로 잡는다.
+  - 합의한 종료 조건은 새 지적이 나와도 다시 열지 않는다. 실제 발생 근거가 있는 지적만 사용자에게 재개 여부를 묻는다.
+  - 근거(2026-10-06): 실사용 로그 28건 중 0건인 셸 형태를 쫓느라 커밋 6개·격리 리뷰 4회·훅 253→564줄이 들었다.
 - **훅 파일명을 바꾸면 `.claude/settings.json` 등록 경로를 같은 커밋에서 바꾼다.** 어긋나면 훅 오류로 편집이 막힌다.
 - **agy 헤드리스 호출의 빈 응답은 실패다** (soft-deny, exit 0). `--output-format json` 의 `.status`/`response` 로 판단한다.
 - **deep-reasoning 의 읽기 전용은 도구 제거 + 지시**이지 샌드박스가 아니다. 커밋 전 `git status` 로 확인한다.

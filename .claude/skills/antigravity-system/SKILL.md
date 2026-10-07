@@ -36,13 +36,22 @@ Task tool parameters:
 - prompt: |
     Research: {topic}
 
-    agy -p "{research question}" --model {slug}   # the orchestrator fills the slug per tier
+    agy -p "{research question}" --model {slug}
+
+    (The orchestrator fills {slug} per tier. Run the line as it is — one agy
+    call, alone, no inline comment — or the log records it as [UNKNOWN].)
 
     Save full output to: .claude/docs/research/{topic}.md
     Return CONCISE summary (5-7 bullet points).
 ```
 
 Directly only for a one-line answer: `agy -p "Brief question" --model gemini-3.7-flash-low`.
+
+Call agy alone, one call per Bash command (`> file`, `$(...)`, `; echo $?`,
+`2>&1` all make the call `[UNKNOWN]` in the log). For a copy on disk use
+`| tee <file>`. Give the Bash tool `timeout: 600000` and keep `--print-timeout`
+at 9m or less, or a call past 2 min is backgrounded and logged `[FAILED]`
+(details: `.claude/agents/general-purpose.md`).
 
 Ask agy in **English**; report to the user in **Korean**. Full answers go to
 `.claude/docs/research/{topic}.md` so deep-reasoning can read them later.

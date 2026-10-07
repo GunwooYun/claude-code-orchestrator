@@ -64,7 +64,7 @@ addopts = "-v --tb=short"
 # them (tests/test_isolated_review.py checks this list stays complete).
 lint = "ruff check . .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check"
 format-check = "ruff format --check . .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check"
-typecheck = "ty check .claude/hooks .claude/skills/checkpointing/checkpoint.py .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check"
+typecheck = "ty check .claude/hooks .claude/skills/checkpointing/checkpoint.py .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check tests"
 test = "pytest"
 all = ["lint", "format-check", "typecheck", "test"]
 

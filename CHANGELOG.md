@@ -11,6 +11,87 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [3.1.0] - 2026-10-07
+
+The first change driven by a handoff report from an adopting project. The agy
+log no longer records false successes. The rules now cover how review findings
+are weighed, how files are edited, and what a format check may demand.
+
+### Fixed
+- **`log-cli-tools` no longer logs a false success.** It read the Bash tool's
+  stdout as agy's answer, so a call redirected to a file, captured with
+  `$(...)` or followed by `|| echo` / `; echo EXIT_CODE=$?` was logged with the
+  echo as its response and marked a success (an adopting project: 10 of 28
+  calls). Only a single-line `agy …` on its own is judged now (`<file` and a
+  final `| tee` allowed; no `2>file`, inline comment, backslash, `$'`, `$(`
+  or `${`); every other shape is `success: null` with a blank response and a
+  `stdout_target` saying why. A differential test checks every judged shape
+  against real bash (#31).
+- `/checkpointing` renders that unknown outcome as `[UNKNOWN]` instead of
+  `[FAILED]` (#31).
+- **A long agy call is no longer logged `[FAILED]` after it succeeds.** Past
+  the Bash tool's 2-minute default the call was moved to the background: it
+  finished, but the log hook had already recorded the empty stdout as a
+  failure and never fired again (measured). The agy templates now tell callers
+  to pass the Bash tool `timeout: 600000`, and keep `--print-timeout` at 9m,
+  under that 10-minute foreground maximum. A consistency test keeps every
+  template's limit below it.
+- **`/isolated-review` usability.** `--base develop` now means `origin/develop`
+  when that exists. It refused in a clone with only the remote branch, and a
+  stale local branch would widen the range; pass `refs/heads/<name>` for a
+  local one. A dirty-tree refusal now says to commit the files or list
+  local-only ones in `.gitignore` / `.git/info/exclude`. After the verbatim
+  report, the session adds a complete translation into the user's language,
+  since the user judges each finding.
+- **Tests are type-checked, and clean.** Four test files carried 16
+  pre-existing `ty` errors (a module loaded from a path: `spec` possibly
+  `None`, attributes unknown; a `Path | None` attribute). They were not bugs,
+  but the save check printed them again on every edit of those files. Fixed at
+  the source, and `tests/` joined the gate's type check so new ones are caught.
+
+### Changed
+- The agent and skill docs ask for one agy call per Bash command, alone, and
+  `| tee <file>` when a copy on disk is needed (#31).
+- **Review findings are filtered by real occurrence.** A finding whose input
+  does not occur in real use — a usage nobody has, a condition that cannot
+  arise, an input built only in theory — is recorded, not fixed, whatever its
+  severity, and never starts another implement → review → fix round. Goals
+  are not set as open-ended absolutes, and an agreed stop condition is not
+  reopened by a theoretical finding. Defined in `CLAUDE.md` 운영 주의사항;
+  `/feature` and `/isolated-review` point to it (#32).
+- **`/initproject` puts a format check in a gate only if the project has
+  adopted that formatter** — a config exists and (nearly) all tracked files
+  already pass. Otherwise it leaves the check out and reports the measured
+  count. A format check judges appearance only; on an unformatted codebase it
+  fails every save of untouched code, and reformatting other people's code
+  pollutes diffs. Static checks (undefined names, type errors) stay. Measured
+  case recorded in `references/known-pitfalls.md` (414 of 555 files) (#34).
+- **"Edit with Edit/Write" now states its priority and exceptions.** It wins
+  over other instructions that allow sed/heredoc edits (auto mode says so),
+  because a Bash edit skips the save check (a whole session's hooks never ran
+  in an adopting project). Bash stays the tool for files in a container, on a
+  remote device or needing privileges, binary files, tool output and bulk
+  replacement — written for the shell where it runs, then re-read and checked.
+- **deep-reasoning marks every factual claim** `[verified: …]` /
+  `[inference]` / `[unverified]`, and the orchestrator re-checks the
+  unverified ones and those a decision rests on — a count reported without its
+  method was off by one, and a "judged by reading" finding was wider in scope.
+- **`/feature` marks the Current Project block `Status: 완료 (date)`** when the
+  unit ends, so a session opened before the next `/feature` does not read a
+  finished unit as current.
+- **Bash output with known lines is filtered before it is delegated**
+  (`tail`, `grep`), with the full output kept in a file and the exit code as
+  the verdict; output that needs understanding still goes to a subagent.
+- **README** updated for 3.1.0:
+  - Separate Linux / macOS and Windows (PowerShell) commands for the template
+    copy, backup, local-only exclude and smoke test. The Windows commands are
+    marked unverified.
+  - Directory changes are written as instructions, not as `cd` inside code blocks.
+  - Upgrade checks compare git content hashes. `diff` reports a file as changed
+    when only its execute bit differs.
+  - The hook, review, verification and pitfall sections describe this release's
+    behaviour.
+
 ## [3.0.1] - 2026-10-05
 
 Documentation only — nothing that ships into a project changed.

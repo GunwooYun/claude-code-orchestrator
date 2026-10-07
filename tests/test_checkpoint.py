@@ -3,6 +3,7 @@
 import importlib.util
 import unittest
 from pathlib import Path
+from typing import Any
 
 SCRIPT = (
     Path(__file__).parent.parent
@@ -12,7 +13,9 @@ SCRIPT = (
     / "checkpoint.py"
 )
 spec = importlib.util.spec_from_file_location("checkpoint", SCRIPT)
-checkpoint = importlib.util.module_from_spec(spec)
+assert spec is not None and spec.loader is not None
+# Any: a module loaded from a path has no static attributes for ty to check.
+checkpoint: Any = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checkpoint)
 
 HISTORY = "## Session History\n\n### 2026-08-31\n\n**agy조사:**\n- ✓ test...\n"

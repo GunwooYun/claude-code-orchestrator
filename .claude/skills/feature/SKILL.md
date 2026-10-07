@@ -88,7 +88,10 @@ Task tool parameters:
        3. Library recommendations
        4. Technical considerations
        Do not create or modify any files; return everything in your response.
-       " --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 10m
+       " --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 9m
+
+       Run it with the Bash tool timeout set to 600000 (agy may take minutes;
+       past the default 2 min the call is backgrounded and logged as FAILED).
 
     2. Save full output to: .claude/docs/research/{feature}.md
 
@@ -327,6 +330,8 @@ rewritten by `/checkpointing`; anything placed after it is lost). Replace an exi
 
 ## Current Project: {feature}
 
+- Status: 진행 중
+
 ### Context
 - Goal: {1-2 sentences}
 - Key files: {list}
@@ -419,6 +424,11 @@ Task tool parameters:
 
 마지막 티어의 결과가 오면 보고한다. `/ticket` Step 5 가 이것을 그대로 쓴다.
 
+**보고와 함께 `## Current Project` 의 `- Status:` 를 `완료 (YYYY-MM-DD)` 로 바꾼다.**
+블록은 다음 `/feature` 가 교체할 때까지 남는다. 표시가 없으면 그 사이에 열린 세션이
+끝난 작업을 진행 중으로 읽는다(실사용 인계 리포트, 2026-10-06 — 끝난 티켓의 블록을
+새 세션이 현재 작업으로 읽고 시작했다). 그 일을 사용자가 알아채기는 어렵다.
+
 - **무엇을 돌렸는가**: 티어와 명령, 그리고 결과(통과/실패)
 - **시나리오별 결과**: 계획의 ID 마다 대응하는 테스트와 그 결과
 - **검증하지 못한 것**: 계획의 "검증할 수 없는 것" 과 루프 중에 새로 생긴 것
@@ -459,6 +469,12 @@ Task tool parameters:
 라운드가 끝나지 않는다(실사용 리포트, 2026-10-02: 6라운드). 심각도는 리뷰어가 매긴
 값이 아니라 사용자가 판정한 값으로 본다 — 격리 리뷰는 심각도를 높게 매기는 경향이
 있다.
+
+**실제로 일어나지 않는 지적은 고치지 않는다.** 지적마다 그 입력이 실사용 데이터(로그·
+필드 리포트)나 템플릿이 안내하는 사용 방식에서 나오는지 먼저 확인해 사용자에게 함께
+보여준다. 나오지 않으면 — 사용되지 않는 방식, 사용될 수 없는 조건, 일어날 수 없는
+상황 — 심각도와 무관하게 기록만 하고, 그 때문에 구현→리뷰→수정을 반복하지 않는다.
+기준 원문: `CLAUDE.md` 운영 주의사항 「일어나지 않는 조건을 이론만으로 쫓지 않는다」.
 
 ---
 

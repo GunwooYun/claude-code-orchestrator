@@ -172,6 +172,62 @@ review falsified the original profile design; see Key Decisions.
       `## Consultation History`. `DocumentedFormatTests` asserts the document
       against *generated* output rather than against a copy of the format, so the
       two cannot drift apart in either direction.
+- [x] `checkpoint.py` C8 — tri-state outcome. `log-cli-tools` now writes
+      `success: null` when agy's stdout did not reach the Bash tool unaltered
+      (redirected, piped, captured) and nothing else says how the call ended;
+      `bool()` rendered that as `[FAILED]`. It now renders `[UNKNOWN]`; a missing
+      field stays `[FAILED]` (`UnknownOutcomeTests`). Origin: an adopting
+      project's log where 10 of 28 agy calls were the caller's own
+      `EXIT_CODE=0` echo, logged as successes.
+- [x] `log-cli-tools` judges by allowlist, not by parsing (2026-10-06). Two
+      rounds classified every shell shape (redirects, pipes, compound commands,
+      fds, newlines, comments); each isolated review found new false successes
+      and round 2 introduced three regressions (heredoc bodies logged as calls,
+      comments with an apostrophe dropping the call). The goal is narrower —
+      never log a false success — so only one shape is judged: a single-line
+      `agy …` alone, with at most `2>file`, `<file`, a final `| tee`. Every
+      other shape is `success: null` with a blank response; envelopes are
+      ignored outside that shape (they may belong to another command). Any
+      parser mistake therefore errs toward unknown. Dropped with it: the
+      trailing-line envelope scan (a trailing line implies a second command,
+      so that shape is never judged) and the `mixed` / compound-command logic.
+      Cost: complex calls with a real answer are `[UNKNOWN]`; the agent docs
+      already ask for one agy call per Bash command.
+
+      **Correction (2026-10-06, PR #31 review):** "any parser mistake errs
+      toward unknown" above was false when written. Detection kept shlex's `#`
+      comments, and shlex starts a comment mid-word (`~/c#proj`, `q#tag`) where
+      bash does not, so the dropped rest of the line (`> out.log; echo
+      EXIT_CODE=$?`, `|| echo FAILED`, a backslash-continued `echo`) was never
+      seen and three such calls were logged `direct`, success true — reproduced
+      before the fix. Instead of a bash-accurate comment stripper (the
+      shell-parsing path the allowlist replaced), a `#` outside quotes now
+      leaves the call unjudged; inline comments become unknown. Also from that
+      review: `run_in_background` calls are `background` (stdout is the
+      harness's notice), and leading comments are removed before
+      backslash-newline joining.
+
+      **Second correction (2026-10-06, isolated review of 84cdf2b):** the `#`
+      check above still let two false successes through — an escaped quote
+      (`~/it\'s#1`) and bash `$'…'` quoting, which shlex reads differently from
+      bash and which hid a redirect and `; echo`. Instead of teaching the
+      checker bash's escape rules, a `direct` call may not contain a backslash,
+      backtick, `$'` or `$"`; without them quoting is plain `'…'`/`"…"`, and a
+      ten-line scanner finds an unquoted `#` or newline exactly. `2>file` left
+      the allowlist too: it hides the soft-deny notice. Since reading the code
+      did not settle this three times, `tests/test_log_cli_tools_oracle.py`
+      now runs every judged shape in real bash with a fake `agy` and requires
+      stdout to be agy's alone and agy's stderr to reach the tool.
+
+      **Third correction (2026-10-06, isolated review of 0cc9cf0):** the flat
+      quote scanner was still wrong inside `"$(…)"` and `"${…}"`, where bash
+      nests quotes — `agy -p "$(echo "'")" > out.log; echo EXIT_CODE=$? # '`
+      was logged a success, reproduced in bash. The oracle had no nested-quote
+      input, so it could not catch this. `$(` and `${` joined the forbidden
+      list (with the old `$[…]` arithmetic form), and the oracle now generates
+      nested-quote prompts. These are the quote-nesting constructs known to
+      us; the oracle, not this list, is the check that the scanner agrees
+      with bash.
 
 - [x] `post-implementation-review.py` — state is now per project and per session
       under `.claude/logs/implementation-state/`, with stale files pruned after
@@ -312,6 +368,29 @@ Dropped after review:
 - [ ] `/lens-review`, `/doc-write`, `/jira-setup`, `/ticket` and `agy-probe`'s
       READY path have never actually run. Their tests assert their instructions,
       not their behaviour in use.
+- [ ] **Deferred: split `log-cli-tools.py` (2026-10-07).** It is 567 lines, which is
+      over the 200–400 target but under the 800 maximum in `coding-principles.md`.
+      It works and is guarded by unit, bash-oracle and mutation tests.
+      - What a split would involve: move detection (tokenize/segments, about 130
+        lines with its constants) to a `_shell_lex.py` helper, as `_savecheck.py`
+        is. `test_hook_effects` copies the hook file alone, so it would have to copy
+        the helper too.
+      - Why deferred: no observed problem, and a refactor of a hook stabilised over
+        five review rounds risks more than it gains.
+      - **When to do it:** the next time this hook must change for a functional
+        reason, split it in the same change.
+- [ ] **Deferred, record only: other `log-cli-tools` follow-ups (2026-10-07).**
+      Each one is reopened only if the condition named for it is observed.
+      - Several agy calls in one non-direct command: a soft-deny on a later call
+        marks the first `[FAILED]`. That is a false failure, not a false success.
+        The docs already ask for one call per command. Reopen if a real log shows
+        it.
+      - `agy -p "$(cat f)"` is `[UNKNOWN]` by design. Measured: 0 of 28 real calls
+        used `$(`. Reopen with a narrow exception if real logs show it is common.
+      - A call that ignores the Bash `timeout: 600000` guidance is still
+        auto-backgrounded and logged `[FAILED]`. A hook-side safety net needs the
+        backgrounding marker in the PostToolUse payload; it is not in stdout and is
+        undocumented. Measure the payload first if such entries appear.
 
 Closed, so that a later session does not reopen them:
 
