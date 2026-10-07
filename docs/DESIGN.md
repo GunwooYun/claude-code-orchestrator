@@ -368,6 +368,29 @@ Dropped after review:
 - [ ] `/lens-review`, `/doc-write`, `/jira-setup`, `/ticket` and `agy-probe`'s
       READY path have never actually run. Their tests assert their instructions,
       not their behaviour in use.
+- [ ] **Deferred: split `log-cli-tools.py` (2026-10-07).** It is 567 lines, which is
+      over the 200–400 target but under the 800 maximum in `coding-principles.md`.
+      It works and is guarded by unit, bash-oracle and mutation tests.
+      - What a split would involve: move detection (tokenize/segments, about 130
+        lines with its constants) to a `_shell_lex.py` helper, as `_savecheck.py`
+        is. `test_hook_effects` copies the hook file alone, so it would have to copy
+        the helper too.
+      - Why deferred: no observed problem, and a refactor of a hook stabilised over
+        five review rounds risks more than it gains.
+      - **When to do it:** the next time this hook must change for a functional
+        reason, split it in the same change.
+- [ ] **Deferred, record only: other `log-cli-tools` follow-ups (2026-10-07).**
+      Each one is reopened only if the condition named for it is observed.
+      - Several agy calls in one non-direct command: a soft-deny on a later call
+        marks the first `[FAILED]`. That is a false failure, not a false success.
+        The docs already ask for one call per command. Reopen if a real log shows
+        it.
+      - `agy -p "$(cat f)"` is `[UNKNOWN]` by design. Measured: 0 of 28 real calls
+        used `$(`. Reopen with a narrow exception if real logs show it is common.
+      - A call that ignores the Bash `timeout: 600000` guidance is still
+        auto-backgrounded and logged `[FAILED]`. A hook-side safety net needs the
+        backgrounding marker in the PostToolUse payload; it is not in stdout and is
+        undocumented. Measure the payload first if such entries appear.
 
 Closed, so that a later session does not reopen them:
 
