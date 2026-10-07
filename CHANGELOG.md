@@ -25,6 +25,13 @@ project changed, back up a gitignored `.claude/` first).
   against real bash (#31).
 - `/checkpointing` renders that unknown outcome as `[UNKNOWN]` instead of
   `[FAILED]` (#31).
+- **A long agy call is no longer logged `[FAILED]` after it succeeds.** Past
+  the Bash tool's 2-minute default the call was moved to the background: it
+  finished, but the log hook had already recorded the empty stdout as a
+  failure and never fired again (measured). The agy templates now tell callers
+  to pass the Bash tool `timeout: 600000`, and keep `--print-timeout` at 9m,
+  under that 10-minute foreground maximum. A consistency test keeps every
+  template's limit below it.
 
 ### Changed
 - The agent and skill docs ask for one agy call per Bash command, alone, and

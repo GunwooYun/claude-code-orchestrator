@@ -66,7 +66,7 @@ The orchestrator picks the tier when it writes the Task prompt. A call without
 | T1 Quick lookup | One fact, yes/no, a version | `gemini-3.7-flash-low` |
 | T2 Summarize / extract | One page or one small file; structured fields | `gemini-3.7-flash-high` (machine-consumed → `gemini-3.1-pro-low`) |
 | T3 Research report | Comparison, best practice, multi-source synthesis | `gemini-3.1-pro-high` |
-| T4 Whole repo / multimodal | Repo-wide analysis, cross-module tracing, PDF/image/video | `gemini-3.1-pro-high` + `--print-timeout 10m` |
+| T4 Whole repo / multimodal | Repo-wide analysis, cross-module tracing, PDF/image/video | `gemini-3.1-pro-high` + `--print-timeout 9m` |
 
 1. Unsure between two tiers → the higher one. T4 is never lowered.
 2. The user's instruction ("flash 로", "pro 로") wins.
