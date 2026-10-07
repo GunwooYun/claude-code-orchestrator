@@ -261,9 +261,10 @@ class SaveTierContractTests(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.script = entrypoints().get("save")
-        if self.script is None:
+        script = entrypoints().get("save")
+        if script is None:
             self.skipTest("no save tier configured")
+        self.script: Path = script
 
     def run_save(self, *args: str) -> subprocess.CompletedProcess[str]:
         argv = [str(self.script), *args]
@@ -320,9 +321,10 @@ class NonMutationTests(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.script = entrypoints().get("save")
-        if self.script is None:
+        script = entrypoints().get("save")
+        if script is None:
             self.skipTest("no save tier configured")
+        self.script: Path = script
 
     def _checked_extensions(self) -> list[str]:
         body = self.script.read_text(encoding="utf-8", errors="replace")

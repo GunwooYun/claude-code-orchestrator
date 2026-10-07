@@ -3,11 +3,14 @@
 import importlib.util
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 HOOK_PATH = Path(__file__).parent.parent / ".claude" / "hooks" / "log-cli-tools.py"
 spec = importlib.util.spec_from_file_location("log_cli_tools", HOOK_PATH)
-hook = importlib.util.module_from_spec(spec)
+assert spec is not None and spec.loader is not None
+# Any: a module loaded from a path has no static attributes for ty to check.
+hook: Any = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(hook)
 
 

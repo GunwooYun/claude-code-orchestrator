@@ -24,8 +24,8 @@ uv run <command>            # run inside the project environment
 
 - **The gate must be read-only** so it can fail: no auto-fixing command in `poe all`.
 - **Do not assume `src/`.** `ty` exits 0 on a path that does not exist (a false pass), so name real
-  paths. This repository checks `.claude/hooks`, `checkpoint.py` and the extensionless scripts
-  listed in `pyproject.toml`.
+  paths. This repository checks `.claude/hooks`, `checkpoint.py`, the extensionless scripts
+  listed in `pyproject.toml`, and `tests/`.
 
 ## Task runner (poe)
 

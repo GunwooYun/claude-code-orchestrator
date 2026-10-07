@@ -39,6 +39,11 @@ project changed, back up a gitignored `.claude/` first).
   local-only ones in `.gitignore` / `.git/info/exclude`. After the verbatim
   report, the session adds a complete translation into the user's language,
   since the user judges each finding.
+- **Tests are type-checked, and clean.** Four test files carried 16
+  pre-existing `ty` errors (a module loaded from a path: `spec` possibly
+  `None`, attributes unknown; a `Path | None` attribute). They were not bugs,
+  but the save check printed them again on every edit of those files. Fixed at
+  the source, and `tests/` joined the gate's type check so new ones are caught.
 
 ### Changed
 - The agent and skill docs ask for one agy call per Bash command, alone, and
