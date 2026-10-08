@@ -5,7 +5,7 @@
 
 ![Claude Code Orchestrator](./summary.png)
 
-> 현재 버전: **4.0.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md).
+> 현재 버전: **4.1.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 목차
 
@@ -91,12 +91,12 @@ your-project/
 ├── .agents/
 │   └── rules/AGENTS.md            # agy 가 읽는 프로젝트 설명
 └── .claude/
-    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 4.0.0)
+    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 4.1.0)
     ├── settings.json              # 훅 등록 + 권한(allow / ask / deny)
     ├── agents/                    # 서브에이전트 정의 (deep-reasoning, general-purpose)
     ├── skills/                    # 슬래시 커맨드 (아래 표)
     ├── hooks/                     # 자동 검사 훅 (아래 표)
-    ├── rules/                     # 매 세션 읽히는 세부 규칙
+    ├── rules/                     # 세부 규칙 — 대부분 매 세션, paths: 가 있으면 맞는 파일을 열 때만
     ├── scripts/                   # 검증 계약: verify-save, verify-task (+README)
     ├── bin/                       # agy-probe — agy 를 지금 쓸 수 있는지 확인
     └── docs/                      # 설계 기록·조사 결과·작성 가이드
@@ -280,7 +280,7 @@ flowchart LR
 `READY`(정상) / `MISSING`(설치 안 됨) / `UNAUTHENTICATED`(로그인 필요) / `DEGRADED`(응답이 빔).
 
 **Step 4 — `CLAUDE.md` 갱신.** 맨 위 제목을 프로젝트 이름으로 바꾸고, `## 기술 스택` 에 실제 명령을 적고,
-`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v4.0.0`)을 기록한다.
+`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v4.1.0`)을 기록한다.
 
 **Step 5 — 검증 스크립트 작성.** Step 2 의 답으로 `.claude/scripts/verify-save`, `verify-task` 등을 만든다.
 이것이 이후 모든 검증의 기준이 된다 ([8장](#8-검증-계약--verify--스크립트)). **포매터(black 등)는 프로젝트가
@@ -516,9 +516,9 @@ flowchart TD
   (`diff` 나 `git diff --no-index` 는 내용이 같아도 실행 권한 차이만으로 "다르다"고 나온다.)
 - 대개 그대로 교체해도 되는 것(템플릿 소유): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`,
   `.claude/bin/`, `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
-  `rules/security.md`, `rules/language.md` — 단, 프로젝트가 고친 흔적이 있으면 병합한다.
+  `rules/security.md`, `rules/language.md`, `rules/writing-style.md` — 단, 프로젝트가 고친 흔적이 있으면 병합한다.
 - 덮어쓰면 안 되는 것(프로젝트 소유): `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`,
-  `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
+  `rules/test-writing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
 - 덮어쓰지 않는 파일이라도 CHANGELOG 가 바꿨다고 적은 부분(예: `settings.json` 의 허용 경로, `CLAUDE.md` 에서
   빠진 섹션)은 손으로 반영한다.
 - **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남아 있으면

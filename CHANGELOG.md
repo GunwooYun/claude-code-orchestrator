@@ -11,6 +11,33 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [4.1.0] - 2026-10-08
+
+The second tuning pass: a quarter less text enters every session. Rules that
+apply only to some files now load when such a file is opened — checked by hand
+in a live session (`docs/DESIGN.md` Open Questions). Nothing is removed; one
+upgrade step is by hand, for the project-owned `testing.md`.
+
+### Changed
+- **Less text in every session: always-loaded rules 30,361 → 22,864 bytes.**
+  `rules/coding-principles.md` now loads only when a Python file is read or edited
+  (`paths:` frontmatter; `/initproject` rewrites the globs for other stacks), and
+  carries the Python security examples. `rules/security.md` keeps a short
+  language-agnostic kernel. `rules/testing.md` keeps principles 1–5 and the tier
+  table; test naming, cases, mocking and the checklist moved to the new
+  `rules/test-writing.md`, loaded for files under `tests/`. `rules/writing-style.md`
+  keeps the honesty rules and its pointers. The `doc-write` and `ticket`
+  descriptions are shorter; their triggers are unchanged.
+- Upgrading: `coding-principles.md`, `security.md` and `writing-style.md` are
+  template-owned and can be replaced. `testing.md` is project-owned — **by hand**,
+  move its "테스트 작성" and "체크리스트" sections into a new
+  `rules/test-writing.md` (copy the template's frontmatter and adjust the glob to
+  the project's test location), or leave `testing.md` as it is.
+- The gate cannot show that the scoped rules load when they should; a hand check
+  in a live session did (an `InstructionsLoaded` hook — `/context` and `--debug`
+  do not show rules loaded on demand). Still unverified: that the shorter
+  descriptions trigger as before. What to watch: `docs/DESIGN.md` Open Questions.
+
 ## [4.0.0] - 2026-10-08
 
 The first tuning pass measured from real use. Three skills that recorded use

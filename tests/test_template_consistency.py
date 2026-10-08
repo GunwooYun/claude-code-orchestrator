@@ -314,7 +314,8 @@ class AlwaysLoadedBudgetTests(unittest.TestCase):
     """
 
     # A ratchet, not a measurement: raise it deliberately, with a reason.
-    BUDGET_BYTES = 31_000
+    # Lowered from 31,000 on 2026-10-08 when two rules became path-scoped.
+    BUDGET_BYTES = 23_500
 
     def _always_loaded(self) -> list[Path]:
         files = [REPO / "CLAUDE.md"]
@@ -338,9 +339,16 @@ class AlwaysLoadedBudgetTests(unittest.TestCase):
         )
 
     def test_the_scan_finds_the_layer(self) -> None:
-        """Guards the ratchet: an empty file list would pass any budget."""
+        """
+        Guards the ratchet: an empty file list would pass any budget. The glob
+        is checked over ALL rule files, because path-scoped rules legitimately
+        leave the always-loaded list (`tests/test_loading_surface.py` checks
+        that their frontmatter really scopes them).
+        """
+        rules = sorted((REPO / ".claude" / "rules").glob("*.md"))
+        self.assertGreaterEqual(len(rules), 8, f"only found {rules}")
         files = self._always_loaded()
-        self.assertGreaterEqual(len(files), 8, f"only found {files}")
+        self.assertGreaterEqual(len(files), 5, f"only found {files}")
         self.assertIn("CLAUDE.md", [p.name for p in files])
 
     def test_no_rule_file_carries_command_syntax(self) -> None:
