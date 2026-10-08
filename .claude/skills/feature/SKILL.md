@@ -64,7 +64,7 @@ Phase 6: Multi-Session Review (New Session + deep-reasoning)
 결과를 이 작업 내내 재사용한다.
 
 ```sh
-.claude/skills/antigravity-system/agy-probe
+.claude/bin/agy-probe
 ```
 
 종료 코드 0(`READY`)이면 아래 A, 그 외면 B 로 간다. 상태와 그 의미는
@@ -321,8 +321,7 @@ Present final plan to user (in Korean):
 
 **프로젝트 관련 정보를 CLAUDE.md에 추가한다.**
 
-Add to CLAUDE.md — **before** any existing `## Session History` section (that section is
-rewritten by `/checkpointing`; anything placed after it is lost). Replace an existing
+Add to CLAUDE.md, after `## Project Setup` if there is one. Replace an existing
 `## Current Project` block instead of appending a second one:
 
 ```markdown

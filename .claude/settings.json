@@ -96,7 +96,7 @@
       "Bash(done)",
       "Bash(true)",
       "Bash(.claude/scripts/*)",
-      "Bash(.claude/skills/antigravity-system/agy-probe)"
+      "Bash(.claude/bin/agy-probe)"
     ],
     "ask": [
       "Bash(git push:*)",

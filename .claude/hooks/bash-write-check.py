@@ -77,10 +77,7 @@ PRUNED_NAMES = frozenset(
         ".terraform",
     }
 )
-PRUNED_PATHS = (
-    os.path.join(".claude", "logs"),
-    os.path.join(".claude", "checkpoints"),
-)
+PRUNED_PATHS = (os.path.join(".claude", "logs"),)
 
 # Only for the nudge line; detection does not depend on it.
 WRITE_PATTERN = re.compile(

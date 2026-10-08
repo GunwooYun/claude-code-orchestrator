@@ -120,8 +120,8 @@ ceiling, and nothing is redacted.
 - A Haiku probe with the same settings runs first and must be refused two reads
   (one inside the repo, one outside); otherwise the review never starts.
 - Deny rules: secrets, the project's own Read denies, and — for neutrality —
-  every `CLAUDE.md` and `CLAUDE.local.md` (nested ones too), `.agents/` (where
-  `/checkpointing` also writes the session's history), checkpoints, logs and
+  every `CLAUDE.md` and `CLAUDE.local.md` (nested ones too), `.agents/` (agy's
+  context file, written by the implementing side), logs and
   earlier reports. A change to one of those files is therefore reviewed from
   the diff only. The verification plan
   reaches the reviewer only as "implementer-authored claims".

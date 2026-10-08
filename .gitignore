@@ -53,9 +53,6 @@ Thumbs.db
 logs/
 .claude/logs/
 
-# Checkpoints (session-specific, may contain sensitive info)
-.claude/checkpoints/
-
 # /isolated-review: reports stay out of git (user decision, docs/isolated-review.md);
 # the work dir holds the probe canary and large diffs only for the run.
 .claude/docs/reviews/
@@ -64,6 +61,5 @@ logs/
 # Jupyter
 .ipynb_checkpoints/
 
-# Backups written by .claude/skills/checkpointing/checkpoint.py before it
-# rewrites a context file.
+# Backups: the README upgrade steps rename .claude and CLAUDE.md to *.bak.
 *.bak
