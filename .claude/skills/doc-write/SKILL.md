@@ -4,8 +4,9 @@ description: |
   Write or revise a Confluence page, Jira ticket body, repo compliance/audit
   document or implementation plan. Use PROACTIVELY on a Confluence link with a
   content request, or "문서로 정리해줘", "보고서 써줘", "페이지 만들어줘",
-  "티켓 본문 채워줘". Do NOT use for chat answers ("설명해줘", "분석해줘",
-  "요약해줘"), reports of your own work, or code comments/commits. Unclear →
+  "티켓 본문 채워줘", or when the user names a document to create or revise.
+  Do NOT use for chat answers ("설명해줘", "분석해줘", "요약해줘", "알려줘"),
+  reports of your own work, or code comments/commits. Unclear →
   answer in chat and offer a document in one line.
 metadata:
   short-description: Write a document under the user's own style rules

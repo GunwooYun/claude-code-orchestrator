@@ -42,7 +42,15 @@ EXPECTED_SCOPED = frozenset({"coding-principles.md", "test-writing.md"})
 
 LISTING_CAP_CHARS = 1_536
 TRIGGER_PHRASES = {
-    "doc-write": ("PROACTIVELY", "Confluence", "문서로 정리해줘", "Do NOT", "설명해줘"),
+    "doc-write": (
+        "PROACTIVELY",
+        "Confluence",
+        "문서로 정리해줘",
+        "names a document",
+        "Do NOT",
+        "설명해줘",
+        "알려줘",
+    ),
     "ticket": ("PROACTIVELY", "ABC-123", "Do NOT", "/jira-setup"),
 }
 
