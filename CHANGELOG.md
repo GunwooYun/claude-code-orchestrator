@@ -11,7 +11,12 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
-## [Unreleased]
+## [4.0.0] - 2026-10-08
+
+The first tuning pass measured from real use. Three skills that recorded use
+never invoked are gone — deep-reasoning and agy are called exactly as before,
+through the rules and the agent files. Breaking because three slash commands
+disappear; an adopted copy upgrades by README §9 (now covering added files).
 
 ### Removed (breaking)
 - **`/deep-reasoning`, `/antigravity-system` and `/checkpointing` skills.** Recorded
