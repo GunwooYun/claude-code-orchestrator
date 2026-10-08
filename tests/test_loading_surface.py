@@ -38,7 +38,7 @@ GLOB_RE = re.compile(r'^  - "([^"\n]+)"$', re.MULTILINE)
 
 # Rules that must stay out of the always-loaded layer. Losing the frontmatter
 # would put them back silently, inside the budget's slack.
-EXPECTED_SCOPED = frozenset({"coding-principles.md"})
+EXPECTED_SCOPED = frozenset({"coding-principles.md", "test-writing.md"})
 
 LISTING_CAP_CHARS = 1_536
 TRIGGER_PHRASES = {
@@ -133,6 +133,24 @@ class ScopedRuleFrontmatterTests(unittest.TestCase):
                     any(glob_matches(g, f) for g in globs for f in files),
                     f"{globs} match no tracked file, so the rule never loads here",
                 )
+
+
+class MovedGuidanceTests(unittest.TestCase):
+    """Drift tripwire over prose: the guidance moved out of testing.md still exists."""
+
+    def test_test_writing_guidance_lives_in_the_scoped_rule(self) -> None:
+        rule = (RULES / "test-writing.md").read_text(encoding="utf-8")
+        for phrase in (
+            "목(mock)은 외부 의존성만",
+            "test_{대상}_{조건}_{기대결과}",
+            "## 체크리스트",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, rule)
+
+    def test_the_testing_rule_points_at_it(self) -> None:
+        testing = (RULES / "testing.md").read_text(encoding="utf-8")
+        self.assertIn(".claude/rules/test-writing.md", testing)
 
 
 class SkillDescriptionTests(unittest.TestCase):
