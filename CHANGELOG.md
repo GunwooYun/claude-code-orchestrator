@@ -11,7 +11,12 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
-## [Unreleased]
+## [4.1.0] - 2026-10-08
+
+The second tuning pass: a quarter less text enters every session. Rules that
+apply only to some files now load when such a file is opened — checked by hand
+in a live session (`docs/DESIGN.md` Open Questions). Nothing is removed; one
+upgrade step is by hand, for the project-owned `testing.md`.
 
 ### Changed
 - **Less text in every session: always-loaded rules 30,361 → 22,864 bytes.**
@@ -28,9 +33,10 @@ project changed, back up a gitignored `.claude/` first).
   move its "테스트 작성" and "체크리스트" sections into a new
   `rules/test-writing.md` (copy the template's frontmatter and adjust the glob to
   the project's test location), or leave `testing.md` as it is.
-- Not verified by the gate: that the scoped rules load when they should, and that
-  the shorter descriptions still trigger. What to watch: `docs/DESIGN.md` Open
-  Questions.
+- The gate cannot show that the scoped rules load when they should; a hand check
+  in a live session did (an `InstructionsLoaded` hook — `/context` and `--debug`
+  do not show rules loaded on demand). Still unverified: that the shorter
+  descriptions trigger as before. What to watch: `docs/DESIGN.md` Open Questions.
 
 ## [4.0.0] - 2026-10-08
 
