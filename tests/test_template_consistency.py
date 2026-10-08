@@ -314,7 +314,8 @@ class AlwaysLoadedBudgetTests(unittest.TestCase):
     """
 
     # A ratchet, not a measurement: raise it deliberately, with a reason.
-    BUDGET_BYTES = 31_000
+    # Lowered from 31,000 on 2026-10-08 when two rules became path-scoped.
+    BUDGET_BYTES = 23_500
 
     def _always_loaded(self) -> list[Path]:
         files = [REPO / "CLAUDE.md"]

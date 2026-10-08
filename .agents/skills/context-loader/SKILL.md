@@ -25,11 +25,12 @@ Read relevant files from `.claude/rules/`:
 
 ```
 .claude/rules/
-├── coding-principles.md   # Simplicity, single responsibility, early return
+├── coding-principles.md   # Python: simplicity, early return, type hints, security examples
 ├── dev-environment.md     # uv, ruff, ty, pytest requirements
 ├── language.md            # Think in English, respond in Korean
-├── security.md            # Secrets, validation, SQLi/XSS prevention
-└── testing.md             # TDD, AAA pattern, 80% coverage
+├── security.md            # Secrets, logs, input validation, terse errors
+├── test-writing.md        # Test naming, cases, mocks, checklist
+└── testing.md             # Verify first, negative tests, duration-based tiers
 ```
 
 ### Step 2: Load Design Documentation

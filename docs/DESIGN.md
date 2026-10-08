@@ -348,6 +348,15 @@ Dropped after review:
 
 <!-- Unresolved issues, things to investigate -->
 
+- [ ] **Path-scoped rules (2026-10-08) — observe, the gate cannot.** (a) Once, by
+      hand: a new session started with `claude --debug` shows no scoped rule at
+      start; reading a `.py` brings in `coding-principles.md`, reading a file under
+      `tests/` brings in `test-writing.md`. (b) At the next usage review (method of
+      the 4.0.0 measurement): sessions where `/doc-write` or `/ticket` should have
+      fired and did not since their descriptions were trimmed, and isolated-review
+      findings on magic numbers, nesting or secrets in Python edits. A rise in
+      either is the signal to revisit, not a reason to restore pre-emptively.
+
 - [ ] "Tests were run" is enforceable; "the tests are meaningful" is not. The
       closest available checks are `/feature` Phase 6 comparing tests against the
       verification plan's scenario IDs, and `/lens-review`'s verification-adequacy
@@ -400,11 +409,13 @@ Closed, so that a later session does not reopen them:
 - ~~Whether to add a Stop hook that blocks "done" without a test run~~ — dropped.
   A `command` hook cannot force continuation, and the commit gate plus
   `.git/hooks/pre-commit` cover the same ground more simply.
+| Path-scope what only applies to some files; keep principles and the security kernel always loaded | Claude Code loads a rule with `paths:` frontmatter only when a matching file is read or edited, and loads it every session if the YAML does not parse (code.claude.com/docs/en/memory.md). `coding-principles.md` (Python, and ruff `ANN` already enforces type hints) and the new `test-writing.md` (split from `testing.md`) are scoped; `security.md` keeps a language-agnostic kernel unscoped because secrets leak through settings and CI files too. One quoted-glob frontmatter shape is pinned by `tests/test_loading_surface.py`, since the budget test only looks for `paths:`. Always-loaded 30,361 → 22,864 bytes on 2026-10-08. Whether rules reach subagents stays unknown (row above), so nothing a subagent must have moved. `antigravity-delegation.md` was left as it is: the target was met without it and it is the most test-pinned file | Scope `security.md` fully; fold test-writing into the `/feature` skill (tests are also edited outside `/feature`) | 2026-10-08 |
 
 ## Changelog
 
 | Date | Changes |
 |------|---------|
+| 2026-10-08 | Path-scoped `coding-principles.md` and new `test-writing.md`; condensed `testing.md`, `security.md`, `writing-style.md`; trimmed `doc-write`/`ticket` descriptions; budget cap 31,000 → 23,500 |
 | 2026-10-07 | Removed the `deep-reasoning`, `antigravity-system` and `/checkpointing` skills (0 recorded uses); agy prompt templates now in `general-purpose.md`; `agy-probe` → `.claude/bin/` |
 | 2026-09-26 | `/lens-review`: orthogonal lenses in parallel, one shared pre-filter, aggregation that surfaces inter-lens conflicts rather than resolving them, conditional adversarial verification; 30 tests |
 | 2026-09-26 | Cost-based routing: token volume × reasoning difficulty replaces topic-only routing; two-stage funnel (agy narrows, Claude judges) wired into /feature Phase 3 and Phase 6, with a size threshold and a locations-not-verdicts contract; 17 tests |
