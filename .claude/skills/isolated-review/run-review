@@ -67,7 +67,7 @@ REPORT_REL = ".claude/docs/reviews"
 # Committed by the project: paths left out of the line cap (still reviewed).
 CONFIG_REL = ".claude/isolated-review.json"
 # Paths this script writes, or that hold other runs: not part of the snapshot.
-SNAPSHOT_EXCLUDES = (WORK_REL, ".claude/logs", REPORT_REL, ".claude/checkpoints")
+SNAPSHOT_EXCLUDES = (WORK_REL, ".claude/logs", REPORT_REL)
 
 FIXED_DENY = [
     # Secrets (the template's own deny list).
@@ -83,13 +83,12 @@ FIXED_DENY = [
     # Neutrality: the implementer's framing, session traces, earlier verdicts.
     "Read(./CLAUDE.md)",
     "Read(./CLAUDE.local.md)",
-    # Nested context files, and the session history /checkpointing also writes
-    # to .agents/rules/AGENTS.md — the same framing CLAUDE.md is denied for
+    # Nested context files, and .agents/rules/AGENTS.md (agy's context file,
+    # written by the implementing side) — the same framing CLAUDE.md is denied for
     # (round-5 review F1).
     "Read(./**/CLAUDE.md)",
     "Read(./**/CLAUDE.local.md)",
     "Read(./.agents/**)",
-    "Read(./.claude/checkpoints/**)",
     "Read(./.claude/logs/**)",
     "Read(./.claude/docs/reviews/**)",
     f"Read(./{WORK_REL}/probe/**)",

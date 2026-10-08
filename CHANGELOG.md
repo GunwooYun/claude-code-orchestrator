@@ -13,25 +13,27 @@ project changed, back up a gitignored `.claude/` first).
 
 ## [Unreleased]
 
-### Removed
+### Removed (breaking)
 - **`/deep-reasoning`, `/antigravity-system` and `/checkpointing` skills.** Recorded
-  use (9 sessions, 3 projects) invoked none of them, while the deep-reasoning
+  use (9 sessions, 3 projects) shows no invocation of any of them (Skill tool
+  calls and slash commands; a transcript cannot show an auto-activation that
+  leaves no tool call), while the deep-reasoning
   subagent ran 30 times and agy 79 times without them. Calling deep-reasoning
   and agy works as before: the rules and the agent files already carried how.
   The agy prompt templates (pre-implementation research, one library) moved to
   `.claude/agents/general-purpose.md`. `/checkpointing` is gone with its tests;
-  the `log-cli-tools` hook and `.claude/logs/cli-tools.jsonl` stay.
+  the `log-cli-tools` hook and `.claude/logs/cli-tools.jsonl` stay. A
+  `## Session History` an earlier `/checkpointing` wrote into `CLAUDE.md` (or
+  `## Consultation History` in `.agents/rules/AGENTS.md`) is no longer
+  rewritten; delete it by hand.
 
 ### Changed
-- **`agy-probe` moved to `.claude/bin/agy-probe`.** Update the `settings.json`
-  allow entry when upgrading a copy.
-
-### Upgrading
-- Delete `.claude/skills/deep-reasoning/`, `.claude/skills/antigravity-system/`
-  and `.claude/skills/checkpointing/` from the copy. A `## Session History`
-  section an earlier `/checkpointing` wrote into `CLAUDE.md` (or
-  `## Consultation History` in `.agents/rules/AGENTS.md`) is no longer
-  rewritten; delete it by hand if it is there.
+- **`agy-probe` moved to `.claude/bin/agy-probe`.** The `settings.json` allow
+  entry changes from `Bash(.claude/skills/antigravity-system/agy-probe)` to
+  `Bash(.claude/bin/agy-probe)`.
+- **README upgrade procedure** covers files a release adds, lists `.claude/bin/`
+  as template-owned, and says to apply by hand what CHANGELOG changes inside a
+  project-owned file.
 
 ## [3.1.0] - 2026-10-07
 

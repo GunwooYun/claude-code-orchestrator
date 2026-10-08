@@ -38,7 +38,7 @@ SKILLS = REPO / ".claude" / "skills"
 SETTINGS = REPO / ".claude" / "settings.json"
 
 # Locations whose contents are INPUTS the model is told to read. Outputs are
-# excluded on purpose: .claude/docs/, .claude/logs/ and .claude/checkpoints/ hold
+# excluded on purpose: .claude/docs/ and .claude/logs/ hold
 # what a skill creates, often with a date or placeholder in the name.
 INPUT_DIRS = ("rules", "skills", "agents", "hooks", "scripts")
 

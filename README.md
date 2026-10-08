@@ -503,9 +503,11 @@ flowchart TD
     C -- "안 고침<br/>(내 버전 원본과 같음)" --> D["새 버전으로 교체"]
     C -- "고침" --> E["새 버전을 받고<br/>프로젝트 수정을 다시 적용"]
     C -- "새 버전에서 삭제됨" --> F["삭제<br/>(훅이면 settings.json 등록도 함께!)"]
+    C -- "새 버전에 새로 생김" --> H["추가<br/>(실행 파일이면 settings.json 허용도 함께)"]
     D --> G["4. 검사: 훅 등록 경로가 모두 실제 파일인지,<br/>/orchestrator-version 이 새 버전인지"]
     E --> G
     F --> G
+    H --> G
 ```
 
 - "프로젝트가 고쳤나"는 그 파일을 **내 버전의 원본과 내용으로 비교**해서 판단한다. git 의 내용 해시를
@@ -513,10 +515,12 @@ flowchart TD
   `git -C <템플릿 클론> rev-parse v<내 버전>:<경로>` 와 `git hash-object <경로>` 의 출력이 **같으면 안 고친 것**이다.
   (`diff` 나 `git diff --no-index` 는 내용이 같아도 실행 권한 차이만으로 "다르다"고 나온다.)
 - 대개 그대로 교체해도 되는 것(템플릿 소유): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`,
-  `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
+  `.claude/bin/`, `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
   `rules/security.md`, `rules/language.md` — 단, 프로젝트가 고친 흔적이 있으면 병합한다.
 - 덮어쓰면 안 되는 것(프로젝트 소유): `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`,
   `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
+- 덮어쓰지 않는 파일이라도 CHANGELOG 가 바꿨다고 적은 부분(예: `settings.json` 의 허용 경로, `CLAUDE.md` 에서
+  빠진 섹션)은 손으로 반영한다.
 - **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남아 있으면
   훅 파일이 없어서 모든 편집이 실패한다. (3.0.0 은 1.x 대비 훅 6개를 지웠다.)
 - 이 과정을 Claude 에게 시켜도 된다: "CHANGELOG 를 보고 v1.1.0 → v3.0.0 업그레이드를 위 절차대로 해 줘.
