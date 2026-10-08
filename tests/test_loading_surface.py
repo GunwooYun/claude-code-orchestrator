@@ -36,6 +36,10 @@ BUDGET_DETECTOR = re.compile(r"^---\n(?:.*\n)*?paths:")
 PINNED_SHAPE = re.compile(r'^---\npaths:\n(?:  - "[^"\n]+"\n)+---\n')
 GLOB_RE = re.compile(r'^  - "([^"\n]+)"$', re.MULTILINE)
 
+# Rules that must stay out of the always-loaded layer. Losing the frontmatter
+# would put them back silently, inside the budget's slack.
+EXPECTED_SCOPED = frozenset({"coding-principles.md"})
+
 LISTING_CAP_CHARS = 1_536
 TRIGGER_PHRASES = {
     "doc-write": ("PROACTIVELY", "Confluence", "문서로 정리해줘", "Do NOT", "설명해줘"),
@@ -86,6 +90,12 @@ def frontmatter_field(text: str, field: str) -> str:
 
 
 class ScopedRuleFrontmatterTests(unittest.TestCase):
+    def test_the_expected_rules_are_scoped(self) -> None:
+        names = {p.name for p in scoped_rules()}
+        self.assertLessEqual(
+            EXPECTED_SCOPED, names, "a rule lost its paths: frontmatter"
+        )
+
     def test_every_frontmatter_in_rules_uses_the_pinned_shape(self) -> None:
         for path in sorted(RULES.glob("*.md")):
             text = path.read_text(encoding="utf-8")
