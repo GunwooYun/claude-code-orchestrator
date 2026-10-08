@@ -1,14 +1,11 @@
 ---
 name: ticket
 description: |
-  Start work from a Jira ticket. Use it PROACTIVELY whenever the user gives a
-  ticket key like ABC-123 or a Jira browse link and asks to work on it, look at
-  it, or implement it. It reads the ticket, decides whether the work is
-  /feature-shaped or a direct fix, carries the ticket's content into the plan so
-  the same questions are not asked twice, and closes the loop afterwards with a
-  comment and a status change under the project's recorded write policy.
-  Do NOT use it to merely answer a question about a ticket's contents, and do NOT
-  use it before /jira-setup has recorded the project — say so instead.
+  Work a Jira ticket end to end: read it, route to /feature or a direct fix,
+  then comment and transition under the recorded write policy. Use PROACTIVELY
+  when the user gives a ticket key like ABC-123 or a Jira browse link and asks to
+  work on, look at or implement it. Do NOT use to merely answer a question about
+  a ticket, or before /jira-setup has recorded the project — say so instead.
 metadata:
   short-description: Work a Jira ticket end to end
 ---

@@ -1,79 +1,33 @@
-# Coding Principles
+---
+paths:
+  - "**/*.py"
+  - ".claude/skills/isolated-review/run-review"
+  - ".claude/skills/isolated-review/field-report"
+  - ".claude/skills/orchestrator-version/check"
+---
+# Coding Principles (Python)
 
-Core coding rules to always follow.
+Loaded when a Python file is read or edited. `/initproject` adjusts the globs to the stack.
 
-## Simplicity First
+- **Simplicity first**: readable over clever; no abstraction without a second user.
+- **Single responsibility**: one function, one job. Files 200–400 lines, 800 at most.
+- **Early return** instead of nested conditions.
+- **Type hints on every function** (ruff `ANN` enforces it in the gate).
+- **Immutability**: build new objects (`{**data, "k": v}`) rather than mutating shared ones.
+- **Naming**: snake_case functions/variables, PascalCase classes, UPPER_SNAKE_CASE constants,
+  meaningful English names.
+- **No magic numbers**: name the constant (`MAX_RETRIES = 3`).
 
-- Choose readable code over complex code
-- Avoid over-abstraction
-- Prioritize "understandable" over "working"
-
-## Single Responsibility
-
-- One function does one thing only
-- One class has one responsibility only
-- Target 200-400 lines per file (max 800)
-
-## Early Return
-
-```python
-# Bad: Deep nesting
-def process(value):
-    if value is not None:
-        if value > 0:
-            return do_something(value)
-    return None
-
-# Good: Early return
-def process(value):
-    if value is None:
-        return None
-    if value <= 0:
-        return None
-    return do_something(value)
-```
-
-## Type Hints Required
-
-All functions must have type annotations:
+## Security in Python
 
 ```python
-def call_llm(
-    prompt: str,
-    model: str = "gpt-4",
-    max_tokens: int = 1000
-) -> str:
-    ...
+API_KEY = os.environ.get("API_KEY")
+if not API_KEY:
+    raise ValueError("API_KEY environment variable is required")
+
+cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))   # never an f-string
+
+raise Exception("Database connection failed")                       # details to the log only
 ```
 
-## Immutability
-
-Create new objects instead of mutating existing ones:
-
-```python
-# Bad: Mutating existing object
-data["new_key"] = value
-
-# Good: Creating new object
-new_data = {**data, "new_key": value}
-```
-
-## Naming Conventions
-
-- **Variables/Functions**: snake_case (English)
-- **Classes**: PascalCase (English)
-- **Constants**: UPPER_SNAKE_CASE (English)
-- **Meaningful names**: `user_count` over `x`
-
-## No Magic Numbers
-
-```python
-# Bad
-if retry_count > 3:
-    ...
-
-# Good
-MAX_RETRIES = 3
-if retry_count > MAX_RETRIES:
-    ...
-```
+Audit dependencies regularly (`pip-audit`).
