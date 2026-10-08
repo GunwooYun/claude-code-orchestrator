@@ -349,14 +349,23 @@ Dropped after review:
 
 <!-- Unresolved issues, things to investigate -->
 
-- [ ] **Path-scoped rules (2026-10-08) — observe, the gate cannot.** (a) Once, by
-      hand: a new session started with `claude --debug` shows no scoped rule at
-      start; reading a `.py` brings in `coding-principles.md`, reading a file under
-      `tests/` brings in `test-writing.md`. (b) At the next usage review (method of
-      the 4.0.0 measurement): sessions where `/doc-write` or `/ticket` should have
-      fired and did not since their descriptions were trimmed, and isolated-review
-      findings on magic numbers, nesting or secrets in Python edits. A rise in
-      either is the signal to revisit, not a reason to restore pre-emptively.
+- [ ] **Path-scoped rules (2026-10-08) — observe, the gate cannot.** (b) is still
+      open: at the next usage review (method of the 4.0.0 measurement), sessions
+      where `/doc-write` or `/ticket` should have fired and did not since their
+      descriptions were trimmed, and isolated-review findings on magic numbers,
+      nesting or secrets in Python edits. A rise in either is the signal to
+      revisit, not a reason to restore pre-emptively.
+      (a) **Resolved 2026-10-08, by hand**, with a temporary `InstructionsLoaded`
+      hook in `settings.local.json` appending each load to a file: at session
+      start CLAUDE.md, CLAUDE.local.md and the seven unscoped rules loaded
+      (`load_reason: session_start`), neither scoped rule did; Reading
+      `.claude/hooks/_savecheck.py` loaded `coding-principles.md` alone
+      (`path_glob_match`); Reading `tests/test_loading_surface.py` then loaded
+      `test-writing.md` (`path_glob_match`) and did not log `coding-principles.md`
+      again. Two observation tools turned out not to work: `/context` lists only the
+      start-time memory files (the two scoped rules were absent after loading),
+      and the `--debug` log records no rule loads (and no parse error). Use the
+      hook to observe.
 
 - [ ] "Tests were run" is enforceable; "the tests are meaningful" is not. The
       closest available checks are `/feature` Phase 6 comparing tests against the
