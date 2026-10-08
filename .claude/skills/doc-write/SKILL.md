@@ -92,7 +92,7 @@ Atlassian MCP 도구로 먼저 확인한다 — **도구 이름은 커넥터 설
 
 **`## Current Project` 에 쓰지 않는다.** 그 섹션은 `/feature` 가 작업 단위마다
 교체하므로 스페이스 키가 사라지고 다시 묻게 된다. `## Project Setup` 은
-`## Session History` **앞**에 둔다 (수명 정의: `CLAUDE.md`
+`## Current Project` **앞**에 둔다 (수명 정의: `CLAUDE.md`
 「`CLAUDE.md` 섹션의 수명」).
 
 ### 3c. 제목과 라벨

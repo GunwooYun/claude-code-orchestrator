@@ -38,7 +38,7 @@ SKILLS = REPO / ".claude" / "skills"
 SETTINGS = REPO / ".claude" / "settings.json"
 
 # Locations whose contents are INPUTS the model is told to read. Outputs are
-# excluded on purpose: .claude/docs/, .claude/logs/ and .claude/checkpoints/ hold
+# excluded on purpose: .claude/docs/ and .claude/logs/ hold
 # what a skill creates, often with a date or placeholder in the name.
 INPUT_DIRS = ("rules", "skills", "agents", "hooks", "scripts")
 
@@ -760,7 +760,6 @@ class AgyFitsTheBashTimeoutTests(unittest.TestCase):
         REPO / ".claude" / "agents" / "general-purpose.md",
         REPO / ".claude" / "rules" / "antigravity-delegation.md",
         SKILLS / "feature" / "SKILL.md",
-        SKILLS / "antigravity-system" / "SKILL.md",
     )
     PRINT_TIMEOUT = re.compile(r"--print-timeout[ =](\d+)(m|s)\b")
 

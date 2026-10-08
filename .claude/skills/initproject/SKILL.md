@@ -13,8 +13,8 @@ in order; skip a step when it does not apply and say so in the final report.
 ## Ground rules
 
 - `CLAUDE.md`: touch only the H1 title line, `## 기술 스택(Tech Stack)` and `## Project Setup`
-  (create it if missing, place it after `## 언어 프로토콜`, then
-  `## Current Project`, then **before** any `## Session History`). Never edit the
+  (create it if missing, place it after `## 언어 프로토콜` and
+  before `## Current Project`). Never edit the
   other sections. Replace the H1 in place (Step 4); never add a second one. The section lifetimes are defined in
   `CLAUDE.md` → 「`CLAUDE.md` 섹션의 수명」: `## Project Setup` holds what lasts as
   long as the project, `## Current Project` is replaced per work unit by
@@ -60,7 +60,7 @@ adopted). Step 5 uses this.
 2. **Repository policy** — commit `.claude/ .agents/ CLAUDE.md` to the repo, or
    keep them local-only? If local-only, append them to `.git/info/exclude`.
    If committed, make sure `.gitignore` covers `.claude/logs/`,
-   `.claude/checkpoints/`, `.claude/settings.local.json`, and — for
+   `.claude/settings.local.json`, and — for
    `/isolated-review` — `.claude/docs/reviews/` and `.claude/isolated-review/`.
    Its reports and transcripts quote the code under review; a committed report
    also lets a later reviewer read the earlier verdict.
@@ -131,8 +131,7 @@ Procedure:
    cost split. Record the choice either way.
 5. Whenever a value changes, update the comment in the agent file and any prose
    that names a model (`CLAUDE.md`, `README.md`,
-   `.claude/rules/deep-reasoning-delegation.md`,
-   `.claude/skills/deep-reasoning/SKILL.md`) so no document claims a model that
+   `.claude/rules/deep-reasoning-delegation.md`) so no document claims a model that
    is not pinned. This drift is what the step exists to prevent.
 
 ### Step 3b — agy: installed? logged in?
@@ -142,7 +141,7 @@ checking **here**, while a person is present and can act on it — during a work
 session nobody can be asked to log in.
 
 ```sh
-.claude/skills/antigravity-system/agy-probe
+.claude/bin/agy-probe
 ```
 
 Branch on the first word it prints:
@@ -320,13 +319,13 @@ the bug this step exists to prevent.
 
 ## Step 8 — Smoke test and report
 
-- Skills list shows `/deep-reasoning`, `/antigravity-system`, `/feature`.
+- Skills list shows `/feature`, `/isolated-review`.
 - `grep -n '^model:' .claude/agents/*.md` matches the matrix agreed in Step 3,
   and no prose names a model that is not pinned.
 - Each verification script written in Step 5 runs by hand and honours the
   contract (0 = pass and silent, non-zero = fail with a reason); the gate has
   been seen to fail once on an injected violation.
-- `.claude/skills/antigravity-system/agy-probe` prints the state agreed in
+- `.claude/bin/agy-probe` prints the state agreed in
   Step 3b. `READY` exits 0; any other state must already be recorded in
   `DESIGN.md` Open Questions with today's date.
 - Report in Korean: detected stack, the final model matrix, agy's state and

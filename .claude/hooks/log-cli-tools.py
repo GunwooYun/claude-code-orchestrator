@@ -511,7 +511,7 @@ def build_entry(
         response = ""
         success = False if soft_denied(stderr) else None
     return {
-        # Local time with offset so checkpoint day-grouping matches the user's calendar.
+        # Local time with offset so grouping by day matches the user's calendar.
         "timestamp": datetime.now(UTC).astimezone().isoformat(),
         "tool": "antigravity",
         "model": extract_model(args) or "default",

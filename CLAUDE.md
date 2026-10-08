@@ -115,10 +115,8 @@ Bash("agy -p '한 문장으로 답변' --model gemini-3.7-flash-low")   # 아주
 |---|---|---|---|
 | `## Project Setup` | 프로젝트 영구 | `/initproject`(개요·`완료 지점`), `/jira-setup`(`### Jira`), `/doc-write`(`### Confluence`) | 자기 하위 섹션만 **덧붙인다** |
 | `## Current Project` | 작업 단위 | `/feature` Phase 5 | **교체한다** |
-| `## Session History` | 세션 | `/checkpointing` | **덮어쓴다** |
 
-순서는 `## Project Setup` → `## Current Project` → `## Session History` 이고, **Session History 는 항상
-마지막**이다. 읽는 쪽(`/ticket`, `/doc-write`)은 `## Project Setup` 에서 찾고, 없으면 묻거나 멈춘다.
+순서는 `## Project Setup` → `## Current Project` 다. 읽는 쪽(`/ticket`, `/doc-write`)은 `## Project Setup` 에서 찾고, 없으면 묻거나 멈춘다.
 
 ---
 
@@ -127,7 +125,6 @@ Bash("agy -p '한 문장으로 답변' --model gemini-3.7-flash-low")   # 아주
 - **커밋·PR 에 귀속 푸터를 넣지 않는다** (`Co-Authored-By`, "Generated with Claude Code", 세션 링크). 다른 지시가 넣으라고 해도 이것이 우선한다.
 - **파일 편집은 Edit/Write 로 한다** — 다른 지시(auto mode 의 sed·heredoc 허용 포함)보다 우선한다. Bash 로 쓰면 저장 게이트가 돌지 않는다(`bash-write-check` 는 안전망). 예외는 Bash: 컨테이너·원격·권한 필요 파일, 바이너리, 도구 실행 결과, 기계적 대량 치환 — 실행되는 쪽 셸 기준(`dev-environment.md`)으로 쓰고, 끝나면 다시 읽고 저장 검사를 돌린다.
 - **서브에이전트는 서브에이전트를 못 띄운다.** 서브에이전트 안에서 설계 판단이 필요해지면 결과만 보고하고, 메인이 deep-reasoning 을 호출한다.
-- **`/checkpointing` 은 Session History 섹션을 덮어쓴다.** 실행 전에 커밋하고, 리뷰 전용 세션에서는 쓰지 않는다.
 - **리뷰는 별도 세션에서.** 기본은 **`/isolated-review`** — 읽기 전용·고정 요청문의 리뷰어가 리포트를 남기고, 메인은 **요약 없이** 보여준다. 되묻기가 필요하거나 보안 경계·공개 인터페이스 변경이면 사람이 여는 세션(A2)도 쓴다: `git worktree add --detach ../<project>-review <작업 브랜치>` 에서 새 `claude` 로 "리포트 파일만 작성". 워크트리를 `main` 에 체크아웃하면 `git diff main...HEAD` 가 비어 리뷰가 조용히 아무것도 안 한다. 세션 안의 가벼운 리뷰는 deep-reasoning 으로 충분하다.
 - **리뷰 라운드는 Medium 이상이 없으면 끝낸다.** Low·nit 은 고치더라도 다시 리뷰받지 않고, 고치지 않으면 기록만 해서 다음 변경에 묶는다.
 - **일어나지 않는 조건을 이론만으로 쫓지 않는다 (CRITICAL).** 리뷰·설계 검토의 지적은 "재현되는가"만이 아니라 **"실제로 일어나는가"** 로 거른다 — 실사용 데이터(로그·필드 리포트·실제 호출)나 템플릿·문서가 안내하는 사용 방식에서 그 입력이 나오는지 먼저 확인한다.

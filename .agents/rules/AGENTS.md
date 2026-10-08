@@ -99,8 +99,5 @@ Structure your response for Claude Code to use:
 4. **Never write files** — Return everything in the response; Claude persists it
 5. **Flag for Claude** — If you find design decisions needed, note them
 
-## Consultation History
-
 Your past calls are logged by Claude Code in `.claude/logs/cli-tools.jsonl`
-(read-only for you). A Session History section summarizing them may be
-appended below this line by Claude's `/checkpointing` skill.
+(read-only for you).

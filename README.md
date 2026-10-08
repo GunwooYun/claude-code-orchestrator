@@ -5,7 +5,7 @@
 
 ![Claude Code Orchestrator](./summary.png)
 
-> 현재 버전: **3.1.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md).
+> 현재 버전: **4.0.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 목차
 
@@ -91,13 +91,14 @@ your-project/
 ├── .agents/
 │   └── rules/AGENTS.md            # agy 가 읽는 프로젝트 설명
 └── .claude/
-    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 3.1.0)
+    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 4.0.0)
     ├── settings.json              # 훅 등록 + 권한(allow / ask / deny)
     ├── agents/                    # 서브에이전트 정의 (deep-reasoning, general-purpose)
     ├── skills/                    # 슬래시 커맨드 (아래 표)
     ├── hooks/                     # 자동 검사 훅 (아래 표)
     ├── rules/                     # 매 세션 읽히는 세부 규칙
     ├── scripts/                   # 검증 계약: verify-save, verify-task (+README)
+    ├── bin/                       # agy-probe — agy 를 지금 쓸 수 있는지 확인
     └── docs/                      # 설계 기록·조사 결과·작성 가이드
 ```
 
@@ -108,10 +109,7 @@ your-project/
 | **`/initproject`** | 복사 직후 **프로젝트당 한 번** | 스택을 감지하고 템플릿을 이 프로젝트에 맞게 고친다 |
 | **`/feature <기능명>`** | **작업 하나마다** | 조사 → 요구사항 → 검증 계획 → 설계 리뷰 → 할 일 목록 → 승인 → 구현 → 리뷰 |
 | **`/isolated-review`** | 구현을 커밋한 뒤 | 이 세션과 무관한 격리된 리뷰어가 읽기 전용으로 리뷰한다 |
-| `/deep-reasoning` | 설계·디버깅 판단이 필요할 때 | deep-reasoning 서브에이전트에게 묻는 템플릿 |
-| `/antigravity-system` | 조사·레포 분석·멀티모달 | agy 를 부르는 방법과 프롬프트 템플릿 |
 | `/orchestrator-version` | 버전이 궁금할 때 | 설치된 버전과 최신 릴리스를 비교 |
-| `/checkpointing` | 세션 기록을 남길 때 | agy 상담 이력을 `CLAUDE.md` 의 `## Session History` 에 기록 |
 | `/jira-setup`, `/ticket` | Jira 를 쓰는 팀 | Jira 연결 설정, 티켓에서 작업 시작 |
 | `/doc-write` | Confluence·문서 작성 | 작성 규칙에 맞춰 문서를 쓰고 발행 |
 
@@ -282,7 +280,7 @@ flowchart LR
 `READY`(정상) / `MISSING`(설치 안 됨) / `UNAUTHENTICATED`(로그인 필요) / `DEGRADED`(응답이 빔).
 
 **Step 4 — `CLAUDE.md` 갱신.** 맨 위 제목을 프로젝트 이름으로 바꾸고, `## 기술 스택` 에 실제 명령을 적고,
-`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v3.1.0`)을 기록한다.
+`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v4.0.0`)을 기록한다.
 
 **Step 5 — 검증 스크립트 작성.** Step 2 의 답으로 `.claude/scripts/verify-save`, `verify-task` 등을 만든다.
 이것이 이후 모든 검증의 기준이 된다 ([8장](#8-검증-계약--verify--스크립트)). **포매터(black 등)는 프로젝트가
@@ -309,7 +307,7 @@ flowchart LR
 cat .claude/ORCHESTRATOR_VERSION
 
 # 2) agy 상태 (READY 가 아니면 첫 단어가 상태다)
-.claude/skills/antigravity-system/agy-probe
+.claude/bin/agy-probe
 
 # 3) 저장 검사가 "말을 하는지" — 검사 대상 파일 하나를 일부러 깨뜨려 본다
 .claude/scripts/verify-save path/to/broken-file ; echo "exit=$?"    # 0 이 아니어야 정상
@@ -332,7 +330,7 @@ git status
 "`agy-probe` 를 실행해서 결과를 보여 줘", "이 파일을 일부러 깨뜨리고 `verify-save` 가 0 이 아닌 종료 코드를
 내는지 확인해 줘".
 
-Claude 세션 안에서는 `/deep-reasoning`, `/antigravity-system` 이 스킬 목록에 보이는지 확인한다.
+Claude 세션 안에서는 `/feature`, `/isolated-review` 가 스킬 목록에 보이는지 확인한다.
 
 ### 5단계 — 첫 작업: `/feature`
 
@@ -505,9 +503,11 @@ flowchart TD
     C -- "안 고침<br/>(내 버전 원본과 같음)" --> D["새 버전으로 교체"]
     C -- "고침" --> E["새 버전을 받고<br/>프로젝트 수정을 다시 적용"]
     C -- "새 버전에서 삭제됨" --> F["삭제<br/>(훅이면 settings.json 등록도 함께!)"]
+    C -- "새 버전에 새로 생김" --> H["추가<br/>(실행 파일이면 settings.json 허용도 함께)"]
     D --> G["4. 검사: 훅 등록 경로가 모두 실제 파일인지,<br/>/orchestrator-version 이 새 버전인지"]
     E --> G
     F --> G
+    H --> G
 ```
 
 - "프로젝트가 고쳤나"는 그 파일을 **내 버전의 원본과 내용으로 비교**해서 판단한다. git 의 내용 해시를
@@ -515,10 +515,12 @@ flowchart TD
   `git -C <템플릿 클론> rev-parse v<내 버전>:<경로>` 와 `git hash-object <경로>` 의 출력이 **같으면 안 고친 것**이다.
   (`diff` 나 `git diff --no-index` 는 내용이 같아도 실행 권한 차이만으로 "다르다"고 나온다.)
 - 대개 그대로 교체해도 되는 것(템플릿 소유): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`,
-  `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
+  `.claude/bin/`, `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
   `rules/security.md`, `rules/language.md` — 단, 프로젝트가 고친 흔적이 있으면 병합한다.
 - 덮어쓰면 안 되는 것(프로젝트 소유): `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`,
   `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
+- 덮어쓰지 않는 파일이라도 CHANGELOG 가 바꿨다고 적은 부분(예: `settings.json` 의 허용 경로, `CLAUDE.md` 에서
+  빠진 섹션)은 손으로 반영한다.
 - **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남아 있으면
   훅 파일이 없어서 모든 편집이 실패한다. (3.0.0 은 1.x 대비 훅 6개를 지웠다.)
 - 이 과정을 Claude 에게 시켜도 된다: "CHANGELOG 를 보고 v1.1.0 → v3.0.0 업그레이드를 위 절차대로 해 줘.
@@ -553,8 +555,6 @@ flowchart TD
 
 - **템플릿을 다시 통째로 복사하지 않는다.** 맞춤화가 사라진다 → [9장 업그레이드 절차](#업그레이드-절차).
 - **훅 파일명을 바꾸거나 지우면 `settings.json` 등록도 같은 커밋에서 바꾼다.** 어긋나면 모든 편집이 막힌다.
-- **`/checkpointing` 은 `CLAUDE.md` 의 `## Session History` 를 덮어쓴다.** 실행 전에 커밋한다.
-  `CLAUDE.md` 섹션 순서는 `## Project Setup` → `## Current Project` → `## Session History`(항상 마지막).
 - **deep-reasoning 의 "읽기 전용"은 도구를 빼고 지시한 것이지 샌드박스가 아니다.** 커밋 전에 `git status` 를 본다.
 - **서브에이전트는 서브에이전트를 못 띄운다.** 조사 중에 설계 판단이 필요하면 메인으로 돌아와 deep-reasoning 을 부른다.
 - **agy 헤드리스 호출이 빈 답을 주면 실패다**(exit 0 이어도). 조용히 넘어가지 않는다.
@@ -585,11 +585,11 @@ flowchart TD
 | `/initproject` | 실제 프로젝트 두 곳(Node/TS 모노레포, Python+TS 포크)에서 대화형으로 완주 |
 | `/feature` | 실제 프로젝트에서 여러 작업 단위를 끝까지 진행 |
 | `/isolated-review` | 실작업 3회 + 지난 작업 6건 재검증. 사람이 연 리뷰가 놓친 진짜 문제를 찾았고 오탐은 없었다. 실행이 필요한 결함은 놓친다 |
-| `/deep-reasoning`, `/antigravity-system` | 실사용 중 (agy 18회 이상 호출). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
+| deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중 (2026-10-07 측정: deep-reasoning 30회, agy 79회). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
 | `/orchestrator-version` | 업그레이드에 사용 |
 | 훅 4개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `log-cli-tools` 의 판정 | 판정하는 모든 모양을 실제 bash 로 돌려 대조하는 테스트(무작위 600개 + 리뷰 지적 입력)로 확인. Bash 시간 제한·백그라운드 동작은 가짜 agy 로 실측 |
-| `/checkpointing`, `/doc-write`, `/jira-setup`, `/ticket` | **아직 실제로 돌려 본 적 없다** |
+| `/doc-write`, `/jira-setup`, `/ticket` | **아직 실제로 돌려 본 적 없다** |
 | Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다 |
 
 ---

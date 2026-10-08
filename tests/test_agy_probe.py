@@ -16,7 +16,9 @@ DEGRADED — still "unusable", still a remedy, just a less specific one.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import stat
 import subprocess
 import tempfile
@@ -24,7 +26,7 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).parent.parent
-PROBE = REPO / ".claude" / "skills" / "antigravity-system" / "agy-probe"
+PROBE = REPO / ".claude" / "bin" / "agy-probe"
 
 
 def run_probe(path_prefix: str | None = None, *args: str):
@@ -67,6 +69,32 @@ class ProbeShapeTests(unittest.TestCase):
         tier, and putting it there would make it look like a fifth entrypoint.
         """
         self.assertFalse((REPO / ".claude" / "scripts" / "agy-probe").exists())
+
+    def test_every_named_probe_path_is_the_real_one_and_allowed(self) -> None:
+        """
+        The probe has no extension, so ReferenceTests cannot see a stale path to
+        it. Moving it touched about a dozen hand-edited sites; one left behind
+        sends the model to run a file that does not exist.
+        """
+        expected = PROBE.relative_to(REPO).as_posix()
+        sources = [REPO / "CLAUDE.md", REPO / "README.md"]
+        for sub in ("rules", "skills", "agents"):
+            sources += sorted((REPO / ".claude" / sub).rglob("*.md"))
+        named = {
+            (path.relative_to(REPO).as_posix(), token)
+            for path in sources
+            for token in re.findall(
+                r"[\w./-]*/agy-probe\b", path.read_text(encoding="utf-8")
+            )
+        }
+        self.assertTrue(named, "no document names the probe path")
+        for source, token in sorted(named):
+            with self.subTest(source=source):
+                self.assertEqual(expected, token.removeprefix("./"))
+        settings = json.loads(
+            (REPO / ".claude" / "settings.json").read_text(encoding="utf-8")
+        )
+        self.assertIn(f"Bash({expected})", settings["permissions"]["allow"])
 
 
 class MissingTests(unittest.TestCase):
