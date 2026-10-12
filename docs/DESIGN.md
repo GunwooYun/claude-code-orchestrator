@@ -350,12 +350,14 @@ Dropped after review:
 
 <!-- Unresolved issues, things to investigate -->
 
-- [ ] **Does agy ever activate `.agents/skills/context-loader`? (2026-10-12) — observe.**
-      Nothing on this side can see it: `cli-tools.jsonl` does not record agy's skill
-      activations, and headless reads need the permission flags. Left unclassified
-      in README 「업그레이드 절차」 until there is evidence either way. At the next usage
-      review, look for it in agy's own transcripts; unused → remove it like
-      `docs/libraries/_TEMPLATE.md` (removed 2026-10-12, nothing pointed at it).
+- [x] **Does agy ever activate `.agents/skills/context-loader`? — no; removed 2026-10-12.**
+      `cli-tools.jsonl` cannot show it, but agy keeps every conversation in
+      `~/.gemini/antigravity-cli/conversations/*.db` (SQLite; step payloads are
+      readable text). Of 61 conversations on the maintainer's machine (2026-08-29 ..
+      2026-10-12) — 21 in an adopting project that has the skill, 18 in this
+      repository — none mentions `context-loader`, while the same query finds
+      `isolated-review` and `AGENTS.md`. [unverified] that agy names a skill in the
+      transcript when it activates one. Restore from tag `v4.1.0` if needed.
 
 - [ ] **Bash-mark sweep race (2026-10-12) — recorded, not fixed, no occurrence.**
       `bash-write-check.py` `sweep_stale` removes marks older than an hour without

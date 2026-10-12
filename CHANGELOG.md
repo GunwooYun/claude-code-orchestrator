@@ -31,6 +31,11 @@ project changed, back up a gitignored `.claude/` first).
   general-purpose agent's library prompt defines its own layout. Upgrading: delete
   it unless the project filled it in; `.claude/docs/libraries/` itself stays the
   place for library notes and is created when the first one is saved.
+- `.agents/skills/context-loader/`. agy's own conversation store shows it never
+  activated: 0 of 61 conversations on the maintainer's machine, 21 of them in an
+  adopting project that has it. `.agents/rules/AGENTS.md` stays — it is the
+  context agy reads. Upgrading: delete `.agents/skills/context-loader/`. Restore
+  from tag `v4.1.0` if a project relies on it.
 
 ## [4.1.0] - 2026-10-08
 
