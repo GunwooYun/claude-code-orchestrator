@@ -637,6 +637,14 @@ class PlanExtrasTests(PlanFixture):
         self.assertIn(".claude/hooks/lost.py — registered, but missing", hooks)
         self.assertNotIn("kept.py", hooks)
 
+    def test_a_hook_registered_twice_is_counted_once(self) -> None:
+        # The shipped settings.json registers bash-write-check.py twice.
+        settings = hook_settings("gone.py", "gone.py", "lost.py")
+        self.put(".claude/settings.json", settings)
+        hooks = self.section(self.plan().stdout, "HOOKS")
+        self.assertTrue(hooks.startswith("2) — "), hooks)
+        self.assertEqual(2, len(hooks.splitlines()[1:]))
+
     def test_no_hooks_section_when_every_registration_stays_valid(self) -> None:
         self.put(".claude/settings.json", hook_settings("kept.py"))
         self.assertNotIn("\nHOOKS", self.plan().stdout)

@@ -301,7 +301,8 @@ def print_hook_registrations(project: Path, classes: dict[str, list[str]]) -> No
         print(f"\nHOOKS — {SETTINGS} is not valid JSON ({exc}); check it by hand")
         return
     deleted = set(classes["DELETE"]) | set(classes["DELETE-MODIFIED"])
-    broken = []
+    # A set: one hook may be registered under several events.
+    broken = set()
     for handlers in settings.get("hooks", {}).values():
         for group in handlers:
             for handler in group.get("hooks", []):
@@ -310,15 +311,15 @@ def print_hook_registrations(project: Path, classes: dict[str, list[str]]) -> No
                     continue
                 rel = HOOKS_DIR + command.split(HOOKS_DIR)[1].split()[0].strip("\"'")
                 if not (project / rel).is_file():
-                    broken.append(f"  {rel} — registered, but missing in the project")
+                    broken.add(f"  {rel} — registered, but missing in the project")
                 elif rel in deleted:
-                    broken.append(
+                    broken.add(
                         f"  {rel} — deleted by this plan: remove its registration "
                         "in the same step"
                     )
     if broken:
         print(f"\nHOOKS ({len(broken)}) — registrations in {SETTINGS}")
-        print("\n".join(sorted(set(broken))))
+        print("\n".join(sorted(broken)))
 
 
 def print_changelog_pointer(
