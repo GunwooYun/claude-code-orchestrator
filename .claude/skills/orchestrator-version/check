@@ -3,11 +3,18 @@
 check — which claude-code-orchestrator release this project's copy came from.
 
 Usage: check [--check-latest]
+       check --plan PROJECT [--from X.Y.Z] [--to X.Y.Z]
   (no flag)       the installed version, from .claude/ORCHESTRATOR_VERSION.
                   No network.
   --check-latest  also the newest release upstream and the changelog entries
                   since the installed one. Needs network to GitHub; if that
                   fails (company proxies block it often) it says so and exits 0.
+  --plan PROJECT  read-only upgrade plan for the copy in PROJECT. Run THIS
+                  script from a template clone with its tags (the project's
+                  own copy is the old version). The old version is PROJECT's
+                  .claude/ORCHESTRATOR_VERSION (or --from), the new one the
+                  highest vX.Y.Z tag of the clone (or --to). Prints a class per
+                  file and changes nothing. Exit 2 when a precondition fails.
 
 Environment (for forks and tests):
   ORCHESTRATOR_UPSTREAM       git URL or path of the template repository
@@ -20,6 +27,7 @@ import argparse
 import os
 import re
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -30,17 +38,27 @@ TIMEOUT_S = 15
 TAG = re.compile(r"refs/tags/v(\d+)\.(\d+)\.(\d+)$")
 ENTRY = re.compile(r"^## \[(\d+)\.(\d+)\.(\d+)\]", re.MULTILINE)
 
-# .claude/skills/orchestrator-version/check -> .claude/
+# .claude/skills/orchestrator-version/check -> .claude/ -> repository root
 CLAUDE_DIR = Path(__file__).resolve().parents[2]
+TEMPLATE_ROOT = CLAUDE_DIR.parent
+SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
 
-def installed() -> tuple[int, int, int] | None:
+class PlanError(Exception):
+    """A --plan precondition failed; the message tells the user what to do."""
+
+
+def parse_version(text: str) -> tuple[int, int, int] | None:
+    m = SEMVER.fullmatch(text.strip())
+    return (int(m[1]), int(m[2]), int(m[3])) if m else None
+
+
+def installed(claude_dir: Path = CLAUDE_DIR) -> tuple[int, int, int] | None:
     try:
-        text = (CLAUDE_DIR / "ORCHESTRATOR_VERSION").read_text(encoding="utf-8").strip()
+        text = (claude_dir / "ORCHESTRATOR_VERSION").read_text(encoding="utf-8")
     except OSError:
         return None
-    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", text)
-    return (int(m[1]), int(m[2]), int(m[3])) if m else None
+    return parse_version(text)
 
 
 def fmt(version: tuple[int, int, int]) -> str:
@@ -84,10 +102,99 @@ def newer_entries(changelog_url: str, since: tuple[int, int, int] | None) -> str
     return "\n\n".join(kept)
 
 
+def git(root: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(["git", "-C", str(root), *args], capture_output=True)
+
+
+def release_tags(root: Path) -> list[tuple[int, int, int]]:
+    out = git(root, "tag", "--list", "v*")
+    if out.returncode != 0:
+        raise PlanError(
+            f"{root} is not a git repository — run this script from a clone of "
+            "the template, not from a copy of .claude/"
+        )
+    versions = []
+    for line in out.stdout.decode("utf-8", errors="replace").splitlines():
+        m = SEMVER.fullmatch(line.strip()[1:])
+        if line.startswith("v") and m:
+            versions.append((int(m[1]), int(m[2]), int(m[3])))
+    return sorted(versions, reverse=True)
+
+
+def resolve_versions(
+    project: Path, from_arg: str | None, to_arg: str | None
+) -> tuple[tuple[int, int, int], tuple[int, int, int], str]:
+    """(old, new, where old came from). Raises PlanError with the fix."""
+    tags = release_tags(TEMPLATE_ROOT)
+    fetch = f"`git -C {TEMPLATE_ROOT} fetch --tags`"
+    if not tags:
+        raise PlanError(f"{TEMPLATE_ROOT} has no vX.Y.Z tags — run {fetch}")
+    in_file = installed(project / ".claude")
+    if from_arg is not None:
+        old = parse_version(from_arg)
+        if old is None:
+            raise PlanError(f"--from {from_arg}: expected X.Y.Z")
+        source = "--from"
+        if in_file is not None and in_file != old:
+            source += f" (overrides the project's file, which says {fmt(in_file)})"
+    elif in_file is not None:
+        old, source = in_file, "the project's .claude/ORCHESTRATOR_VERSION"
+    else:
+        raise PlanError(
+            f"{project} has no .claude/ORCHESTRATOR_VERSION — pass --from X.Y.Z, "
+            "the release the copy was taken from"
+        )
+    new = tags[0]
+    if to_arg is not None:
+        parsed = parse_version(to_arg)
+        if parsed is None:
+            raise PlanError(f"--to {to_arg}: expected X.Y.Z")
+        new = parsed
+    for version in (old, new):
+        if version not in tags:
+            raise PlanError(f"{TEMPLATE_ROOT} has no tag v{fmt(version)} — run {fetch}")
+    if old > new:
+        raise PlanError(f"the project ({fmt(old)}) is newer than {fmt(new)}")
+    shipped = git(TEMPLATE_ROOT, "show", f"v{fmt(new)}:.claude/ORCHESTRATOR_VERSION")
+    if shipped.returncode != 0 or parse_version(shipped.stdout.decode()) != new:
+        raise PlanError(
+            f"{TEMPLATE_ROOT} is not a claude-code-orchestrator clone (its tag "
+            f"v{fmt(new)} does not ship .claude/ORCHESTRATOR_VERSION {fmt(new)}) — "
+            "run this script from a template clone"
+        )
+    return old, new, source
+
+
+def plan(project: Path, from_arg: str | None, to_arg: str | None) -> int:
+    if not (project / ".claude").is_dir():
+        raise PlanError(
+            f"{project} has no .claude/ — pass the project's root directory"
+        )
+    old, new, source = resolve_versions(project, from_arg, to_arg)
+    print(f"upgrade plan: {fmt(old)} -> {fmt(new)} (read-only, nothing is changed)")
+    print(f"project:  {project}")
+    print(f"template: {TEMPLATE_ROOT}")
+    print(f"old version from {source}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="check")
-    parser.add_argument("--check-latest", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check-latest", action="store_true")
+    mode.add_argument("--plan", metavar="PROJECT", type=Path)
+    parser.add_argument("--from", dest="from_version", metavar="X.Y.Z")
+    parser.add_argument("--to", dest="to_version", metavar="X.Y.Z")
     args = parser.parse_args()
+
+    if args.plan is not None:
+        try:
+            return plan(args.plan.resolve(), args.from_version, args.to_version)
+        except PlanError as exc:
+            print(f"plan: {exc}", file=sys.stderr)
+            return 2
+    if args.from_version or args.to_version:
+        parser.error("--from and --to go with --plan")
 
     have = installed()
     if have is None:
