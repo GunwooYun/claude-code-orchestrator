@@ -22,6 +22,20 @@ project changed, back up a gitignored `.claude/` first).
 - `tests/test_agy_probe.py`: the temp-file leak test now watches its own `TMPDIR`.
   It globbed `/tmp` for the capture file's old name, so it could not fail on a
   real leak.
+- README 「업그레이드 절차」 now classifies four template-owned files it left out:
+  `docs/writing-style.md`, `docs/templates/field-report.md`, `scripts/README.md`
+  and `ORCHESTRATOR_VERSION`.
+
+### Removed
+- `.claude/docs/libraries/_TEMPLATE.md`. No instruction pointed at it: the
+  general-purpose agent's library prompt defines its own layout. Upgrading: delete
+  it unless the project filled it in; `.claude/docs/libraries/` itself stays the
+  place for library notes and is created when the first one is saved.
+- `.agents/skills/context-loader/`. agy's own conversation store shows it never
+  activated: 0 of 61 conversations on the maintainer's machine, 21 of them in an
+  adopting project that has it. `.agents/rules/AGENTS.md` stays — it is the
+  context agy reads. Upgrading: delete `.agents/skills/context-loader/`. Restore
+  from tag `v4.1.0` if a project relies on it.
 
 ## [4.1.0] - 2026-10-08
 

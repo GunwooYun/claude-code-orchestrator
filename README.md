@@ -516,7 +516,9 @@ flowchart TD
   (`diff` 나 `git diff --no-index` 는 내용이 같아도 실행 권한 차이만으로 "다르다"고 나온다.)
 - 대개 그대로 교체해도 되는 것(템플릿 소유): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`,
   `.claude/bin/`, `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
-  `rules/security.md`, `rules/language.md`, `rules/writing-style.md` — 단, 프로젝트가 고친 흔적이 있으면 병합한다.
+  `rules/security.md`, `rules/language.md`, `rules/writing-style.md`, `docs/writing-style.md`,
+  `docs/templates/field-report.md`, `scripts/README.md`, `ORCHESTRATOR_VERSION`(새 버전 값이 된다)
+  — 단, 프로젝트가 고친 흔적이 있으면 병합한다.
 - 덮어쓰면 안 되는 것(프로젝트 소유): `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`,
   `rules/test-writing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
 - 덮어쓰지 않는 파일이라도 CHANGELOG 가 바꿨다고 적은 부분(예: `settings.json` 의 허용 경로, `CLAUDE.md` 에서
