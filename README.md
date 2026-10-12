@@ -510,7 +510,14 @@ flowchart TD
     H --> G
 ```
 
-- "프로젝트가 고쳤나"는 그 파일을 **내 버전의 원본과 내용으로 비교**해서 판단한다. git 의 내용 해시를
+- **3번 분류표는 도구가 만든다** (읽기 전용, 아무것도 바꾸지 않는다). 템플릿 클론의 스크립트로 실행한다 —
+  프로젝트에 있는 사본은 옛 버전이라 이 옵션이 없을 수 있다:
+  `git -C <템플릿 클론> fetch --tags` 후
+  `python3 <템플릿 클론>/.claude/skills/orchestrator-version/check --plan <프로젝트 루트>`.
+  파일마다 REPLACE·MERGE·KEEP·DELETE·ADD·PROJECT-ONLY 등으로 나누고, 예전 업그레이드에서 지웠어야 할
+  파일은 PROJECT-ONLY 아래 "last shipped in X" 로 모아 보여 준다. 실행 권한을 잃은 스크립트, 지워질 훅을
+  가리키는 `settings.json` 등록, 읽어야 할 CHANGELOG 항목도 함께 나온다.
+- "프로젝트가 고쳤나"는 그 파일을 **내 버전의 원본과 내용으로 비교**해서 판단한다 (도구도 이 규칙을 쓴다). git 의 내용 해시를
   쓰면 Linux·macOS·Windows(PowerShell·cmd) 어디서나 같은 명령이고, 파일 권한 차이에 속지 않는다:
   `git -C <템플릿 클론> rev-parse v<내 버전>:<경로>` 와 `git hash-object <경로>` 의 출력이 **같으면 안 고친 것**이다.
   (`diff` 나 `git diff --no-index` 는 내용이 같아도 실행 권한 차이만으로 "다르다"고 나온다.)
@@ -588,7 +595,7 @@ flowchart TD
 | `/feature` | 실제 프로젝트에서 여러 작업 단위를 끝까지 진행 |
 | `/isolated-review` | 실작업 3회 + 지난 작업 6건 재검증. 사람이 연 리뷰가 놓친 진짜 문제를 찾았고 오탐은 없었다. 실행이 필요한 결함은 놓친다 |
 | deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중 (2026-10-07 측정: deep-reasoning 30회, agy 79회). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
-| `/orchestrator-version` | 업그레이드에 사용 |
+| `/orchestrator-version` | 업그레이드에 사용. `--plan` 은 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치) |
 | 훅 4개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `log-cli-tools` 의 판정 | 판정하는 모든 모양을 실제 bash 로 돌려 대조하는 테스트(무작위 600개 + 리뷰 지적 입력)로 확인. Bash 시간 제한·백그라운드 동작은 가짜 agy 로 실측 |
 | `/doc-write`, `/jira-setup`, `/ticket` | **아직 실제로 돌려 본 적 없다** |

@@ -666,6 +666,15 @@ class ProjectOwnedListTests(unittest.TestCase):
         for entry in module.PROJECT_OWNED:
             self.assertIn(f"`{entry}`", owned_text)
 
+    def test_the_upgrade_procedure_and_the_skill_point_at_plan(self) -> None:
+        # Prose tripwire: the README procedure and the skill must name the tool,
+        # or upgrades go back to hand-written hash loops.
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        section = readme.split("### 업그레이드 절차", 1)[1].split("\n---", 1)[0]
+        skill = (CHECK.parent / "SKILL.md").read_text(encoding="utf-8")
+        for text in (section, skill):
+            self.assertIn("orchestrator-version/check --plan", text)
+
 
 if __name__ == "__main__":
     unittest.main()
