@@ -35,6 +35,8 @@ uv run poe fix     # mutating helpers, run deliberately
 ```
 
 `poe` exists only inside the project environment — called bare it exits 127.
+`poe test` runs `pytest -n auto` (pytest-xdist): after pulling, `uv sync --all-extras`, or the
+gate fails on `-n`. Serial debugging: `uv run poe test -n 0`, or bare `uv run pytest`.
 
 ## Before committing
 

@@ -26,13 +26,17 @@ a hook gains behaviour.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
-HOOKS_DIR = Path(__file__).parent.parent / ".claude" / "hooks"
-SETTINGS = Path(__file__).parent.parent / ".claude" / "settings.json"
+REPO = Path(__file__).parent.parent
+HOOKS_DIR = REPO / ".claude" / "hooks"
+SETTINGS = REPO / ".claude" / "settings.json"
+REAL_MARK = REPO / ".claude" / "logs" / "bash-marks" / "toolu_contract"
 
 # A payload per hook event, shaped the way Claude Code sends it.
 PAYLOADS: dict[str, dict] = {
@@ -98,15 +102,27 @@ def hook_files() -> list[Path]:
     return sorted(p for p in HOOKS_DIR.glob("*.py") if not p.name.startswith("_"))
 
 
-def run_hook(path: Path, payload: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(path)],
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        cwd=str(HOOKS_DIR.parent.parent),
-    )
+def run_hook(
+    path: Path, payload: str, project_dir: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    """
+    Run a hook with a project dir of its own, never the real repository's:
+    `bash-write-check` wrote its `toolu_contract` mark into the real
+    `.claude/logs/bash-marks/` on every run, and the Post payload never took it.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        env = dict(os.environ)
+        env.pop("CLAUDE_SESSION_ID", None)
+        env["CLAUDE_PROJECT_DIR"] = str(project_dir or tmp)
+        return subprocess.run(
+            [sys.executable, str(path)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=str(REPO),
+            env=env,
+        )
 
 
 class HookInventoryTests(unittest.TestCase):
@@ -213,6 +229,24 @@ class HookContractTests(unittest.TestCase):
             for payload in DEGENERATE_INPUTS:
                 with self.subTest(hook=path.name, payload=payload or "<empty>"):
                     self.assert_contract(path, payload)
+
+    def test_the_contract_run_leaves_the_real_repository_alone(self) -> None:
+        """The mark lands in the run's own project dir, not the real one. A mark
+        left by an older run may exist; it must keep its mtime."""
+
+        def snapshot() -> int | None:
+            return REAL_MARK.stat().st_mtime_ns if REAL_MARK.exists() else None
+
+        before = snapshot()
+        with tempfile.TemporaryDirectory() as tmp:
+            run_hook(
+                HOOKS_DIR / "bash-write-check.py",
+                json.dumps(PAYLOADS["PreToolUse-Bash"]),
+                project_dir=Path(tmp),
+            )
+            own = Path(tmp) / ".claude" / "logs" / "bash-marks" / "toolu_contract"
+            self.assertTrue(own.exists(), "the hook did not write its mark at all")
+        self.assertEqual(before, snapshot(), "the hook wrote into the real repository")
 
 
 if __name__ == "__main__":

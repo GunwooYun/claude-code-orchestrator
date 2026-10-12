@@ -29,8 +29,10 @@ REPO = Path(__file__).parent.parent
 PROBE = REPO / ".claude" / "bin" / "agy-probe"
 
 
-def run_probe(path_prefix: str | None = None, *args: str):
-    env = dict(os.environ)
+def run_probe(
+    path_prefix: str | None = None, *args: str, extra_env: dict[str, str] | None = None
+):
+    env = {**os.environ, **(extra_env or {})}
     if path_prefix is not None:
         env["PATH"] = f"{path_prefix}{os.pathsep}{env['PATH']}"
     else:
@@ -168,10 +170,27 @@ class StubbedStateTests(unittest.TestCase):
         self.assertNotEqual(0, degraded.returncode)
 
     def test_no_temp_file_is_left_behind(self) -> None:
-        stub_agy(self.bin, '#!/bin/sh\necho "PROBE_OK"\necho "noise" >&2\n')
-        run_probe(str(self.bin))
-        leftovers = list(Path("/tmp").glob(".agy-probe-err.*"))
-        self.assertEqual([], leftovers, "the probe leaked its stderr temp file")
+        """
+        The probe gets a TMPDIR of its own, and the stub lists it while the
+        probe runs. Globbing the shared /tmp for an old file name could neither
+        see a real leak (the capture moved to `mktemp` under TMPDIR) nor stay
+        quiet under parallel workers, where TempFileTests plants that name.
+        """
+        tmpdir = self.bin / "tmp"
+        tmpdir.mkdir()
+        seen = self.bin / "seen"
+        stub_agy(
+            self.bin,
+            f'#!/bin/sh\nls -A "$TMPDIR" > "{seen}"\necho "PROBE_OK"\necho "noise" >&2\n',
+        )
+        result = run_probe(str(self.bin), extra_env={"TMPDIR": str(tmpdir)})
+        self.assertEqual("READY", state(result))
+        during = seen.read_text(encoding="utf-8").split()
+        self.assertEqual(1, len(during), f"expected one capture file, saw {during}")
+        self.assertTrue(during[0].startswith("agy-probe."), during)
+        self.assertEqual(
+            [], list(tmpdir.iterdir()), "the probe leaked its stderr temp file"
+        )
 
 
 class StateOrderTests(unittest.TestCase):
