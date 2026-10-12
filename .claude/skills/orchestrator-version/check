@@ -24,6 +24,7 @@ Environment (for forks and tests):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import re
 import subprocess
@@ -31,6 +32,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import NamedTuple
 
 DEFAULT_UPSTREAM = "https://github.com/GunwooYun/claude-code-orchestrator.git"
 DEFAULT_CHANGELOG = "https://raw.githubusercontent.com/GunwooYun/claude-code-orchestrator/main/CHANGELOG.md"
@@ -43,9 +45,64 @@ CLAUDE_DIR = Path(__file__).resolve().parents[2]
 TEMPLATE_ROOT = CLAUDE_DIR.parent
 SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
+# What a copy carries (README Quick Start), and what a plan compares.
+PLAN_SCOPE = (".claude", ".agents", "CLAUDE.md")
+# Runtime state a project accumulates. Never shipped, never part of a plan.
+RUNTIME_PREFIXES = (
+    ".claude/logs/",
+    ".claude/docs/reviews/",
+    ".claude/isolated-review/",
+)
+RUNTIME_FILES = (".claude/settings.local.json",)
+COMPILED_SUFFIXES = (".pyc", ".pyo", ".pyd")
+HOOKS_DIR = ".claude/hooks/"
+# Project-owned files, spelled exactly as README §9 「업그레이드 절차」 lists them:
+# relative to .claude/ unless they are CLAUDE.md or start with .agents/.
+PROJECT_OWNED = (
+    "CLAUDE.md",
+    "rules/dev-environment.md",
+    "rules/testing.md",
+    "rules/test-writing.md",
+    "scripts/verify-*",
+    "settings.json",
+    ".agents/rules/AGENTS.md",
+    "docs/DESIGN.md",
+    "docs/research/",
+)
+CLASSES = (
+    ("REPLACE", "unmodified in the project, changed upstream: take the new file"),
+    (
+        "MERGE",
+        "changed by the project AND upstream: take the new file, re-apply the "
+        "project's edits",
+    ),
+    ("KEEP", "changed by the project, not upstream: leave it"),
+    ("DELETE", "gone upstream, unmodified in the project: delete it"),
+    ("DELETE-MODIFIED", "gone upstream, but the project changed it: decide"),
+    ("ADD", "new upstream: add it"),
+    (
+        "ABSENT",
+        "shipped in both versions, missing in the project: add it back, or "
+        "confirm it was removed on purpose",
+    ),
+    (
+        "PROJECT-ONLY",
+        "not shipped in the old version: leftovers of older releases, or the "
+        "project's own files",
+    ),
+)
+OWNED_NOTE = (
+    "[project-owned] = do not overwrite; apply what the CHANGELOG says changed by hand"
+)
+
 
 class PlanError(Exception):
     """A --plan precondition failed; the message tells the user what to do."""
+
+
+class Blob(NamedTuple):
+    mode: str
+    sha: str
 
 
 def parse_version(text: str) -> tuple[int, int, int] | None:
@@ -171,11 +228,144 @@ def plan(project: Path, from_arg: str | None, to_arg: str | None) -> int:
             f"{project} has no .claude/ — pass the project's root directory"
         )
     old, new, source = resolve_versions(project, from_arg, to_arg)
+    old_tree, new_tree = tree(f"v{fmt(old)}"), tree(f"v{fmt(new)}")
+    hashes = {rel: blob_sha(path) for rel, path in project_files(project).items()}
+    classes, unchanged = classify(old_tree, new_tree, hashes)
+
     print(f"upgrade plan: {fmt(old)} -> {fmt(new)} (read-only, nothing is changed)")
     print(f"project:  {project}")
     print(f"template: {TEMPLATE_ROOT}")
     print(f"old version from {source}")
+    print(f"\nNOOP: {unchanged} files already match {fmt(new)} (not listed)")
+    for name, meaning in CLASSES:
+        paths = classes[name]
+        if not paths:
+            continue
+        print(f"\n{name} ({len(paths)}) — {meaning}")
+        if name == "PROJECT-ONLY":
+            print_project_only(paths, release_tags(TEMPLATE_ROOT))
+            continue
+        for rel in paths:
+            print(f"  {rel}{'  [project-owned]' if project_owned(rel) else ''}")
+    if any(project_owned(rel) for paths in classes.values() for rel in paths):
+        print(f"\n{OWNED_NOTE}")
     return 0
+
+
+def tree(tag: str) -> dict[str, Blob]:
+    """Every file `tag` ships under PLAN_SCOPE, path -> (mode, blob sha)."""
+    out = git(TEMPLATE_ROOT, "ls-tree", "-r", "-z", tag, "--", *PLAN_SCOPE)
+    if out.returncode != 0:
+        raise PlanError(f"cannot list {tag}: {out.stderr.decode().strip()[:200]}")
+    entries = {}
+    for record in out.stdout.decode("utf-8", errors="surrogateescape").split("\0"):
+        if not record:
+            continue
+        meta, path = record.split("\t", 1)
+        mode, kind, sha = meta.split()
+        if kind == "blob":
+            entries[path] = Blob(mode, sha)
+    return entries
+
+
+def blob_sha(path: Path) -> str:
+    """`git hash-object` without filters: the raw bytes, also outside a repo."""
+    data = path.read_bytes()
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def is_runtime(rel: str) -> bool:
+    name = rel.rsplit("/", 1)[-1]
+    hook_dotfile = rel.startswith(HOOKS_DIR) and rel.count("/") == 2 and name[0] == "."
+    return (
+        rel.startswith(RUNTIME_PREFIXES)
+        or rel in RUNTIME_FILES
+        or name.endswith(COMPILED_SUFFIXES)
+        or hook_dotfile
+    )
+
+
+def project_files(project: Path) -> dict[str, Path]:
+    """The project's files under PLAN_SCOPE, minus runtime state."""
+    files = {}
+    for top in PLAN_SCOPE[:2]:
+        for dirpath, _, filenames in os.walk(project / top):
+            for name in filenames:
+                path = Path(dirpath, name)
+                rel = path.relative_to(project).as_posix()
+                if not is_runtime(rel):
+                    files[rel] = path
+    if (project / "CLAUDE.md").is_file():
+        files["CLAUDE.md"] = project / "CLAUDE.md"
+    return files
+
+
+def classify(
+    old: dict[str, Blob], new: dict[str, Blob], hashes: dict[str, str]
+) -> tuple[dict[str, list[str]], int]:
+    """(class -> sorted paths, count of files already matching the new version)."""
+    classes: dict[str, list[str]] = {name: [] for name, _ in CLASSES}
+    unchanged = 0
+    for rel in sorted(set(old) | set(new) | set(hashes)):
+        was, now, have = old.get(rel), new.get(rel), hashes.get(rel)
+        unmodified = was is not None and have == was.sha
+        if have is None:
+            if now is None:
+                continue
+            name = "ADD" if was is None else "ABSENT"
+        elif now is None:
+            if was is None:
+                name = "PROJECT-ONLY"
+            else:
+                name = "DELETE" if unmodified else "DELETE-MODIFIED"
+        elif have == now.sha:
+            unchanged += 1
+            continue
+        elif unmodified:
+            name = "REPLACE"
+        elif was is not None and was.sha == now.sha:
+            name = "KEEP"
+        else:
+            name = "MERGE"
+        classes[name].append(rel)
+    return classes, unchanged
+
+
+def project_owned(rel: str) -> bool:
+    for entry in PROJECT_OWNED:
+        top_level = entry == "CLAUDE.md" or entry.startswith(".agents/")
+        full = entry if top_level else f".claude/{entry}"
+        if rel == full:
+            return True
+        if full.endswith(("*", "/")) and rel.startswith(full.rstrip("*")):
+            return True
+    return False
+
+
+def print_project_only(paths: list[str], tags: list[tuple[int, int, int]]) -> None:
+    """Group by the newest release that shipped each path — that is how the
+    leftovers of earlier upgrades show up."""
+    shipped: dict[tuple[int, int, int], set[str]] = {}
+    groups: dict[tuple[int, int, int] | None, list[str]] = {}
+    for rel in paths:
+        last = None
+        for tag in tags:
+            if tag not in shipped:
+                shipped[tag] = set(tree(f"v{fmt(tag)}"))
+            if rel in shipped[tag]:
+                last = tag
+                break
+        groups.setdefault(last, []).append(rel)
+    for tag in tags:
+        if tag in groups:
+            print(f"  last shipped in {fmt(tag)} ({len(groups[tag])}):")
+            for rel in groups[tag]:
+                print(f"    {rel}")
+    if None in groups:
+        print(f"  never shipped ({len(groups[None])}):")
+        for rel in groups[None]:
+            owned = "  [project-owned]" if project_owned(rel) else ""
+            print(f"    {rel}{owned}")
 
 
 def main() -> int:

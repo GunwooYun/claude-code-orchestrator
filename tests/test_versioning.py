@@ -13,6 +13,8 @@ drift tripwire over prose, not behavioural coverage.
 
 from __future__ import annotations
 
+import importlib.machinery
+import importlib.util
 import os
 import re
 import shutil
@@ -263,9 +265,12 @@ class PlanFixture(unittest.TestCase):
         self.tmp = Path(tmp.name)
         self.tpl = self.tmp / "tpl"
         self.project = self.tmp / "project"
-        (self.project / ".claude").mkdir(parents=True)
         self.git("init", "-q", str(self.tpl))
-        shutil.copytree(CHECK.parent, self.tpl / ".claude/skills/orchestrator-version")
+        skill = ".claude/skills/orchestrator-version"
+        no_cache = shutil.ignore_patterns("__pycache__")
+        shutil.copytree(CHECK.parent, self.tpl / skill, ignore=no_cache)
+        # The project carries the same skill copy, as a real one would.
+        shutil.copytree(CHECK.parent, self.project / skill, ignore=no_cache)
 
     def git(self, *args: str) -> str:
         return subprocess.run(
@@ -374,6 +379,186 @@ class PlanPreconditionTests(PlanFixture):
         result = self.plan("--check-latest")
         self.assertEqual(2, result.returncode)
         self.assertIn("not allowed with", result.stderr)
+
+
+CLASS_HEADER = re.compile(r"^([A-Z-]+) \((\d+)\) — ")
+
+
+def parse_plan(stdout: str) -> dict[str, dict[str, str]]:
+    """class -> {path: group}; group is the PROJECT-ONLY sub-heading, else ""."""
+    classes: dict[str, dict[str, str]] = {}
+    current, group = "", ""
+    for line in stdout.splitlines():
+        if m := CLASS_HEADER.match(line):
+            current, group = m[1], ""
+            classes[current] = {}
+        elif not line.startswith("  "):
+            current = ""
+        elif current and line.endswith(":"):
+            group = line.strip().rsplit(" (", 1)[0]
+        elif current:
+            classes[current][line.strip().split("  ")[0]] = group
+    return classes
+
+
+def tree_state(root: Path) -> list[tuple[str, bytes, int]]:
+    return sorted(
+        (p.relative_to(root).as_posix(), p.read_bytes(), p.stat().st_mode)
+        for p in root.rglob("*")
+        if p.is_file()
+    )
+
+
+class PlanClassificationTests(PlanFixture):
+    """V1, V2, V3, V7, VH: each file lands in its class, nothing is written."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.release(
+            "0.9.0",
+            {".claude/legacy.md": "l", ".claude/ancient.md": "an"},
+        )
+        self.release("0.10.0", {".claude/ancient.md": None})
+        old = {
+            "replace.md": "r1",
+            "noop.md": "n",
+            "merge.md": "m1",
+            "keep.md": "k",
+            "delete.md": "d",
+            "delete-mod.md": "dm",
+            "absent.md": "a",
+        }
+        self.release(
+            "1.0.0",
+            {
+                ".claude/legacy.md": None,
+                **{f".claude/{k}": v for k, v in old.items()},
+                ".agents/rules/AGENTS.md": "ag1",
+                "CLAUDE.md": "c1",
+            },
+        )
+        self.release(
+            "2.0.0",
+            {
+                ".claude/replace.md": "r2",
+                ".claude/merge.md": "m2",
+                ".claude/delete.md": None,
+                ".claude/delete-mod.md": None,
+                ".claude/add.md": "new",
+                ".agents/rules/AGENTS.md": "ag2",
+            },
+        )
+        # The project: a 1.0.0 copy, partly edited, plus leftovers.
+        self.put(".claude/ORCHESTRATOR_VERSION", "1.0.0\n")
+        for rel, text in old.items():
+            if rel != "absent.md":
+                self.put(f".claude/{rel}", text)
+        self.put(".claude/merge.md", "m1 edited")
+        self.put(".claude/keep.md", "k edited")
+        self.put(".claude/delete-mod.md", "dm edited")
+        self.put(".agents/rules/AGENTS.md", "ag1")
+        self.put("CLAUDE.md", "c1 edited")
+        self.put(".claude/legacy.md", "l")
+        self.put(".claude/ancient.md", "an")
+        self.put(".claude/mine.md", "project's own")
+
+    def test_every_file_lands_in_exactly_its_class(self) -> None:
+        result = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        got = {name: set(paths) for name, paths in parse_plan(result.stdout).items()}
+        self.assertEqual(
+            {
+                "REPLACE": {
+                    ".claude/replace.md",
+                    ".claude/ORCHESTRATOR_VERSION",
+                    ".agents/rules/AGENTS.md",
+                },
+                "MERGE": {".claude/merge.md"},
+                "KEEP": {".claude/keep.md", "CLAUDE.md"},
+                "DELETE": {".claude/delete.md"},
+                "DELETE-MODIFIED": {".claude/delete-mod.md"},
+                "ADD": {".claude/add.md"},
+                "ABSENT": {".claude/absent.md"},
+                "PROJECT-ONLY": {
+                    ".claude/legacy.md",
+                    ".claude/ancient.md",
+                    ".claude/mine.md",
+                },
+            },
+            got,
+        )
+        # noop.md and the two skill files match 2.0.0.
+        self.assertIn("NOOP: 3 files already match 2.0.0", result.stdout)
+
+    def test_project_only_names_the_newest_release_that_shipped_it(self) -> None:
+        only = parse_plan(self.plan().stdout)["PROJECT-ONLY"]
+        self.assertEqual("last shipped in 0.10.0", only[".claude/legacy.md"])
+        self.assertEqual("last shipped in 0.9.0", only[".claude/ancient.md"])
+        self.assertEqual("never shipped", only[".claude/mine.md"])
+
+    def test_project_owned_files_are_marked(self) -> None:
+        stdout = self.plan().stdout
+        self.assertIn("  CLAUDE.md  [project-owned]", stdout)
+        self.assertIn("  .claude/keep.md\n", stdout)
+        self.assertIn("[project-owned] = do not overwrite", stdout)
+
+    def test_runtime_state_is_not_part_of_the_plan(self) -> None:
+        runtime = (
+            ".claude/logs/bash-marks/toolu_x",
+            ".claude/docs/reviews/r.md",
+            ".claude/isolated-review/canary",
+            ".claude/skills/x/__pycache__/y.cpython-312.pyc",
+            ".claude/hooks/__pycache__/h.cpython-312.pyc",
+            ".claude/hooks/.blocked-reviews",
+            ".claude/settings.local.json",
+        )
+        for rel in runtime:
+            self.put(rel, "state")
+        # The same dotfile name outside the hooks directory is a real file.
+        self.put(".claude/notes/.blocked-reviews", "a note")
+        stdout = self.plan().stdout
+        for rel in runtime:
+            self.assertNotIn(rel, stdout)
+        self.assertIn(".claude/notes/.blocked-reviews", stdout)
+
+    def test_raw_bytes_hash_like_git(self) -> None:
+        # CRLF and non-UTF-8 bytes: an unmodified copy must still be NOOP.
+        raw = b"line\r\nmore\xff\xfe\n"
+        (self.tpl / ".claude/raw.bin").write_bytes(raw)
+        self.git("-C", str(self.tpl), "add", "-A")
+        self.git("-C", str(self.tpl), "commit", "-q", "-m", "raw")
+        self.git("-C", str(self.tpl), "tag", "-f", "v2.0.0")
+        (self.project / ".claude/raw.bin").write_bytes(raw)
+        stdout = self.plan().stdout
+        self.assertNotIn("raw.bin", stdout)
+        self.assertIn("NOOP: 4 files", stdout)
+
+    def test_the_plan_writes_nothing(self) -> None:
+        project_before = tree_state(self.project)
+        status = ["-C", str(self.tpl), "status", "--porcelain", "--ignored"]
+        tpl_before = self.git(*status)
+        self.assertEqual(0, self.plan().returncode)
+        self.assertEqual(project_before, tree_state(self.project))
+        self.assertEqual(tpl_before, self.git(*status))
+
+
+class ProjectOwnedListTests(unittest.TestCase):
+    """VO: the script's project-owned list is README §9's, word for word."""
+
+    def test_every_project_owned_entry_is_in_the_readme_upgrade_section(self) -> None:
+        loader = importlib.machinery.SourceFileLoader("check_script", str(CHECK))
+        spec = importlib.util.spec_from_loader("check_script", loader)
+        assert spec is not None
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        section = readme.split("### 업그레이드 절차", 1)[1].split("\n---", 1)[0]
+        owned_line = next(
+            line for line in section.splitlines() if "덮어쓰면 안 되는 것" in line
+        )
+        owned_text = owned_line + section.split(owned_line, 1)[1].split("\n- ", 1)[0]
+        for entry in module.PROJECT_OWNED:
+            self.assertIn(f"`{entry}`", owned_text)
 
 
 if __name__ == "__main__":
