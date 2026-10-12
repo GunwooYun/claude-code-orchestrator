@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
+import json
 import os
 import re
 import shutil
@@ -277,8 +278,11 @@ class PlanFixture(unittest.TestCase):
             ["git", *args], check=True, capture_output=True, text=True, env=GIT_ENV
         ).stdout
 
-    def release(self, version: str, files: dict[str, str | None]) -> None:
-        """Write (or delete, on None) template files, then commit and tag."""
+    def release(
+        self, version: str, files: dict[str, str | None], executable: tuple = ()
+    ) -> None:
+        """Write (or delete, on None) template files, then commit and tag.
+        Paths in `executable` are committed as 100755."""
         files = {".claude/ORCHESTRATOR_VERSION": f"{version}\n", **files}
         for rel, text in files.items():
             path = self.tpl / rel
@@ -287,6 +291,7 @@ class PlanFixture(unittest.TestCase):
                 continue
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
+            path.chmod(0o755 if rel in executable else 0o644)
         self.git("-C", str(self.tpl), "add", "-A")
         self.git("-C", str(self.tpl), "commit", "-q", "-m", version)
         self.git("-C", str(self.tpl), "tag", f"v{version}")
@@ -540,6 +545,107 @@ class PlanClassificationTests(PlanFixture):
         self.assertEqual(0, self.plan().returncode)
         self.assertEqual(project_before, tree_state(self.project))
         self.assertEqual(tpl_before, self.git(*status))
+
+
+SHEBANG = "#!/usr/bin/env python3\n"
+FIXTURE_TEMPLATE_CHANGELOG = """# Changelog
+
+## [2.0.0] - 2026-10-12
+## [1.5.0] - 2026-10-11
+## [1.0.0] - 2026-10-10
+"""
+
+
+def hook_settings(*names: str) -> str:
+    command = 'python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/{}"'
+    groups = [
+        {"hooks": [{"type": "command", "command": command.format(n)}]} for n in names
+    ]
+    return json.dumps({"hooks": {"PostToolUse": groups}})
+
+
+@unittest.skipIf(os.name == "nt", "no exec bit on Windows")
+class PlanExtrasTests(PlanFixture):
+    """V4, V4b, V4c, V5 and the CHANGELOG pointer."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.release(
+            "1.0.0",
+            {
+                "CHANGELOG.md": FIXTURE_TEMPLATE_CHANGELOG,
+                ".claude/hooks/kept.py": SHEBANG,
+                ".claude/hooks/gone.py": SHEBANG,
+                ".claude/bin/tool": SHEBANG,
+                ".claude/rules/doc.md": "a document tracked as 100755",
+                ".claude/rules/plain.md": "plain",
+            },
+            executable=(
+                ".claude/hooks/kept.py",
+                ".claude/hooks/gone.py",
+                ".claude/bin/tool",
+                ".claude/rules/doc.md",
+            ),
+        )
+        self.release(
+            "2.0.0",
+            {
+                ".claude/hooks/gone.py": None,
+                ".claude/bin/new-tool": SHEBANG,
+                ".claude/rules/new-doc.md": "another 100755 document",
+            },
+            executable=(".claude/bin/new-tool", ".claude/rules/new-doc.md"),
+        )
+        self.put(".claude/ORCHESTRATOR_VERSION", "1.0.0\n")
+        for rel, mode in (
+            (".claude/hooks/kept.py", 0o644),  # lost its exec bit: report
+            (".claude/hooks/gone.py", 0o755),
+            (".claude/bin/tool", 0o755),
+            (".claude/rules/doc.md", 0o644),  # 100755 upstream, no shebang
+            (".claude/rules/plain.md", 0o755),  # executable here only
+        ):
+            shipped = self.git("-C", str(self.tpl), "show", f"v1.0.0:{rel}")
+            self.put(rel, shipped).chmod(mode)
+        self.put(
+            ".claude/settings.json", hook_settings("kept.py", "gone.py", "lost.py")
+        )
+
+    def section(self, stdout: str, name: str) -> str:
+        if f"\n{name} (" not in stdout:
+            return ""
+        return stdout.split(f"\n{name} (", 1)[1].split("\n\n", 1)[0]
+
+    def test_a_script_that_lost_its_exec_bit_is_reported(self) -> None:
+        result = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            ["  .claude/hooks/kept.py"],
+            self.section(result.stdout, "EXEC BIT").splitlines()[1:],
+        )
+
+    def test_add_notes_settings_permissions_only_for_scripts(self) -> None:
+        add = self.section(self.plan().stdout, "ADD")
+        self.assertIn(".claude/bin/new-tool  (script: allow it in settings.json", add)
+        self.assertIn("  .claude/rules/new-doc.md\n", add + "\n")
+        self.assertNotIn("new-doc.md  (script", add)
+
+    def test_hook_registrations_without_a_file_after_the_plan_are_reported(
+        self,
+    ) -> None:
+        hooks = self.section(self.plan().stdout, "HOOKS")
+        self.assertIn(".claude/hooks/gone.py — deleted by this plan", hooks)
+        self.assertIn(".claude/hooks/lost.py — registered, but missing", hooks)
+        self.assertNotIn("kept.py", hooks)
+
+    def test_no_hooks_section_when_every_registration_stays_valid(self) -> None:
+        self.put(".claude/settings.json", hook_settings("kept.py"))
+        self.assertNotIn("\nHOOKS", self.plan().stdout)
+
+    def test_the_changelog_entries_between_the_versions_are_named(self) -> None:
+        stdout = self.plan().stdout
+        self.assertIn(
+            "CHANGELOG — read the entries 2.0.0, 1.5.0 for hand steps", stdout
+        )
 
 
 class ProjectOwnedListTests(unittest.TestCase):

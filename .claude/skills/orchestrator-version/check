@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -56,6 +57,8 @@ RUNTIME_PREFIXES = (
 RUNTIME_FILES = (".claude/settings.local.json",)
 COMPILED_SUFFIXES = (".pyc", ".pyo", ".pyd")
 HOOKS_DIR = ".claude/hooks/"
+SETTINGS = ".claude/settings.json"
+ADD_SCRIPT_NOTE = "(script: allow it in settings.json permissions where it is called)"
 # Project-owned files, spelled exactly as README §9 「업그레이드 절차」 lists them:
 # relative to .claude/ unless they are CLAUDE.md or start with .agents/.
 PROJECT_OWNED = (
@@ -246,10 +249,96 @@ def plan(project: Path, from_arg: str | None, to_arg: str | None) -> int:
             print_project_only(paths, release_tags(TEMPLATE_ROOT))
             continue
         for rel in paths:
-            print(f"  {rel}{'  [project-owned]' if project_owned(rel) else ''}")
+            owned = "  [project-owned]" if project_owned(rel) else ""
+            script = name == "ADD" and is_script(new_tree[rel])
+            print(f"  {rel}{owned}{'  ' + ADD_SCRIPT_NOTE if script else ''}")
     if any(project_owned(rel) for paths in classes.values() for rel in paths):
         print(f"\n{OWNED_NOTE}")
+    print_exec_bits(project, new_tree)
+    print_hook_registrations(project, classes)
+    print_changelog_pointer(old, new)
     return 0
+
+
+def is_script(blob: Blob) -> bool:
+    """Executable in git AND a shebang: the template also tracks plain
+    documents as 100755, and those must not be reported."""
+    if blob.mode != "100755":
+        return False
+    return git(TEMPLATE_ROOT, "cat-file", "blob", blob.sha).stdout[:2] == b"#!"
+
+
+def print_exec_bits(project: Path, new_tree: dict[str, Blob]) -> None:
+    """Scripts the new version runs that the project's copy cannot execute.
+    Only that direction breaks anything; Windows has no exec bit."""
+    if os.name == "nt":
+        return
+    lost = [
+        rel
+        for rel, blob in sorted(new_tree.items())
+        if (project / rel).is_file()
+        and not os.access(project / rel, os.X_OK)
+        and is_script(blob)
+    ]
+    if lost:
+        print(
+            f"\nEXEC BIT ({len(lost)}) — a script upstream, not executable here: chmod +x"
+        )
+        for rel in lost:
+            print(f"  {rel}")
+
+
+def print_hook_registrations(project: Path, classes: dict[str, list[str]]) -> None:
+    """settings.json hooks whose file is missing now or deleted by this plan:
+    a registration without its file makes every edit fail."""
+    try:
+        text = (project / SETTINGS).read_text(encoding="utf-8")
+    except OSError:
+        return
+    try:
+        settings = json.loads(text)
+    except ValueError as exc:
+        print(f"\nHOOKS — {SETTINGS} is not valid JSON ({exc}); check it by hand")
+        return
+    deleted = set(classes["DELETE"]) | set(classes["DELETE-MODIFIED"])
+    broken = []
+    for handlers in settings.get("hooks", {}).values():
+        for group in handlers:
+            for handler in group.get("hooks", []):
+                command = handler.get("command", "")
+                if HOOKS_DIR not in command:
+                    continue
+                rel = HOOKS_DIR + command.split(HOOKS_DIR)[1].split()[0].strip("\"'")
+                if not (project / rel).is_file():
+                    broken.append(f"  {rel} — registered, but missing in the project")
+                elif rel in deleted:
+                    broken.append(
+                        f"  {rel} — deleted by this plan: remove its registration "
+                        "in the same step"
+                    )
+    if broken:
+        print(f"\nHOOKS ({len(broken)}) — registrations in {SETTINGS}")
+        print("\n".join(sorted(set(broken))))
+
+
+def print_changelog_pointer(
+    old: tuple[int, int, int], new: tuple[int, int, int]
+) -> None:
+    """Hand steps live in the CHANGELOG; point at the entries, do not parse them."""
+    out = git(TEMPLATE_ROOT, "show", f"v{fmt(new)}:CHANGELOG.md")
+    if out.returncode != 0:
+        return
+    text = out.stdout.decode("utf-8", errors="replace")
+    versions = [
+        fmt(v)
+        for m in ENTRY.finditer(text)
+        if old < (v := (int(m[1]), int(m[2]), int(m[3]))) <= new
+    ]
+    if versions:
+        print(
+            f"\nCHANGELOG — read the entries {', '.join(versions)} for hand steps: "
+            f"git -C {TEMPLATE_ROOT} show v{fmt(new)}:CHANGELOG.md"
+        )
 
 
 def tree(tag: str) -> dict[str, Blob]:
