@@ -11,6 +11,21 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [Unreleased]
+
+### Added
+- **`check --plan <project>`: the upgrade classification as a tool, read-only.**
+  Run the template clone's script (`.claude/skills/orchestrator-version/check`)
+  against an adopted copy: every file under `.claude/`, `.agents/` and
+  `CLAUDE.md` is classed REPLACE / MERGE / KEEP / DELETE / DELETE-MODIFIED /
+  ADD / ABSENT / PROJECT-ONLY by the README hash rule, project-owned files are
+  marked, and PROJECT-ONLY files are grouped by the last release that shipped
+  them. It also lists scripts that lost their exec bit, `settings.json` hook
+  registrations left without a file, and the CHANGELOG entries to read. It
+  changes nothing. Why: a real 3.1.0 copy still carried 18 files earlier
+  upgrades should have deleted (hooks, and skills colliding with built-ins), and
+  the README procedure had no tool; the plan lists exactly those 18.
+
 ## [4.2.0] - 2026-10-12
 
 Maintenance from deferred items. Two shipped files that nothing used are gone
