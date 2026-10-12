@@ -11,6 +11,18 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [Unreleased]
+
+### Changed
+- **This repository's gate runs its tests in parallel: ~90 s → ~25 s.**
+  `poe test` is now `pytest -n auto` (new dev extra `pytest-xdist`); most of the
+  suite waits on subprocesses, not CPU. Same results as a serial run (335 passed,
+  1 skipped). Maintainers: `uv sync --all-extras` after pulling. Adopting projects
+  are unaffected — `pyproject.toml` is not copied, and their gate is their own.
+- `tests/test_agy_probe.py`: the temp-file leak test now watches its own `TMPDIR`.
+  It globbed `/tmp` for the capture file's old name, so it could not fail on a
+  real leak.
+
 ## [4.1.0] - 2026-10-08
 
 The second tuning pass: a quarter less text enters every session. Rules that

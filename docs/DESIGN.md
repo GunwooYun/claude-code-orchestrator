@@ -115,6 +115,7 @@
 | `/isolated-review`: Phase 6 A1 runs a `claude -p` reviewer the orchestrator launches; isolation by tool set (`--restricted --tools Read,Grep,Glob --strict-mcp-config --disable-slash-commands`), checked per run from the `system/init` event and by a pre-flight probe; fixed prompt, no free text; implementer's CLAUDE.md denied (verification plan passed as claims); report shown verbatim, verdict never "approved" | Phase 6 Option A never actually ran — it needed a person to open a worktree. Proposed from an adopting project; measured before and after implementation (docs/isolated-review.md): `--allowedTools` does not restrict (a reviewer wrote a file under it), `--bare` drops OAuth login and CLAUDE.md, MCP connectors survive without `--strict-mcp-config`. Live fixture run found a planted bug and reported, not obeyed, a prompt injection | Worktree + allow list (the proposal: M4 shows it leaks writes, and the worktree hides gitignored CLAUDE.md); `--bare` (auth); user concerns in the prompt (user: no — a steering channel); chunked review of large diffs (loses cross-file view; refused above 3000 lines instead) | 2026-09-29 |
 | Remove the skills real use never invoked: `deep-reasoning`, `antigravity-system` (folded into `general-purpose.md`), `/checkpointing` (deleted) | Measured 2026-10-07 over 9 recorded sessions in 3 projects (`.claude/docs/research/usage-3.1.0.md`, local): no Skill-tool invocation or slash command of any of the three, and no read of their files outside template maintenance (an auto-activation that leaves no tool call cannot be seen in transcripts), while the deep-reasoning subagent ran 30 times and agy 79 times without them. The rule and agent files already carried what the two wrapper skills said; `/checkpointing` never wrote a Session History yet took 17 commits. `agy-probe` moved to `.claude/bin/` (three callers, no owner; `.claude/scripts/` stays the verification contract). The `log-cli-tools` hook stays — its log is what usage is measured from. Restore from tag `v3.1.0` if real use asks for them | Keep them frozen (still loaded descriptions and tests on every gate) | 2026-10-07 |
 | Path-scope what only applies to some files; keep principles and the security kernel always loaded | Claude Code loads a rule with `paths:` frontmatter only when a matching file is read or edited, and loads it every session if the YAML does not parse (code.claude.com/docs/en/memory.md). `coding-principles.md` (Python, and ruff `ANN` already enforces type hints) and the new `test-writing.md` (split from `testing.md`) are scoped; `security.md` keeps a language-agnostic kernel unscoped because secrets leak through settings and CI files too. One quoted-glob frontmatter shape is pinned by `tests/test_loading_surface.py`, since the budget test only looks for `paths:`. Always-loaded 30,361 → 22,864 bytes on 2026-10-08. Whether rules reach subagents stays unknown (the "reaches a SUBAGENT" row), so nothing a subagent must have moved. `antigravity-delegation.md` was left as it is: the target was met without it and it is the most test-pinned file | Scope `security.md` fully; fold test-writing into the `/feature` skill (tests are also edited outside `/feature`) | 2026-10-08 |
+| The gate runs pytest with `-n auto` (pytest-xdist, default `--dist load`), in the poe `test` task only | Measured 2026-10-12: gate 90 s, pytest 82 s real against 50 s CPU — the isolated-review tests spend ~0.65 s each spawning git, `run-review` and a fake `claude`, not sleeping. Five parallel runs: max 25.3 s, 335 passed / 1 skipped like the serial run. The one cross-worker collision (a leak test globbing the shared `/tmp` for a name another test plants) was fixed first. `loadfile` would pin the 36 s file to one worker. Scoped `verify-task <path>` and bare `pytest` stay serial for debugging. No test pins `-n`: dropping it shows as 90 s, a missing extra fails at once | Shrink the waits in the tests; move isolated-review tests to a new `verify-unit` tier (the gate would check less) | 2026-10-12 |
 
 ## TODO
 
@@ -348,6 +349,21 @@ Dropped after review:
 ## Open Questions
 
 <!-- Unresolved issues, things to investigate -->
+
+- [ ] **Bash-mark sweep race (2026-10-12) — recorded, not fixed, no occurrence.**
+      `bash-write-check.py` `sweep_stale` removes marks older than an hour without
+      catching `OSError`. `tests/test_hook_contract.py` leaves a `toolu_contract`
+      mark in the real `.claude/logs/bash-marks/` on EVERY run, serial or not (its
+      PostToolUse payload has no `tool_use_id`, so the mark is never taken). Once
+      that mark is stale, two `on_pre` calls sweeping at the same instant — two
+      contract tests on parallel workers, or parallel subagents' Bash calls — can
+      make the loser's sweep raise before it writes its own mark. The top-level
+      handler swallows the error (exit 0), so nothing goes red: that one command's
+      write check is silently skipped. **Correction**: this note first said the
+      race would give a traceback and a red contract test; the isolated review
+      found the top-level handler rules that out. Fix if it is ever seen: `except
+      OSError` around the remove; separately, the contract test should not leave
+      its mark behind.
 
 - [ ] **Path-scoped rules (2026-10-08) — observe, the gate cannot.** (b) is still
       open: at the next usage review (method of the 4.0.0 measurement), sessions

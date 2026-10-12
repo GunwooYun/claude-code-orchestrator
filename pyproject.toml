@@ -11,6 +11,7 @@ dev = [
     "ruff>=0.8",
     "ty>=0.0.1a1",
     "pytest>=8.0",
+    "pytest-xdist>=3.6",
     "poethepoet>=0.31",
 ]
 
@@ -65,7 +66,9 @@ addopts = "-v --tb=short"
 lint = "ruff check . .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check"
 format-check = "ruff format --check . .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check"
 typecheck = "ty check .claude/hooks .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check tests"
-test = "pytest"
+# Parallel: most of the suite waits on subprocesses (90 s serial, ~25 s here).
+# Scoped `verify-task <path>` and bare `uv run pytest` stay serial.
+test = "pytest -n auto"
 all = ["lint", "format-check", "typecheck", "test"]
 
 # Mutating helpers, run on purpose rather than as part of the gate.
