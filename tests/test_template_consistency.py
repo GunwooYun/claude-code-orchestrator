@@ -29,6 +29,8 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -443,16 +445,19 @@ class ModelTierConsistencyTests(unittest.TestCase):
     CANONICAL = REPO / ".claude" / "rules" / "antigravity-delegation.md"
 
     def _files(self) -> list[Path]:
-        found = [
-            p
-            for p in REPO.rglob("*.md")
-            if not any(
-                part in (".git", "research", "node_modules", "checkpoints")
-                for part in p.parts
-            )
-        ]
-        found += sorted((REPO / ".claude" / "hooks").glob("*.py"))
-        return sorted(set(found))
+        """Tracked files only: local reviews and plans must not decide the gate."""
+        tracked = subprocess.run(
+            ["git", "ls-files", "*.md", ".claude/hooks/*.py"],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
+        return sorted(
+            REPO / name
+            for name in tracked
+            if "research" not in Path(name).parts and (REPO / name).is_file()
+        )
 
     def _pairings(self, path: Path) -> dict[str, set[str]]:
         """Tier -> slugs, taken from lines that name exactly one tier."""
@@ -491,15 +496,16 @@ class ModelTierConsistencyTests(unittest.TestCase):
         self.assertEqual([], problems, "; ".join(problems))
 
     def test_the_extractor_finds_a_restatement(self) -> None:
-        """Guards the extractor: with none found, the test above is vacuous.
-        Restatements were cut on purpose (2026-10-03); one is enough to prove
-        the extractor works."""
-        restating = [
-            p for p in self._files() if p != self.CANONICAL and self._pairings(p)
-        ]
-        self.assertGreaterEqual(
-            len(restating), 1, f"only {len(restating)} files paired a tier with a slug"
-        )
+        """Guards the extractor: if it found nothing, the test above is vacuous.
+        Restatements were cut on purpose (2026-10-03) and no tracked file has one,
+        so the guard feeds it a restatement of its own. It used to count files
+        in the tree and passed only through a gitignored local review report —
+        a fresh clone failed it."""
+        line = "| T4 Whole repo | `gemini-3.1-pro-high` |"
+        with tempfile.TemporaryDirectory() as tmp:
+            sample = Path(tmp) / "sample.md"
+            sample.write_text(f"# Tiers\n\n{line}\n", encoding="utf-8")
+            self.assertEqual({"4": {"gemini-3.1-pro-high"}}, self._pairings(sample))
 
     def test_every_slug_used_anywhere_is_a_known_slug(self) -> None:
         """Catches an invented or mistyped slug, which fails loudly at call time."""
