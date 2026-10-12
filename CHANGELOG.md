@@ -11,7 +11,11 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
-## [Unreleased]
+## [4.2.0] - 2026-10-12
+
+Maintenance from deferred items. Two shipped files that nothing used are gone
+(see Removed — delete them when upgrading); everything else changes only this
+repository's own gate and tests, which adopting projects do not copy.
 
 ### Changed
 - **This repository's gate runs its tests in parallel: ~90 s → ~25 s.**
@@ -22,6 +26,10 @@ project changed, back up a gitignored `.claude/` first).
 - `tests/test_agy_probe.py`: the temp-file leak test now watches its own `TMPDIR`.
   It globbed `/tmp` for the capture file's old name, so it could not fail on a
   real leak.
+- This repository's tests no longer depend on local state: the model-tier
+  consistency test read untracked files and failed on a fresh clone (it now reads
+  `git ls-files`), and the hook contract tests no longer write a mark into the
+  real `.claude/logs/bash-marks/`.
 - README 「업그레이드 절차」 now classifies four template-owned files it left out:
   `docs/writing-style.md`, `docs/templates/field-report.md`, `scripts/README.md`
   and `ORCHESTRATOR_VERSION`.
