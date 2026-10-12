@@ -352,11 +352,18 @@ Dropped after review:
 
 - [ ] **Bash-mark sweep race (2026-10-12) — recorded, not fixed, no occurrence.**
       `bash-write-check.py` `sweep_stale` removes marks older than an hour without
-      catching `OSError`. `tests/test_hook_contract.py` leaves a mark in the real
-      `.claude/logs/bash-marks/`, so once it is stale, two contract tests on
-      parallel workers could sweep it at the same instant and one would get a
-      traceback (parallel subagents' Bash calls could do the same). Fix if it is
-      ever seen: `except OSError` around the remove.
+      catching `OSError`. `tests/test_hook_contract.py` leaves a `toolu_contract`
+      mark in the real `.claude/logs/bash-marks/` on EVERY run, serial or not (its
+      PostToolUse payload has no `tool_use_id`, so the mark is never taken). Once
+      that mark is stale, two `on_pre` calls sweeping at the same instant — two
+      contract tests on parallel workers, or parallel subagents' Bash calls — can
+      make the loser's sweep raise before it writes its own mark. The top-level
+      handler swallows the error (exit 0), so nothing goes red: that one command's
+      write check is silently skipped. **Correction**: this note first said the
+      race would give a traceback and a red contract test; the isolated review
+      found the top-level handler rules that out. Fix if it is ever seen: `except
+      OSError` around the remove; separately, the contract test should not leave
+      its mark behind.
 
 - [ ] **Path-scoped rules (2026-10-08) — observe, the gate cannot.** (b) is still
       open: at the next usage review (method of the 4.0.0 measurement), sessions
