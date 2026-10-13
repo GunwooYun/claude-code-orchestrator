@@ -69,7 +69,7 @@ TOKEN_FIELDS = {
 COMMAND_TAG = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
 HOOK_FILE = re.compile(r"\.claude/hooks/([\w.-]+)")
 # Only in command position: `grep agy-probe x` names it, it does not run it.
-AT_COMMAND = r"(?:^|[;&|(\n])\s*(?:(?:do|then|else|\S*/time)\s+)?"
+AT_COMMAND = r"(?:^|[;&|({\n])\s*(?:(?:do|then|else|(?:\S*/)?time(?:\s+-\S+)*)\s+)?"
 AGY_CALL = re.compile(AT_COMMAND + r"agy\s")
 PROBE_CALL = re.compile(AT_COMMAND + r"(?:\S*/)?agy-probe\b")
 VERIFY_TIER = re.compile(AT_COMMAND + r"(?:\S*/)?\.claude/scripts/verify-([a-z]+)\b")

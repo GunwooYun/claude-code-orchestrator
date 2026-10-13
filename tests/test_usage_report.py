@@ -420,7 +420,9 @@ class Gate(UsageReportCase):
             "cd /r && .claude/scripts/verify-task": True,
             "for i in 1; do .claude/scripts/verify-task; done": True,
             '"$CLAUDE_PROJECT_DIR"/.claude/scripts/verify-task': True,
-            "/usr/bin/time .claude/scripts/verify-task": True,
+            "/usr/bin/time -p .claude/scripts/verify-task": True,
+            "time .claude/scripts/verify-task": True,
+            '[ -f x ] && { .claude/scripts/verify-task "x"; }': True,
         }
         self.write_session(
             [
