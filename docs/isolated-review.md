@@ -153,7 +153,7 @@ The same scan rewrites the transcript
 CLI's output. JSON Lines are split on `\n` only — `splitlines()` also splits on
 U+2028/U+2029/U+0085, which the CLI emits raw inside strings, and that cut
 events in half so their secrets were never seen (round-3 F1; `run-review` and
-`field-report` both). If the rewrite fails, the report says so in a reason line
+`field-report` both — `field-report` was removed in 5.0.0). If the rewrite fails, the report says so in a reason line
 rather than being lost (round-2 review N1). Reasons pass through the same scan
 (round-3 F5). An undecodable byte on stdout, an unreadable file in the snapshot
 and an unwritable report no longer lose the review (round-3 F6/F7): the review
