@@ -334,6 +334,37 @@ class SlugCheckTests(unittest.TestCase):
         call = self.calls.read_text(encoding="utf-8").splitlines()[-1]
         self.assertIn(f"--model {self.slugs['T1'][0]}", call)
 
+    def test_a_tier_without_a_slug_in_the_table_is_stale(self) -> None:
+        # Isolated review 2026-10-13 #2: an unreadable T1 row said DEGRADED
+        # ("wait"), and T2-T4 rows were skipped without a word.
+        stub_agy(self.bin, '#!/bin/sh\necho "PROBE_OK"\n')
+        for tier in ("T1", "T2", "T3", "T4"):
+            with self.subTest(tier=tier):
+                root = self.bin / tier
+                (root / ".claude" / "bin").mkdir(parents=True)
+                (root / ".claude" / "rules").mkdir()
+                probe = root / ".claude" / "bin" / "agy-probe"
+                probe.write_text(PROBE.read_text(encoding="utf-8"), encoding="utf-8")
+                probe.chmod(0o755)
+                lines = RULES.read_text(encoding="utf-8").splitlines()
+                (root / ".claude" / "rules" / RULES.name).write_text(
+                    "\n".join(
+                        SLUG.sub("TBD", line) if line.startswith(f"| {tier} ") else line
+                        for line in lines
+                    ),
+                    encoding="utf-8",
+                )
+                env = {
+                    **os.environ,
+                    "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+                }
+                result = subprocess.run(
+                    [str(probe)], capture_output=True, text=True, timeout=60, env=env
+                )
+                self.assertEqual("STALE", state(result), result.stdout)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn(f"{tier} has no slug", result.stdout)
+
     def test_the_probe_names_no_slug_of_its_own(self) -> None:
         self.assertEqual([], SLUG.findall(PROBE.read_text(encoding="utf-8")))
 

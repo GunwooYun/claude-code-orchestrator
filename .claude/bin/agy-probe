@@ -51,12 +51,15 @@ trap 'rm -f "$errfile"' EXIT HUP INT TERM
 rules="$(dirname "$0")/../rules/antigravity-delegation.md"
 rows=$(grep -E '^\| T[1-4] ' "$rules" 2>/dev/null)
 slug_re='gemini-[0-9a-z.-]+-(low|medium|high)'
-t1=$(printf '%s\n' "$rows" | grep -E '^\| T1 ' | grep -oE "$slug_re" | head -n 1)
-if [ -z "$t1" ]; then
-    say "DEGRADED"
-    say "no T1 slug in the Model policy table of $rules."
+# A tier with no slug is the same fix as a stale one: pick it again.
+for tier in 1 2 3 4; do
+    printf '%s\n' "$rows" | grep -E "^\| T$tier " | grep -qE "$slug_re" && continue
+    say "STALE"
+    say "T$tier has no slug in the Model policy table of $rules."
+    say "Pick the tier slugs again (/initproject Step 3c), then re-run the probe."
     exit 1
-fi
+done
+t1=$(printf '%s\n' "$rows" | grep -E '^\| T1 ' | grep -oE "$slug_re" | head -n 1)
 
 # Every tier's slug against what agy offers, BEFORE the call: when the T1 slug
 # itself is gone the call below fails, and reading that as DEGRADED sent people
