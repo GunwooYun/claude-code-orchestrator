@@ -11,7 +11,14 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
-## [Unreleased]
+## [4.3.0] - 2026-10-13
+
+**Upgrade soon if you use agy:** on agy 1.3.3 every tier slug this template
+named is rejected, so every agy call failed and the probe told you to wait.
+Also: an upgrade-plan tool, a per-tier agy model choice, and a fix for
+isolated reviews ending INVALID on Claude Code's own runtime files. Nothing is
+removed. Upgrading: run `check --plan` (Added), then `.claude/bin/agy-probe` —
+`READY`, or `STALE` → `/agy-models`.
 
 ### Added
 - **`check --plan <project>`: the upgrade classification as a tool, read-only.**
@@ -47,13 +54,12 @@ project changed, back up a gitignored `.claude/` first).
   replaced 3.1 Pro High with 3.8 Flash High). The table in
   `.claude/rules/antigravity-delegation.md` is now the only place a slug is
   written; the agent file, `/feature` and `CLAUDE.md` name the tier, and
-  `AGENTS.md` uses a generic `{slug}`. Upgrading: take those files as they are, and keep your own table rows
-  if you changed them.
+  `AGENTS.md` uses a generic `{slug}`. Upgrading: take those files as they
+  are, and keep your own table rows if you changed them.
 - **`agy-probe` reports `STALE`** (exit 1) when agy no longer offers a slug
   the table names, or a tier row has none — checked with `agy models` before
-  its own call. It used to
-  report DEGRADED, "wait", for a fault that waiting never fixes. It reads its
-  own slug from the table.
+  its own call. It used to report DEGRADED, "wait", for a fault that waiting
+  never fixes. It reads its own slug from the table.
 
 ## [4.2.0] - 2026-10-12
 
