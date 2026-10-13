@@ -22,6 +22,7 @@ from test_isolated_review import (
     EXIT_INCOMPLETE,
     EXIT_INVALID,
     EXIT_REFUSED,
+    REPO,
     IsolatedReviewCase,
     load_script,
 )
@@ -50,6 +51,55 @@ class SnapshotTests(IsolatedReviewCase):
         result = self.sandbox().run(scenario="modify_ignored_claude_file")
         self.assertEqual(EXIT_INVALID, result.returncode, result.stdout)
         self.assertIn(".claude/settings.local.json", header(result.stdout))
+
+
+class RuntimeFileTests(IsolatedReviewCase):
+    """
+    Claude Code's runtime files under .claude/ made a real review INVALID
+    (2026-10-13: `.claude/scheduled_tasks.lock` appeared mid-run). Not ignored
+    here, as in a project Claude Code has not yet written its exclude block to.
+    """
+
+    def test_runtime_lock_created_mid_run_is_not_a_tree_change(self) -> None:
+        result = self.sandbox().run(scenario="touch_runtime_lock")
+        self.assertEqual(EXIT_COMPLETE, result.returncode, result.stdout)
+
+    def test_runtime_lock_present_before_is_not_refused_and_may_vanish(self) -> None:
+        box = self.sandbox()
+        (box.root / ".claude/scheduled_tasks.lock").write_text("{}", encoding="utf-8")
+        result = box.run(scenario="remove_runtime_lock")
+        self.assertEqual(EXIT_COMPLETE, result.returncode, result.stdout)
+
+    def test_real_edit_beside_runtime_lock_is_invalid_and_named(self) -> None:
+        result = self.sandbox().run(scenario="runtime_lock_and_rule_edit")
+        self.assertEqual(EXIT_INVALID, result.returncode, result.stdout)
+        shown = header(result.stdout)
+        self.assertIn(".claude/rules/x.md", shown)
+        self.assertNotIn("scheduled_tasks.lock", shown)
+
+    def test_runtime_paths_match_only_at_the_top_of_claude(self) -> None:
+        for path in (
+            ".claude/scheduled_tasks.lock",
+            ".claude/worktrees/agent-1/src/a.py",
+            ".claude/agent-memory-local/m.md",
+            ".claude/routines/.state/x",
+        ):
+            self.assertTrue(RR.excluded(path), path)
+        for path in (
+            ".claude/rules/scheduled_tasks.lock",
+            ".claude/scheduled_tasks.lockx",
+            ".claude/worktrees-notes.md",
+            "scheduled_tasks.lock",
+        ):
+            self.assertFalse(RR.excluded(path), path)
+
+    def test_every_runtime_path_is_named_in_the_design_doc(self) -> None:
+        # VD: the doc lists what the snapshot skips; a name only in the code
+        # leaves the next INVALID unexplained.
+        doc = (REPO / "docs/isolated-review.md").read_text(encoding="utf-8")
+        section = doc.split("Snapshot — ", 1)[1].split("\n\n", 1)[0]
+        for path in RR.CLAUDE_RUNTIME:
+            self.assertIn(f"`{path.removeprefix('.claude/')}`", section)
 
 
 class AddedFileTests(IsolatedReviewCase):

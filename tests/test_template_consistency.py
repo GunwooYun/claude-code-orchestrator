@@ -38,6 +38,10 @@ REPO = Path(__file__).parent.parent
 HOOKS = REPO / ".claude" / "hooks"
 SKILLS = REPO / ".claude" / "skills"
 SETTINGS = REPO / ".claude" / "settings.json"
+# Directories the prose scans skip. "reviews" holds isolated-review reports
+# (gitignored); a header such as "changed: 5 files, 881 lines" reads as a
+# threshold and failed the gate on a 5-file branch.
+PROSE_SCAN_SKIP = (".git", "research", "node_modules", "checkpoints", "reviews")
 
 # Locations whose contents are INPUTS the model is told to read. Outputs are
 # excluded on purpose: .claude/docs/ and .claude/logs/ hold
@@ -199,10 +203,7 @@ class LargeChangeThresholdTests(unittest.TestCase):
     def _threshold_mentions(self) -> dict[str, set[str]]:
         found: dict[str, set[str]] = {}
         for path in sorted(REPO.rglob("*.md")):
-            if any(
-                part in (".git", "research", "node_modules", "checkpoints")
-                for part in path.parts
-            ):
+            if any(part in PROSE_SCAN_SKIP for part in path.parts):
                 continue
             flat = " ".join(path.read_text(encoding="utf-8").split())
             numbers: set[str] = set()
@@ -403,7 +404,7 @@ class AlwaysLoadedBudgetTests(unittest.TestCase):
         executor = (REPO / ".claude" / "agents" / "general-purpose.md").read_text(
             encoding="utf-8"
         )
-        for state in ("MISSING", "UNAUTHENTICATED", "DEGRADED"):
+        for state in ("MISSING", "UNAUTHENTICATED", "DEGRADED", "STALE"):
             self.assertIn(
                 state, executor, f"the executor cannot recognise the {state} state"
             )
@@ -441,7 +442,7 @@ class ModelTierConsistencyTests(unittest.TestCase):
     """
 
     TIER = re.compile(r"\bT([1-4])\b")
-    SLUG = re.compile(r"gemini-[0-9a-z.\-]*-(?:low|high)")
+    SLUG = re.compile(r"gemini-[0-9a-z.\-]*-(?:low|medium|high)")
     CANONICAL = REPO / ".claude" / "rules" / "antigravity-delegation.md"
 
     def _files(self) -> list[Path]:
@@ -517,6 +518,21 @@ class ModelTierConsistencyTests(unittest.TestCase):
                 unknown[str(path.relative_to(REPO))] = sorted(used - known)
         self.assertEqual({}, unknown, f"unknown model slugs: {unknown}")
 
+    def test_only_the_canonical_table_writes_a_slug(self) -> None:
+        """
+        Copies name the tier, not the slug. agy 1.3.3 dropped every slug at once
+        (2026-10-13) and six files carried them; /initproject Step 3c rewrites
+        the table only, so a literal elsewhere would keep the old choice. This
+        also catches a tier swap the pairing check above cannot see.
+        """
+        literals = {
+            str(path.relative_to(REPO)): sorted(set(self.SLUG.findall(text)))
+            for path in self._files()
+            if path != self.CANONICAL
+            and self.SLUG.search(text := path.read_text(encoding="utf-8"))
+        }
+        self.assertEqual({}, literals, f"slugs written outside the table: {literals}")
+
 
 class SectionPointerTests(unittest.TestCase):
     """
@@ -548,10 +564,7 @@ class SectionPointerTests(unittest.TestCase):
     def _pointers(self) -> list[tuple[Path, str, str]]:
         found = []
         for path in sorted(REPO.rglob("*.md")):
-            if any(
-                part in (".git", "research", "node_modules", "checkpoints")
-                for part in path.parts
-            ):
+            if any(part in PROSE_SCAN_SKIP for part in path.parts):
                 continue
             flat = " ".join(path.read_text(encoding="utf-8").split())
             for match in self.POINTER.finditer(flat):

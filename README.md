@@ -5,7 +5,7 @@
 
 ![Claude Code Orchestrator](./summary.png)
 
-> 현재 버전: **4.2.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md).
+> 현재 버전: **4.3.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md).
 
 ## 목차
 
@@ -91,7 +91,7 @@ your-project/
 ├── .agents/
 │   └── rules/AGENTS.md            # agy 가 읽는 프로젝트 설명
 └── .claude/
-    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 4.2.0)
+    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 4.3.0)
     ├── settings.json              # 훅 등록 + 권한(allow / ask / deny)
     ├── agents/                    # 서브에이전트 정의 (deep-reasoning, general-purpose)
     ├── skills/                    # 슬래시 커맨드 (아래 표)
@@ -110,6 +110,7 @@ your-project/
 | **`/feature <기능명>`** | **작업 하나마다** | 조사 → 요구사항 → 검증 계획 → 설계 리뷰 → 할 일 목록 → 승인 → 구현 → 리뷰 |
 | **`/isolated-review`** | 구현을 커밋한 뒤 | 이 세션과 무관한 격리된 리뷰어가 읽기 전용으로 리뷰한다 |
 | `/orchestrator-version` | 버전이 궁금할 때 | 설치된 버전과 최신 릴리스를 비교 |
+| `/agy-models` | agy 프로브가 `STALE` 일 때, 등급별 모델을 바꾸고 싶을 때 | agy 등급 T1~T4 의 모델을 사용자가 고른다 (`/initproject` 도 이 절차를 쓴다) |
 | `/jira-setup`, `/ticket` | Jira 를 쓰는 팀 | Jira 연결 설정, 티켓에서 작업 시작 |
 | `/doc-write` | Confluence·문서 작성 | 작성 규칙에 맞춰 문서를 쓰고 발행 |
 
@@ -280,7 +281,7 @@ flowchart LR
 `READY`(정상) / `MISSING`(설치 안 됨) / `UNAUTHENTICATED`(로그인 필요) / `DEGRADED`(응답이 빔).
 
 **Step 4 — `CLAUDE.md` 갱신.** 맨 위 제목을 프로젝트 이름으로 바꾸고, `## 기술 스택` 에 실제 명령을 적고,
-`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v4.2.0`)을 기록한다.
+`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v4.3.0`)을 기록한다.
 
 **Step 5 — 검증 스크립트 작성.** Step 2 의 답으로 `.claude/scripts/verify-save`, `verify-task` 등을 만든다.
 이것이 이후 모든 검증의 기준이 된다 ([8장](#8-검증-계약--verify--스크립트)). **포매터(black 등)는 프로젝트가
@@ -510,7 +511,14 @@ flowchart TD
     H --> G
 ```
 
-- "프로젝트가 고쳤나"는 그 파일을 **내 버전의 원본과 내용으로 비교**해서 판단한다. git 의 내용 해시를
+- **3번 분류표는 도구가 만든다** (읽기 전용, 아무것도 바꾸지 않는다). 템플릿 클론의 스크립트로 실행한다 —
+  프로젝트에 있는 사본은 옛 버전이라 이 옵션이 없을 수 있다:
+  `git -C <템플릿 클론> fetch --tags` 후
+  `python3 <템플릿 클론>/.claude/skills/orchestrator-version/check --plan <프로젝트 루트>`.
+  파일마다 REPLACE·MERGE·KEEP·DELETE·ADD·PROJECT-ONLY 등으로 나누고, 예전 업그레이드에서 지웠어야 할
+  파일은 PROJECT-ONLY 아래 "last shipped in X" 로 모아 보여 준다. 실행 권한을 잃은 스크립트, 지워질 훅을
+  가리키는 `settings.json` 등록, 읽어야 할 CHANGELOG 항목도 함께 나온다.
+- "프로젝트가 고쳤나"는 그 파일을 **내 버전의 원본과 내용으로 비교**해서 판단한다 (도구도 이 규칙을 쓴다). git 의 내용 해시를
   쓰면 Linux·macOS·Windows(PowerShell·cmd) 어디서나 같은 명령이고, 파일 권한 차이에 속지 않는다:
   `git -C <템플릿 클론> rev-parse v<내 버전>:<경로>` 와 `git hash-object <경로>` 의 출력이 **같으면 안 고친 것**이다.
   (`diff` 나 `git diff --no-index` 는 내용이 같아도 실행 권한 차이만으로 "다르다"고 나온다.)
@@ -588,9 +596,10 @@ flowchart TD
 | `/feature` | 실제 프로젝트에서 여러 작업 단위를 끝까지 진행 |
 | `/isolated-review` | 실작업 3회 + 지난 작업 6건 재검증. 사람이 연 리뷰가 놓친 진짜 문제를 찾았고 오탐은 없었다. 실행이 필요한 결함은 놓친다 |
 | deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중 (2026-10-07 측정: deep-reasoning 30회, agy 79회). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
-| `/orchestrator-version` | 업그레이드에 사용 |
+| `/orchestrator-version` | 업그레이드에 사용. `--plan` 은 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치) |
 | 훅 4개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `log-cli-tools` 의 판정 | 판정하는 모든 모양을 실제 bash 로 돌려 대조하는 테스트(무작위 600개 + 리뷰 지적 입력)로 확인. Bash 시간 제한·백그라운드 동작은 가짜 agy 로 실측 |
+| `/agy-models` | 템플릿 저장소에서 실제 agy 1.3.3 으로 1회 완주(2026-10-13): Gemini 3개 제시 → 등급별 선택 → 표 기록 → 프로브 `READY`. 선택지가 4개를 넘는 경우와 `/initproject` Step 3c 경유 실행은 아직 돌려 보지 않았다 |
 | `/doc-write`, `/jira-setup`, `/ticket` | **아직 실제로 돌려 본 적 없다** |
 | Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다 |
 

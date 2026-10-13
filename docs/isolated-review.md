@@ -90,6 +90,18 @@ Snapshot — a long review runs in the background while people keep working:
 - After the run: same HEAD, clean status, unchanged hashes of CLAUDE.md and
   `.claude/` → else the report is written marked `INVALID: tree changed during
   review` and the script exits non-zero. Never discarded silently.
+- Not part of the snapshot: what the script writes itself (`.claude/isolated-review/`,
+  `.claude/logs/`, `.claude/docs/reviews/`), dotfiles under `.claude/` (a hook's
+  state, 2026-10-02), and Claude Code's runtime state — the `# claude-code-runtime`
+  block Claude Code appends to `.git/info/exclude`, copied as is:
+  `scheduled_tasks.lock`, `scheduled_tasks.json`, `routines/.state`, `worktrees`,
+  `checkpoints`, `mailbox`, `agent-registry.json`, `agent-memory-local`,
+  `first-run`, `assistant-daemon-state.json` (each under `.claude/`). Any Claude
+  session in the project, the reviewer included, may write them:
+  `.claude/scheduled_tasks.lock` appearing mid-run made a real review INVALID
+  (2026-10-13). They are skipped by name, not because git ignores them — a project
+  that ignores all of `.claude/` must still see its edits (F4). A new runtime
+  name: copy the block again (`CLAUDE_RUNTIME` in run-review).
 
 Verdict — sections present is not coverage:
 - A `## Coverage` section must list every changed path — the plain `status	path`
@@ -232,7 +244,8 @@ Documented, not changed:
   says not to share it.
 - A secret the branch itself commits reaches the reviewer through the diff; the
   Read denies do not apply to stdin.
-- **#15**: files ignored by git are outside the snapshot. The implementer can
+- **#15**: files ignored by git **outside `CLAUDE.md` and `.claude/`** are outside
+  the snapshot (inside them, content is hashed — F4). The implementer can
   change one during the run and the report stays COMPLETE. Hashing ignored
   trees (`node_modules`) on every run costs more than the risk.
 - The environment is inherited as-is (`ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`):

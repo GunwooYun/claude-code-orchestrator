@@ -144,6 +144,15 @@ if scenario == "touch_hook_state":
     # real project: .claude/hooks/.blocked-reviews), written during the run.
     Path(".claude/hooks").mkdir(parents=True, exist_ok=True)
     Path(".claude/hooks/.blocked-reviews").write_text("pending\n")
+if scenario == "touch_runtime_lock":
+    # Claude Code's own lock (real run, 2026-10-13), not ignored in the sandbox.
+    Path(".claude/scheduled_tasks.lock").write_text('{"pid": 1}')
+if scenario == "remove_runtime_lock":
+    Path(".claude/scheduled_tasks.lock").unlink()
+if scenario == "runtime_lock_and_rule_edit":
+    Path(".claude/scheduled_tasks.lock").write_text('{"pid": 1}')
+    Path(".claude/rules").mkdir(parents=True, exist_ok=True)
+    Path(".claude/rules/x.md").write_text("changed during review\n")
 if scenario == "no_result":
     sys.exit(0)  # a crash that still exits 0: init printed, no result event
 if scenario == "modify_tree":

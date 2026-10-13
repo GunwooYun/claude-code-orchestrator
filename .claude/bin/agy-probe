@@ -12,6 +12,9 @@
 #              UNAUTHENTICATED  installed but no valid session: log in
 #              DEGRADED         answered, but the answer was empty (soft-deny,
 #                               quota, or network) — treat as unusable for now
+#              STALE            a tier slug in the Model policy table is not
+#                               offered by `agy models`: pick slugs again
+#                               (/agy-models)
 #
 # Callers gate on the exit code and read the word to pick the remedy. The states
 # exist because the remedies differ: installing, logging in and waiting are three
@@ -43,11 +46,50 @@ errfile=$(mktemp "${TMPDIR:-/tmp}/agy-probe.XXXXXX" 2>/dev/null) || {
 }
 trap 'rm -f "$errfile"' EXIT HUP INT TERM
 
+# The Model policy table is the only place a slug is written; the probe reads it
+# rather than carrying a copy that goes stale on its own.
+rules="$(dirname "$0")/../rules/antigravity-delegation.md"
+rows=$(grep -E '^\| T[1-4] ' "$rules" 2>/dev/null)
+slug_re='gemini-[0-9a-z.-]+-(low|medium|high)'
+# A tier with no slug is the same fix as a stale one: pick it again.
+for tier in 1 2 3 4; do
+    printf '%s\n' "$rows" | grep -E "^\| T$tier " | grep -qE "$slug_re" && continue
+    say "STALE"
+    say "T$tier has no slug in the Model policy table of $rules."
+    say "Pick the tier slugs again (/agy-models), then re-run the probe."
+    exit 1
+done
+t1=$(printf '%s\n' "$rows" | grep -E '^\| T1 ' | grep -oE "$slug_re" | head -n 1)
+
+# Every tier's slug against what agy offers, BEFORE the call: when the T1 slug
+# itself is gone the call below fails, and reading that as DEGRADED sent people
+# to wait for something that never recovers (2026-10-13, agy 1.3.3 dropped every
+# slug the table named). Lines are `slug<TAB>display name`; a listing without
+# that shape (an older agy, a failure) skips the check rather than passing it.
+offered=$(agy models 2>/dev/null | awk -F '\t' 'NF >= 2 { print $1 }')
+missing=""
+if [ -n "$offered" ]; then
+    for tier in 1 2 3 4; do
+        for slug in $(printf '%s\n' "$rows" | grep -E "^\| T$tier " | grep -oE "$slug_re"); do
+            printf '%s\n' "$offered" | grep -qxF "$slug" || missing="$missing T$tier:$slug"
+        done
+    done
+fi
+if [ -n "$missing" ]; then
+    say "STALE"
+    for entry in $missing; do
+        say "${entry%%:*} names ${entry#*:}, which agy does not offer."
+    done
+    say "agy offers: $(printf '%s\n' "$offered" | grep '^gemini-' | tr '\n' ' ')"
+    say "Pick the tier slugs again (/agy-models), then re-run the probe."
+    exit 1
+fi
+
 # One cheap call on the cheapest tier. Ask for an exact token so an empty or
 # hedged answer is detectable — a soft-denied call exits 0 with no content, which
 # is the trap documented in .claude/docs/research/antigravity-cli.md (§3).
 output=$(agy -p "Reply with exactly: PROBE_OK" \
-    --model gemini-3.7-flash-low \
+    --model "$t1" \
     --print-timeout 60s 2>"$errfile" )
 status=$?
 stderr=$(cat "$errfile" 2>/dev/null)
@@ -60,6 +102,7 @@ stderr=$(cat "$errfile" 2>/dev/null)
 case "$output" in
     *PROBE_OK*)
         say "READY"
+        [ -z "$offered" ] && say "note: could not list agy's models; tier slugs not checked."
         [ -n "$stderr" ] && say "note: agy wrote to stderr: $stderr"
         exit 0
         ;;

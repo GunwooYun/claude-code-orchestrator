@@ -19,7 +19,11 @@ flags and prompt templates live elsewhere:
 Check once per unit of work (`/feature` Phase 1), not per call:
 `.claude/bin/agy-probe` — exit 0 = `READY`; otherwise the
 first word is the state: `MISSING` (not on PATH), `UNAUTHENTICATED` (log in),
-`DEGRADED` (empty answers: soft-deny, quota, network).
+`DEGRADED` (empty answers: soft-deny, quota, network), `STALE` (a slug in the
+Model policy table is no longer offered by agy).
+
+**`STALE`:** show the probe's lines and ask the user once — they run
+`/agy-models`, or you use the fallbacks. Never pick a slug yourself.
 
 | agy's job | Fallback | What is lost |
 |---|---|---|
@@ -63,17 +67,21 @@ The orchestrator picks the tier when it writes the Task prompt. A call without
 
 | Tier | Task | `--model` |
 |---|---|---|
-| T1 Quick lookup | One fact, yes/no, a version | `gemini-3.7-flash-low` |
-| T2 Summarize / extract | One page or one small file; structured fields | `gemini-3.7-flash-high` (machine-consumed → `gemini-3.1-pro-low`) |
-| T3 Research report | Comparison, best practice, multi-source synthesis | `gemini-3.1-pro-high` |
-| T4 Whole repo / multimodal | Repo-wide analysis, cross-module tracing, PDF/image/video | `gemini-3.1-pro-high` + `--print-timeout 9m` |
+| T1 Quick lookup | One fact, yes/no, a version | `gemini-3.8-flash-low` |
+| T2 Summarize / extract | One page or one small file; structured fields | `gemini-3.8-flash-high` |
+| T3 Research report | Comparison, best practice, multi-source synthesis | `gemini-3.8-flash-high` |
+| T4 Whole repo / multimodal | Repo-wide analysis, cross-module tracing, PDF/image/video | `gemini-3.8-flash-high` + `--print-timeout 9m` |
+
+**This table is the only place a slug is written.** Other files name the tier;
+`.claude/bin/agy-probe` reads the slugs from here and reports `STALE` when agy no
+longer offers one. Choosing them per project: `/agy-models`.
 
 1. Unsure between two tiers → the higher one. T4 is never lowered.
-2. The user's instruction ("flash 로", "pro 로") wins.
+2. The user's instruction ("low 로", "high 로", a named slug) wins.
 3. Any prompt that names local files, a directory or "this repo" needs the
    headless flags and the "do not modify files" sentence, at any tier.
-4. An empty answer: check for soft-deny first; then raise once to
-   `gemini-3.1-pro-high`. No `--effort` flag — the slug suffix is the knob.
+4. An empty answer: check for soft-deny first; then raise once to the T3
+   slug. No `--effort` flag — the slug suffix is the knob.
 
 Ask agy in **English**; the subagent summarises and saves; the main session
 reports to the user in **Korean**.

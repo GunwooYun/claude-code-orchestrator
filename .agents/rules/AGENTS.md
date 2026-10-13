@@ -55,7 +55,7 @@ with tool permissions auto-approved; the read-only rule is what keeps that safe.
 ```bash
 agy -p "{research question}" --model {slug}
 agy -p "Read the file at {absolute_path} and {question}. Do not create or modify any files." \
-  --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox   # multimodal: read the file yourself
+  --model {slug} --dangerously-skip-permissions --sandbox   # multimodal: read the file yourself
 agy -p "{question}" --model {slug} --output-format json --print-timeout 10m   # scripted calls
 ```
 

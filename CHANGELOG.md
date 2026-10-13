@@ -11,6 +11,56 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [4.3.0] - 2026-10-13
+
+**Upgrade soon if you use agy:** on agy 1.3.3 every tier slug this template
+named is rejected, so every agy call failed and the probe told you to wait.
+Also: an upgrade-plan tool, a per-tier agy model choice, and a fix for
+isolated reviews ending INVALID on Claude Code's own runtime files. Nothing is
+removed. Upgrading: run `check --plan` (Added), then `.claude/bin/agy-probe` —
+`READY`, or `STALE` → `/agy-models`.
+
+### Added
+- **`check --plan <project>`: the upgrade classification as a tool, read-only.**
+  Run the template clone's script (`.claude/skills/orchestrator-version/check`)
+  against an adopted copy: every file under `.claude/`, `.agents/` and
+  `CLAUDE.md` is classed REPLACE / MERGE / KEEP / DELETE / DELETE-MODIFIED /
+  ADD / ABSENT / PROJECT-ONLY by the README hash rule, project-owned files are
+  marked, and PROJECT-ONLY files are grouped by the last release that shipped
+  them. It also lists scripts that lost their exec bit, `settings.json` hook
+  registrations left without a file, and the CHANGELOG entries to read. It
+  changes nothing. Why: a real 3.1.0 copy still carried 18 files earlier
+  upgrades should have deleted (hooks, and skills colliding with built-ins), and
+  the README procedure had no tool; the plan lists exactly those 18.
+- **`/agy-models`: choose the agy model of each tier** (user-invoked; also
+  `/initproject` Step 3c). Shows the table and the Gemini slugs agy offers,
+  asks for T1–T4, writes the table, re-probes to `READY`. `STALE` points to
+  it, so it is run again whenever agy renames its models — without re-running
+  all of `/initproject`. Why: agy quota differs per person — with quota to
+  spare, high on every tier is a reasonable choice.
+
+### Fixed
+- **`/isolated-review`: Claude Code's runtime files no longer make a review
+  INVALID.** `.claude/scheduled_tasks.lock` (written by any Claude session in the
+  project, the reviewer included) appeared mid-run and a real review ended
+  INVALID with the reviewed commit unchanged. The snapshot and the clean-tree
+  check now skip the paths Claude Code lists in its `# claude-code-runtime`
+  block of `.git/info/exclude`; edits to any other file under `.claude/` are
+  still caught, gitignored or not. Hit INVALID naming one of those paths in an
+  adopted copy: upgrade `run-review`.
+- **agy model slugs: every tier failed on agy 1.3.3.** It offers only the 3.8
+  Flash slugs; the 3.7 Flash and 3.1 Pro slugs the Model policy table named
+  are rejected (exit 1). T1 is now 3.8 Flash low, T2–T4 3.8 Flash high (agy
+  replaced 3.1 Pro High with 3.8 Flash High). The table in
+  `.claude/rules/antigravity-delegation.md` is now the only place a slug is
+  written; the agent file, `/feature` and `CLAUDE.md` name the tier, and
+  `AGENTS.md` uses a generic `{slug}`. Upgrading: take those files as they
+  are, and keep your own table rows if you changed them.
+- **`agy-probe` reports `STALE`** (exit 1) when agy no longer offers a slug
+  the table names, or a tier row has none — checked with `agy models` before
+  its own call. It used to report DEGRADED, "wait", for a fault that waiting
+  never fixes. It reads its own slug from the table.
+
 ## [4.2.0] - 2026-10-12
 
 Maintenance from deferred items. Two shipped files that nothing used are gone

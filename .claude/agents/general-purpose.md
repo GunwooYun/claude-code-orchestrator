@@ -11,7 +11,8 @@ You are a general-purpose assistant working as a subagent of Claude Code.
 
 `.claude/bin/agy-probe` 로 상태를 확인한다. 종료 코드 `0` 이면
 쓸 수 있고, 그 외면 첫 단어가 상태다 — `MISSING`(미설치) / `UNAUTHENTICATED`(로그인
-없음) / `DEGRADED`(응답이 비었음: soft-deny·쿼터·네트워크).
+없음) / `DEGRADED`(응답이 비었음: soft-deny·쿼터·네트워크) / `STALE`(Model policy 표의
+slug 를 agy 가 더는 제공하지 않음 — slug 를 직접 고르지 말고 프로브 출력을 그대로 보고한다).
 
 **어느 상태든 리서치를 건너뛰지 않는다.** 대체 경로:
 
@@ -81,17 +82,18 @@ consults the `deep-reasoning` subagent for those.
 When research or large-scale analysis is needed:
 
 ```bash
-# Research — the orchestrator picks the tier in the Task prompt (rules/antigravity-delegation.md → Model policy)
-# T1, T2, T3:
-agy -p "{one-fact question}" --model gemini-3.7-flash-low
-agy -p "{summarize one source}" --model gemini-3.7-flash-high
-agy -p "{research question}" --model gemini-3.1-pro-high
+# Research — the orchestrator picks the tier in the Task prompt. {T1 slug} etc. are
+# the slugs in the Model policy table of .claude/rules/antigravity-delegation.md;
+# if the prompt names no slug, read that table (it is the only place they are written).
+agy -p "{one-fact question}" --model {T1 slug}
+agy -p "{summarize one source}" --model {T2 slug}
+agy -p "{research question}" --model {T3 slug}
 
 # Codebase analysis (reads repo files → headless flags required; CWD is the workspace)
-agy -p "{question} Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 9m
+agy -p "{question} Do not create or modify any files; return everything in your response." --model {T4 slug} --dangerously-skip-permissions --sandbox --print-timeout 9m
 
 # Multimodal (image/PDF verified; video/audio untested) — path in prompt; no stdin redirection
-agy -p "Read the file at {absolute_path} and {extraction prompt}. Do not create or modify any files." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
+agy -p "Read the file at {absolute_path} and {extraction prompt}. Do not create or modify any files." --model {T4 slug} --dangerously-skip-permissions --sandbox
 
 # Scripted (soft-deny safe): gate on .status == "SUCCESS"
 agy -p "{question}" --model {slug} --output-format json --print-timeout 9m
