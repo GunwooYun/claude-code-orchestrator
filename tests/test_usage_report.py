@@ -14,6 +14,7 @@ zeros, not as an error — these tests cannot catch that.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -158,7 +159,8 @@ class UsageReportCase(unittest.TestCase):
             for record in records:
                 handle.write(json.dumps(record) + "\n")
 
-    def run_report(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run_report(self, *args: str, tz: str = "") -> subprocess.CompletedProcess[str]:
+        env = {**os.environ, "TZ": tz} if tz else None
         return subprocess.run(
             [
                 str(SCRIPT),
@@ -171,10 +173,11 @@ class UsageReportCase(unittest.TestCase):
             capture_output=True,
             text=True,
             timeout=60,
+            env=env,
         )
 
-    def report(self, *args: str) -> dict:
-        result = self.run_report("--json", *args)
+    def report(self, *args: str, tz: str = "") -> dict:
+        result = self.run_report("--json", *args, tz=tz)
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
@@ -294,6 +297,16 @@ class Tokens(UsageReportCase):
         )
         self.assertEqual(tokens["subagent"]["output"], 5)
 
+    def test_streamed_response_counts_its_final_record(self) -> None:
+        # Measured (2026-10-14): subagent records of one response carry a
+        # growing output_tokens; the first record undercounted 4.6x-24x.
+        records = [tool_use(f"s{n}", "Read", {}, msg_id="m1") for n in range(3)]
+        for record, out in zip(records, (1, 7, 12), strict=True):
+            record["message"]["usage"] = usage(out=out)
+        self.write_session([user_text("hi")])
+        self.write_session(records, agent="x1")
+        self.assertEqual(self.report()["tokens"]["subagent"]["output"], 12)
+
 
 class Hooks(UsageReportCase):
     def test_runs_nonzero_and_output_per_hook_file(self) -> None:
@@ -397,6 +410,27 @@ class Gate(UsageReportCase):
             {"task": {"runs": 2, "failed": 1}, "unit": {"runs": 1, "failed": 0}},
         )
 
+    def test_only_commands_in_command_position_are_runs(self) -> None:
+        # Measured (2026-10-14): about a quarter of the mentions in real
+        # transcripts were reads or arguments, not runs.
+        commands = {
+            "cat .claude/scripts/verify-task": False,
+            "git diff -- .claude/scripts/verify-task": False,
+            'git commit -m "run .claude/scripts/verify-task"': False,
+            "cd /r && .claude/scripts/verify-task": True,
+            "for i in 1; do .claude/scripts/verify-task; done": True,
+            '"$CLAUDE_PROJECT_DIR"/.claude/scripts/verify-task': True,
+            "/usr/bin/time .claude/scripts/verify-task": True,
+        }
+        self.write_session(
+            [
+                tool_use(f"v{n}", "Bash", {"command": command})
+                for n, command in enumerate(commands)
+            ]
+        )
+        runs = sum(commands.values())
+        self.assertEqual(self.report()["gate"], {"task": {"runs": runs, "failed": 0}})
+
 
 class FeatureProgress(UsageReportCase):
     def test_how_far_feature_sessions_get(self) -> None:
@@ -447,7 +481,12 @@ class Agy(UsageReportCase):
                     "Bash",
                     {"command": ".claude/scripts/verify-task; .claude/bin/agy-probe"},
                 ),
+                # Was expected as "unknown": that is the common real shape
+                # (2026-10-14: 30 of 41 probe runs), so the state is read
+                # from any line, not only the first word.
                 tool_result("y8", "== gate ==\nREADY"),
+                tool_use("y9", "Bash", {"command": ".claude/bin/agy-probe"}),
+                tool_result("y9", "Exit code 1\nTraceback: boom", True),
                 tool_use("y5", "Bash", {"command": "grep -n agy-probe a.md"}),
                 tool_result("y5", "a.md:1: agy-probe"),
                 tool_use("y6", "Bash", {"command": "echo agy is down | tee x"}),
@@ -460,8 +499,8 @@ class Agy(UsageReportCase):
             {
                 "calls": 3,
                 "failed": 1,
-                "probe_runs": 3,
-                "probe_states": {"READY": 1, "STALE": 1, "unknown": 1},
+                "probe_runs": 4,
+                "probe_states": {"READY": 2, "STALE": 1, "unknown": 1},
             },
         )
         self.assertEqual(data["gate"], {"task": {"runs": 1, "failed": 0}})
@@ -479,6 +518,15 @@ class Since(UsageReportCase):
         data = self.report("--since", "2026-10-01")
         self.assertEqual(data["skills"]["feature"]["typed"], 1)
         self.assertEqual(data["coverage"]["first"], "2026-10-12")
+
+    def test_since_is_a_local_date(self) -> None:
+        # Transcript stamps are UTC; --since and the run-log names are local.
+        record = user_text("<command-name>/feature</command-name>")
+        record["timestamp"] = "2026-10-12T20:00:00.000Z"  # 05:00 on the 13th in Seoul
+        self.write_session([record])
+        data = self.report("--since", "2026-10-13", tz="Asia/Seoul")
+        self.assertEqual(data["skills"]["feature"]["typed"], 1)
+        self.assertEqual(data["coverage"]["first"], "2026-10-13")
 
     def test_bad_since_is_refused(self) -> None:
         result = self.run_report("--since", "yesterday")

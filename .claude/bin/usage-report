@@ -4,7 +4,8 @@ usage-report — count how this project used the template, from what is already
 recorded: Claude Code's session transcripts (and the isolated-review run log).
 
 Usage: usage-report [--project DIR] [--transcripts DIR] [--since YYYY-MM-DD] [--json]
-Output: Markdown (or JSON) on stdout. Exit 0, or 2 when there is nothing to read.
+Output: Markdown (or JSON) on stdout. Exit 0; 2 on a bad argument or a missing
+transcript directory. --since is a local date.
 
 Every number answers a decision: a template skill or hook with 0 uses is a
 removal candidate; denied calls and hook output tune rules and hooks; how far
@@ -36,7 +37,7 @@ import os
 import re
 import sys
 from collections import Counter
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 # The template's own names — kept equal to its files by tests/test_usage_report.py.
@@ -67,13 +68,13 @@ TOKEN_FIELDS = {
 
 COMMAND_TAG = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
 HOOK_FILE = re.compile(r"\.claude/hooks/([\w.-]+)")
-VERIFY_TIER = re.compile(r"\.claude/scripts/verify-([a-z]+)\b")
 # Only in command position: `grep agy-probe x` names it, it does not run it.
-AT_COMMAND = r"(?:^|[;&|(\n])\s*"
+AT_COMMAND = r"(?:^|[;&|(\n])\s*(?:(?:do|then|else|\S*/time)\s+)?"
 AGY_CALL = re.compile(AT_COMMAND + r"agy\s")
 PROBE_CALL = re.compile(AT_COMMAND + r"(?:\S*/)?agy-probe\b")
+VERIFY_TIER = re.compile(AT_COMMAND + r"(?:\S*/)?\.claude/scripts/verify-([a-z]+)\b")
+PROBE_STATE = re.compile(r"^(" + "|".join(PROBE_STATES) + r")\b", re.MULTILINE)
 BUILTIN_TOOL = re.compile(r"^[A-Z][A-Za-z]+$")
-EXIT_LINE = re.compile(r"^Exit code \d+\s*\n?")
 Pending = tuple[str, list[str]]  # (tool name, kinds of command a Bash call ran)
 EXIT_USAGE = 2
 
@@ -135,10 +136,19 @@ def hook_counts() -> Counter[str]:
     return Counter(runs=0, nonzero=0, with_output=0, errors=0)
 
 
-def first_word(output: str) -> str:
-    words = EXIT_LINE.sub("", output.lstrip(), count=1).split()
-    word = words[0] if words else ""
-    return word if word in PROBE_STATES else "unknown"
+def probe_state(output: str) -> str:
+    """The probe is often chained after other commands: its line is not first."""
+    match = PROBE_STATE.search(output)
+    return match.group(1) if match else "unknown"
+
+
+def local_day(stamp: str) -> str:
+    """Transcript stamps are UTC; --since and the run-log names are local."""
+    try:
+        moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return stamp[:10]
+    return moment.astimezone().date().isoformat()
 
 
 class Tally:
@@ -190,13 +200,18 @@ def scan_file(
     records, bad = read_jsonl(path)
     tally.unreadable += bad
     pending: dict[str, Pending] = {}  # tool_use id -> (tool, kinds)
-    seen_messages: set[str] = set()
+    usages: dict[str, dict] = {}  # message id -> its latest usage
     for record in records:
-        day = str(record.get("timestamp", ""))[:10]
+        day = local_day(str(record.get("timestamp", "")))
         if not day or (since and day < since):
             continue
         tally.dates.append(day)
-        scan_record(record, day, side, tally, session, pending, seen_messages)
+        scan_record(record, day, side, tally, session, pending, usages)
+    for message_usage in usages.values():
+        for key, field in TOKEN_FIELDS.items():
+            value = message_usage.get(field)
+            if isinstance(value, int):
+                tally.tokens[side][key] += value
 
 
 def scan_record(
@@ -206,7 +221,7 @@ def scan_record(
     tally: Tally,
     session: Session,
     pending: dict[str, Pending],
-    seen_messages: set[str],
+    usages: dict[str, dict],
 ) -> None:
     kind = record.get("type")
     if kind == "attachment":
@@ -224,24 +239,19 @@ def scan_record(
                 scan_result(block, tally, pending)
         return
     if kind == "assistant":
-        count_tokens(record, side, tally, seen_messages)
+        keep_usage(record, usages)
         for block in blocks(record):
             if block.get("type") == "tool_use":
                 scan_tool_use(block, day, tally, session, pending)
 
 
-def count_tokens(record: dict, side: str, tally: Tally, seen: set[str]) -> None:
+def keep_usage(record: dict, usages: dict[str, dict]) -> None:
+    """One response is split over several records; while it streams, a later
+    record's output_tokens is larger (measured in subagent transcripts), so the
+    last record of a message id is the one counted."""
     message = record.get("message")
-    if not isinstance(message, dict) or not isinstance(message.get("usage"), dict):
-        return
-    message_id = str(message.get("id", ""))
-    if message_id in seen:
-        return
-    seen.add(message_id)
-    for key, field in TOKEN_FIELDS.items():
-        value = message["usage"].get(field)
-        if isinstance(value, int):
-            tally.tokens[side][key] += value
+    if isinstance(message, dict) and isinstance(message.get("usage"), dict):
+        usages[str(message.get("id", ""))] = message["usage"]
 
 
 def scan_tool_use(
@@ -299,7 +309,7 @@ def scan_result(block: dict, tally: Tally, pending: dict[str, Pending]) -> None:
         elif kind == "agy" and failed:
             tally.agy["failed"] += 1
         elif kind == "probe":
-            tally.probe_states[first_word(output)] += 1
+            tally.probe_states[probe_state(output)] += 1
 
 
 def scan_hook(attachment: object, tally: Tally) -> None:
