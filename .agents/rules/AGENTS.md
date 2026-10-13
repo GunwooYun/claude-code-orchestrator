@@ -98,6 +98,3 @@ Structure your response for Claude Code to use:
 3. **Be actionable** — Focus on what Claude Code can use
 4. **Never write files** — Return everything in the response; Claude persists it
 5. **Flag for Claude** — If you find design decisions needed, note them
-
-Your past calls are logged by Claude Code in `.claude/logs/cli-tools.jsonl`
-(read-only for you).

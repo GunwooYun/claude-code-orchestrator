@@ -415,7 +415,7 @@ Dropped after review:
 - [ ] `/lens-review`, `/doc-write`, `/jira-setup`, `/ticket` and `agy-probe`'s
       READY path have never actually run. Their tests assert their instructions,
       not their behaviour in use.
-- [ ] **Deferred: split `log-cli-tools.py` (2026-10-07).** It is 567 lines, which is
+- [x] **Deferred: split `log-cli-tools.py` (2026-10-07).** Closed 2026-10-13: hook removed in 5.0.0 (direction review). It is 567 lines, which is
       over the 200–400 target but under the 800 maximum in `coding-principles.md`.
       It works and is guarded by unit, bash-oracle and mutation tests.
       - What a split would involve: move detection (tokenize/segments, about 130
@@ -426,7 +426,7 @@ Dropped after review:
         five review rounds risks more than it gains.
       - **When to do it:** the next time this hook must change for a functional
         reason, split it in the same change.
-- [ ] **Deferred, record only: other `log-cli-tools` follow-ups (2026-10-07).**
+- [x] **Deferred, record only: other `log-cli-tools` follow-ups (2026-10-07).** Closed 2026-10-13: hook removed in 5.0.0 (direction review).
       Each one is reopened only if the condition named for it is observed.
       - Several agy calls in one non-direct command: a soft-deny on a later call
         marks the first `[FAILED]`. That is a false failure, not a false success.

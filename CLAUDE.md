@@ -104,7 +104,6 @@ Bash("agy -p '한 문장으로 답변' --model <T1 slug>")   # 아주 짧은 질
 | `.claude/rules/` | 코딩 / 보안 / 언어 / 위임 규칙 |
 | `.claude/docs/DESIGN.md` | 설계 결정 기록 |
 | `.claude/docs/research/` | 조사 결과 |
-| `.claude/logs/cli-tools.jsonl` | agy 입출력 로그 |
 | `.agents/rules/AGENTS.md` | agy 용 프로젝트 컨텍스트 |
 
 ### `CLAUDE.md` 섹션의 수명 (CRITICAL)

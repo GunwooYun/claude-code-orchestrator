@@ -50,7 +50,7 @@ TEMPLATE_SKILLS = (
     "orchestrator-version",
     "ticket",
 )
-TEMPLATE_HOOKS = ("bash-write-check.py", "lint-on-save.py", "log-cli-tools.py")
+TEMPLATE_HOOKS = ("bash-write-check.py", "lint-on-save.py")
 TEMPLATE_AGENTS = ("deep-reasoning", "general-purpose", "Explore", "Plan")
 PROBE_STATES = ("READY", "MISSING", "UNAUTHENTICATED", "DEGRADED", "STALE")
 DENIED_MARKERS = (
