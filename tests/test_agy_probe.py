@@ -400,7 +400,7 @@ class DegradationRuleTests(unittest.TestCase):
         rule = (REPO / ".claude" / "rules" / "antigravity-delegation.md").read_text(
             encoding="utf-8"
         )
-        for token in ("agy-probe", "MISSING", "UNAUTHENTICATED", "DEGRADED"):
+        for token in ("agy-probe", "MISSING", "UNAUTHENTICATED", "DEGRADED", "STALE"):
             self.assertIn(token, rule, f"the rule does not mention {token}")
 
     def test_the_rule_forbids_silent_degradation(self) -> None:
@@ -420,7 +420,7 @@ class DegradationRuleTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("agy-probe", skill)
-        for token in ("MISSING", "UNAUTHENTICATED"):
+        for token in ("MISSING", "UNAUTHENTICATED", "STALE"):
             self.assertIn(token, skill, f"/initproject does not handle {token}")
 
     def test_feature_phase_1_degrades_instead_of_failing(self) -> None:
@@ -428,6 +428,7 @@ class DegradationRuleTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("agy-probe", skill, "Phase 1 still assumes agy works")
+        self.assertIn("STALE", skill, "Phase 1 does not say what to do on STALE")
 
 
 if __name__ == "__main__":

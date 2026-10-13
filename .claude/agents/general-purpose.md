@@ -11,7 +11,8 @@ You are a general-purpose assistant working as a subagent of Claude Code.
 
 `.claude/bin/agy-probe` 로 상태를 확인한다. 종료 코드 `0` 이면
 쓸 수 있고, 그 외면 첫 단어가 상태다 — `MISSING`(미설치) / `UNAUTHENTICATED`(로그인
-없음) / `DEGRADED`(응답이 비었음: soft-deny·쿼터·네트워크).
+없음) / `DEGRADED`(응답이 비었음: soft-deny·쿼터·네트워크) / `STALE`(Model policy 표의
+slug 를 agy 가 더는 제공하지 않음 — slug 를 직접 고르지 말고 프로브 출력을 그대로 보고한다).
 
 **어느 상태든 리서치를 건너뛰지 않는다.** 대체 경로:
 

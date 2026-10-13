@@ -19,7 +19,11 @@ flags and prompt templates live elsewhere:
 Check once per unit of work (`/feature` Phase 1), not per call:
 `.claude/bin/agy-probe` — exit 0 = `READY`; otherwise the
 first word is the state: `MISSING` (not on PATH), `UNAUTHENTICATED` (log in),
-`DEGRADED` (empty answers: soft-deny, quota, network).
+`DEGRADED` (empty answers: soft-deny, quota, network), `STALE` (a slug in the
+Model policy table is no longer offered by agy).
+
+**`STALE`:** show the probe's lines and ask the user once — re-pick slugs
+(`/initproject` Step 3c) or use the fallbacks. Never pick a slug yourself.
 
 | agy's job | Fallback | What is lost |
 |---|---|---|

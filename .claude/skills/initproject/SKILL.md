@@ -152,6 +152,7 @@ Branch on the first word it prints:
 | `MISSING` | **Ask the user to install Antigravity CLI**, then to run `agy` once and log in. Offer to wait: re-run the probe when they say they are done. Do not install it yourself — Step 2's ground rule is to ask before installing anything. |
 | `UNAUTHENTICATED` | agy is already there, so this is the short path: **ask the user to run `agy` and log in**, then re-run the probe. Say explicitly that no installation is needed. |
 | `DEGRADED` | Installed and authenticated but the probe came back empty. Show the probe's detail line (soft-deny, quota, or network) and ask whether to wait and retry or proceed without agy. |
+| `STALE` | agy works but no longer offers a slug the Model policy table names. Go to Step 3c — choosing the slugs is the fix. |
 
 If the user declines, or the state does not become `READY`:
 

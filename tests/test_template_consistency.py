@@ -404,7 +404,7 @@ class AlwaysLoadedBudgetTests(unittest.TestCase):
         executor = (REPO / ".claude" / "agents" / "general-purpose.md").read_text(
             encoding="utf-8"
         )
-        for state in ("MISSING", "UNAUTHENTICATED", "DEGRADED"):
+        for state in ("MISSING", "UNAUTHENTICATED", "DEGRADED", "STALE"):
             self.assertIn(
                 state, executor, f"the executor cannot recognise the {state} state"
             )
