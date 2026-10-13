@@ -278,7 +278,11 @@ flowchart LR
 **Step 3 — 모델 구성 확인.** 서브에이전트가 어떤 모델로 도는지 보여 주고 바꿀지 묻는다.
 기본값은 `deep-reasoning` = Fable, `general-purpose` = Sonnet 이다. `/isolated-review` 리뷰어는 Fable 로
 고정이다(바꿀 수 없다). **Step 3b** 에서 `agy-probe` 로 agy 상태를 확인한다:
-`READY`(정상) / `MISSING`(설치 안 됨) / `UNAUTHENTICATED`(로그인 필요) / `DEGRADED`(응답이 빔).
+`READY`(정상) / `MISSING`(설치 안 됨) / `UNAUTHENTICATED`(로그인 필요) / `DEGRADED`(응답이 빔) /
+`STALE`(규칙의 모델 표에 적힌 모델을 agy 가 더는 제공하지 않음). **Step 3c** 에서 agy 등급 T1~T4 의
+모델을 하나씩 고른다(`/agy-models` 와 같은 절차). 기본값은 T1 = `flash-low`, T2~T4 = `flash-high` 이고,
+agy 할당량이 넉넉하면 전부 high 로 두어도 된다. 나중에 `STALE` 이 나오거나 등급을 바꾸고 싶으면
+`/agy-models` 만 다시 실행한다.
 
 **Step 4 — `CLAUDE.md` 갱신.** 맨 위 제목을 프로젝트 이름으로 바꾸고, `## 기술 스택` 에 실제 명령을 적고,
 `## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v4.3.0`)을 기록한다.
@@ -440,7 +444,7 @@ sequenceDiagram
 | `COMPLETE` | 격리가 확인됐고, 바뀐 파일을 모두 읽었다 | 발견을 판단한다. **승인이 아니다** |
 | `INCOMPLETE` | 일부 파일을 읽지 않았다(또는 브랜치가 리뷰어의 읽기 제한을 바꿨다) | 안 읽은 파일은 리뷰되지 않은 것으로 본다 |
 | `FAILED` | 격리 확인 실패, 시간·예산 초과, 형식 누락 등 | 사유를 보고 다시 실행 |
-| `INVALID` | 리뷰 중에 작업 트리가 바뀌었다(사유에 파일명이 나온다) | 다시 실행 |
+| `INVALID` | 리뷰 중에 작업 트리가 바뀌었다(사유에 파일명이 나온다). Claude Code 자신의 런타임 파일(`.claude/scheduled_tasks.lock` 등)과 `.claude/` 아래 dotfile 은 세지 않는다 | 다시 실행 |
 | `REFUSED` | 실행 조건이 안 맞았다 | 사유대로 고치고 다시 실행 |
 
 리포트는 `.claude/docs/reviews/`, 리뷰어 기록은 `.claude/logs/isolated-review/` 에 남는다.
@@ -526,7 +530,9 @@ flowchart TD
   `.claude/bin/`, `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
   `rules/security.md`, `rules/language.md`, `rules/writing-style.md`, `docs/writing-style.md`,
   `docs/templates/field-report.md`, `scripts/README.md`, `ORCHESTRATOR_VERSION`(새 버전 값이 된다)
-  — 단, 프로젝트가 고친 흔적이 있으면 병합한다.
+  — 단, 프로젝트가 고친 흔적이 있으면 병합한다. `/agy-models` 로 agy 모델을 바꿨다면
+  `rules/antigravity-delegation.md` 는 MERGE 로 나온다: 모델 표 4줄은 내 값을 유지한다.
+- 업그레이드 뒤 `.claude/bin/agy-probe` 를 한 번 돌린다. `STALE` 이면 `/agy-models` 로 모델을 다시 고른다.
 - 덮어쓰면 안 되는 것(프로젝트 소유): `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`,
   `rules/test-writing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
 - 덮어쓰지 않는 파일이라도 CHANGELOG 가 바꿨다고 적은 부분(예: `settings.json` 의 허용 경로, `CLAUDE.md` 에서
@@ -616,7 +622,9 @@ flowchart TD
 
 - 기능 PR 은 변경을 `CHANGELOG.md` 의 `## [Unreleased]` 에 적는다.
 - 릴리스: `## [Unreleased]` 를 `## [X.Y.Z] - 날짜` 로 바꾸고 `.claude/ORCHESTRATOR_VERSION` 을 같은 버전으로
-  올린다 → `develop` 을 `main` 으로 PR·머지 → `main` 에 태그를 달고 push.
+  올린다. **같은 PR 에서 README 를 그 릴리스 내용에 맞게 고친다** — 버전 표기만이 아니라 새 스킬·상태·절차와
+  12장 검증 현황까지(4.3.0 은 이걸 빠뜨렸다) → `develop` 을 `main` 으로 PR, **merge commit 으로 머지**
+  (squash 하면 다음 릴리스 PR 이 충돌한다 — 4.3.0 의 #59) → `main` 의 머지 커밋에 태그를 달고 push.
 - 다음 변경은 실사용 리포트를 근거로 정한다. 방향과 운영 원칙: [`docs/direction-review-2026-10-03.md`](docs/direction-review-2026-10-03.md)
 
 ### 명령
