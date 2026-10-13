@@ -25,6 +25,12 @@ project changed, back up a gitignored `.claude/` first).
   changes nothing. Why: a real 3.1.0 copy still carried 18 files earlier
   upgrades should have deleted (hooks, and skills colliding with built-ins), and
   the README procedure had no tool; the plan lists exactly those 18.
+- **`/agy-models`: choose the agy model of each tier** (user-invoked; also
+  `/initproject` Step 3c). Shows the table and the Gemini slugs agy offers,
+  asks for T1–T4, writes the table, re-probes to `READY`. `STALE` points to
+  it, so it is run again whenever agy renames its models — without re-running
+  all of `/initproject`. Why: agy quota differs per person — with quota to
+  spare, high on every tier is a reasonable choice.
 
 ### Fixed
 - **`/isolated-review`: Claude Code's runtime files no longer make a review
@@ -35,6 +41,19 @@ project changed, back up a gitignored `.claude/` first).
   block of `.git/info/exclude`; edits to any other file under `.claude/` are
   still caught, gitignored or not. Hit INVALID naming one of those paths in an
   adopted copy: upgrade `run-review`.
+- **agy model slugs: every tier failed on agy 1.3.3.** It offers only the 3.8
+  Flash slugs; the 3.7 Flash and 3.1 Pro slugs the Model policy table named
+  are rejected (exit 1). T1 is now 3.8 Flash low, T2–T4 3.8 Flash high (agy
+  replaced 3.1 Pro High with 3.8 Flash High). The table in
+  `.claude/rules/antigravity-delegation.md` is now the only place a slug is
+  written; the agent file, `/feature` and `CLAUDE.md` name the tier, and
+  `AGENTS.md` uses a generic `{slug}`. Upgrading: take those files as they are, and keep your own table rows
+  if you changed them.
+- **`agy-probe` reports `STALE`** (exit 1) when agy no longer offers a slug
+  the table names, or a tier row has none — checked with `agy models` before
+  its own call. It used to
+  report DEGRADED, "wait", for a fault that waiting never fixes. It reads its
+  own slug from the table.
 
 ## [4.2.0] - 2026-10-12
 

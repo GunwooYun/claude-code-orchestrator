@@ -110,6 +110,7 @@ your-project/
 | **`/feature <기능명>`** | **작업 하나마다** | 조사 → 요구사항 → 검증 계획 → 설계 리뷰 → 할 일 목록 → 승인 → 구현 → 리뷰 |
 | **`/isolated-review`** | 구현을 커밋한 뒤 | 이 세션과 무관한 격리된 리뷰어가 읽기 전용으로 리뷰한다 |
 | `/orchestrator-version` | 버전이 궁금할 때 | 설치된 버전과 최신 릴리스를 비교 |
+| `/agy-models` | agy 프로브가 `STALE` 일 때, 등급별 모델을 바꾸고 싶을 때 | agy 등급 T1~T4 의 모델을 사용자가 고른다 (`/initproject` 도 이 절차를 쓴다) |
 | `/jira-setup`, `/ticket` | Jira 를 쓰는 팀 | Jira 연결 설정, 티켓에서 작업 시작 |
 | `/doc-write` | Confluence·문서 작성 | 작성 규칙에 맞춰 문서를 쓰고 발행 |
 
@@ -598,7 +599,7 @@ flowchart TD
 | `/orchestrator-version` | 업그레이드에 사용. `--plan` 은 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치) |
 | 훅 4개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `log-cli-tools` 의 판정 | 판정하는 모든 모양을 실제 bash 로 돌려 대조하는 테스트(무작위 600개 + 리뷰 지적 입력)로 확인. Bash 시간 제한·백그라운드 동작은 가짜 agy 로 실측 |
-| `/doc-write`, `/jira-setup`, `/ticket` | **아직 실제로 돌려 본 적 없다** |
+| `/doc-write`, `/jira-setup`, `/ticket`, `/agy-models` | **아직 실제로 돌려 본 적 없다** (`/agy-models` 는 프로브의 `STALE`/`READY` 판정만 실제 agy 로 확인) |
 | Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다 |
 
 ---

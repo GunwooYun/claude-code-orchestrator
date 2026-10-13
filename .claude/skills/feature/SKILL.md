@@ -69,6 +69,8 @@ Phase 6: Multi-Session Review (New Session + deep-reasoning)
 
 종료 코드 0(`READY`)이면 아래 A, 그 외면 B 로 간다. 상태와 그 의미는
 `.claude/rules/antigravity-delegation.md` 의 "When agy is unavailable"를 따른다.
+**`STALE` 이면** 프로브 출력(어느 등급의 어떤 slug, agy 가 제공하는 것)을 보여주고 한 번
+묻는다 — 사용자가 `/agy-models` 로 slug 를 다시 골라 재확인할지, B 로 갈지.
 
 ### A. agy 가 READY 일 때
 
@@ -88,7 +90,7 @@ Task tool parameters:
        3. Library recommendations
        4. Technical considerations
        Do not create or modify any files; return everything in your response.
-       " --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 9m
+       " --model {T4 slug} --dangerously-skip-permissions --sandbox --print-timeout 9m
 
        Run it with the Bash tool timeout set to 600000 (agy may take minutes;
        past the default 2 min the call is backgrounded and logged as FAILED).
@@ -98,7 +100,7 @@ Task tool parameters:
     3. Return CONCISE summary (5-7 bullet points)
 ```
 
-### B. agy 를 쓸 수 없을 때 (MISSING / UNAUTHENTICATED / DEGRADED)
+### B. agy 를 쓸 수 없을 때 (MISSING / UNAUTHENTICATED / DEGRADED / STALE)
 
 **리서치를 건너뛰지 않는다.** general-purpose 서브에이전트가 Grep/Glob/Read 와
 WebSearch/WebFetch 로 대신 조사하고, 산출물 첫 줄에 대체했다는 사실을 남긴다. 사용자에게

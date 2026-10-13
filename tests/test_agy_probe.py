@@ -237,6 +237,138 @@ class StateOrderTests(unittest.TestCase):
         self.assertEqual("UNAUTHENTICATED", state(run_probe(str(self.bin))))
 
 
+RULES = REPO / ".claude" / "rules" / "antigravity-delegation.md"
+SLUG = re.compile(r"gemini-[0-9a-z.\-]+-(?:low|medium|high)")
+
+
+def table_slugs() -> dict[str, list[str]]:
+    """Tier -> slugs in the Model policy table, as the probe reads them."""
+    rows: dict[str, list[str]] = {}
+    for line in RULES.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"^\| (T[1-4]) ", line)
+        if match:
+            rows[match.group(1)] = SLUG.findall(line)
+    return rows
+
+
+class SlugCheckTests(unittest.TestCase):
+    """
+    The probe compares every tier slug in the Model policy table with
+    `agy models` before its own call. agy 1.3.3 dropped every slug the table
+    named (2026-10-13); the probe called that DEGRADED — "wait" — when the
+    remedy was to pick slugs again.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.bin = Path(self.tmp.name)
+        self.calls = self.bin / "calls"
+        self.slugs = table_slugs()
+
+    def stub(self, offered: list[str], call_fails: bool = False) -> None:
+        listing = "".join(f"{slug}\\tName ({slug})\\n" for slug in offered)
+        answer = (
+            'echo "error: invalid model selection" >&2; exit 1'
+            if call_fails
+            else 'echo "PROBE_OK"'
+        )
+        stub_agy(
+            self.bin,
+            "#!/bin/sh\n"
+            f'echo "$*" >> "{self.calls}"\n'
+            'if [ "$1" = models ]; then\n'
+            '  echo "Fetching available models..." >&2\n'
+            f"  printf '{listing}'\n"
+            "  exit 0\n"
+            "fi\n"
+            f"{answer}\n",
+        )
+
+    def all_slugs(self) -> list[str]:
+        return sorted({s for slugs in self.slugs.values() for s in slugs})
+
+    def test_every_tier_offered_is_ready(self) -> None:
+        self.stub(self.all_slugs())
+        result = run_probe(str(self.bin))
+        self.assertEqual("READY", state(result), result.stdout)
+        self.assertNotIn("not checked", result.stdout)
+        self.assertNotIn("Fetching", result.stdout)
+
+    def test_a_missing_t3_slug_is_stale_and_named(self) -> None:
+        t3 = self.slugs["T3"][0]
+        self.stub([s for s in self.all_slugs() if s != t3])
+        result = run_probe(str(self.bin))
+        self.assertEqual("STALE", state(result), result.stdout)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn(f"T3 names {t3}", result.stdout)
+        self.assertIn("/agy-models", result.stdout)
+
+    def test_a_missing_t1_slug_is_stale_not_degraded(self) -> None:
+        # The observed case: the T1 slug is gone, so the call itself fails.
+        t1 = self.slugs["T1"][0]
+        self.stub([s for s in self.all_slugs() if s != t1], call_fails=True)
+        result = run_probe(str(self.bin))
+        self.assertEqual("STALE", state(result), result.stdout)
+        self.assertIn(f"T1 names {t1}", result.stdout)
+
+    def test_slugs_match_exactly_not_by_prefix(self) -> None:
+        self.stub([s + "x" for s in self.all_slugs()])
+        self.assertEqual("STALE", state(run_probe(str(self.bin))))
+
+    def test_an_unreadable_listing_skips_the_check_and_says_so(self) -> None:
+        for listing in ("", "PROBE_OK"):
+            with self.subTest(listing=listing):
+                stub_agy(
+                    self.bin,
+                    f'#!/bin/sh\n[ "$1" = models ] && {{ echo "{listing}"; exit 0; }}\n'
+                    'echo "PROBE_OK"\n',
+                )
+                result = run_probe(str(self.bin))
+                self.assertEqual("READY", state(result))
+                self.assertIn("tier slugs not checked", result.stdout)
+
+    def test_the_call_uses_the_t1_slug_from_the_table(self) -> None:
+        self.stub(self.all_slugs())
+        run_probe(str(self.bin))
+        call = self.calls.read_text(encoding="utf-8").splitlines()[-1]
+        self.assertIn(f"--model {self.slugs['T1'][0]}", call)
+
+    def test_a_tier_without_a_slug_in_the_table_is_stale(self) -> None:
+        # Isolated review 2026-10-13 #2: an unreadable T1 row said DEGRADED
+        # ("wait"), and T2-T4 rows were skipped without a word.
+        stub_agy(self.bin, '#!/bin/sh\necho "PROBE_OK"\n')
+        for tier in ("T1", "T2", "T3", "T4"):
+            with self.subTest(tier=tier):
+                root = self.bin / tier
+                (root / ".claude" / "bin").mkdir(parents=True)
+                (root / ".claude" / "rules").mkdir()
+                probe = root / ".claude" / "bin" / "agy-probe"
+                probe.write_text(PROBE.read_text(encoding="utf-8"), encoding="utf-8")
+                probe.chmod(0o755)
+                lines = RULES.read_text(encoding="utf-8").splitlines()
+                (root / ".claude" / "rules" / RULES.name).write_text(
+                    "\n".join(
+                        SLUG.sub("TBD", line) if line.startswith(f"| {tier} ") else line
+                        for line in lines
+                    ),
+                    encoding="utf-8",
+                )
+                env = {
+                    **os.environ,
+                    "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+                }
+                result = subprocess.run(
+                    [str(probe)], capture_output=True, text=True, timeout=60, env=env
+                )
+                self.assertEqual("STALE", state(result), result.stdout)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn(f"{tier} has no slug", result.stdout)
+
+    def test_the_probe_names_no_slug_of_its_own(self) -> None:
+        self.assertEqual([], SLUG.findall(PROBE.read_text(encoding="utf-8")))
+
+
 class TempFileTests(unittest.TestCase):
     """
     The stderr capture must not use a predictable path.
@@ -299,7 +431,7 @@ class DegradationRuleTests(unittest.TestCase):
         rule = (REPO / ".claude" / "rules" / "antigravity-delegation.md").read_text(
             encoding="utf-8"
         )
-        for token in ("agy-probe", "MISSING", "UNAUTHENTICATED", "DEGRADED"):
+        for token in ("agy-probe", "MISSING", "UNAUTHENTICATED", "DEGRADED", "STALE"):
             self.assertIn(token, rule, f"the rule does not mention {token}")
 
     def test_the_rule_forbids_silent_degradation(self) -> None:
@@ -319,14 +451,41 @@ class DegradationRuleTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("agy-probe", skill)
-        for token in ("MISSING", "UNAUTHENTICATED"):
+        for token in ("MISSING", "UNAUTHENTICATED", "STALE"):
             self.assertIn(token, skill, f"/initproject does not handle {token}")
+
+    def test_agy_models_lets_the_user_choose_each_tier(self) -> None:
+        # V6: the skill STALE points to must exist and touch the table only.
+        skill = (REPO / ".claude" / "skills" / "agy-models" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        for token in (
+            "agy models",
+            "T1, T2, T3, T4",
+            ".claude/bin/agy-probe",
+            ".claude/rules/antigravity-delegation.md",
+            "READY",
+            "2–4 options",
+            "disable-model-invocation: true",
+        ):
+            self.assertIn(token, skill, f"/agy-models does not mention {token}")
+
+    def test_initproject_step_3c_runs_agy_models(self) -> None:
+        # Isolated review 2026-10-13 #5: STALE pointed into /initproject, which
+        # only restarts from Step 1. The procedure lives in one skill.
+        skill = (REPO / ".claude" / "skills" / "initproject" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        step = skill.split("### Step 3c", 1)[1].split("\n## ", 1)[0]
+        self.assertIn(".claude/skills/agy-models/SKILL.md", step)
+        self.assertNotIn("AskUserQuestion", step, "the procedure is copied back")
 
     def test_feature_phase_1_degrades_instead_of_failing(self) -> None:
         skill = (REPO / ".claude" / "skills" / "feature" / "SKILL.md").read_text(
             encoding="utf-8"
         )
         self.assertIn("agy-probe", skill, "Phase 1 still assumes agy works")
+        self.assertIn("STALE", skill, "Phase 1 does not say what to do on STALE")
 
 
 if __name__ == "__main__":

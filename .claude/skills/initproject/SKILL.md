@@ -113,7 +113,7 @@ and ask whether to keep it or change it.
 | Main orchestrator | the user's session (`/model`) | Opus | Orchestration, user dialogue, final decisions |
 | `deep-reasoning` | `.claude/agents/deep-reasoning.md` → `model:` | `fable` | Deep reasoning on a cheaper tier than the main session; pinned so an Opus main session does not silently make it Opus |
 | `general-purpose` | `.claude/agents/general-purpose.md` → `model:` | `sonnet` | Thin wrapper around agy and file work — the tokens should go to agy, not to this agent |
-| agy research | `--model` per call | see the Model Policy in `.claude/rules/antigravity-delegation.md` | Gemini tiers T1–T4, pinned per call |
+| agy research | `--model` per call | see the Model Policy in `.claude/rules/antigravity-delegation.md` | Gemini tiers T1–T4, pinned per call; chosen in Step 3c (`/agy-models`) |
 | `/isolated-review` reviewer | `.claude/skills/isolated-review/run-review` → `MODEL` | `fable` | **Not reassignable.** Its neutrality was measured on Fable. Tell the user: without Fable access this skill always ends FAILED, and Phase 6 uses a person-opened (A2) review instead |
 
 Procedure:
@@ -152,6 +152,7 @@ Branch on the first word it prints:
 | `MISSING` | **Ask the user to install Antigravity CLI**, then to run `agy` once and log in. Offer to wait: re-run the probe when they say they are done. Do not install it yourself — Step 2's ground rule is to ask before installing anything. |
 | `UNAUTHENTICATED` | agy is already there, so this is the short path: **ask the user to run `agy` and log in**, then re-run the probe. Say explicitly that no installation is needed. |
 | `DEGRADED` | Installed and authenticated but the probe came back empty. Show the probe's detail line (soft-deny, quota, or network) and ask whether to wait and retry or proceed without agy. |
+| `STALE` | agy works but no longer offers a slug the Model policy table names. Go to Step 3c (`/agy-models`) — choosing the slugs is the fix. |
 
 If the user declines, or the state does not become `READY`:
 
@@ -165,6 +166,12 @@ If the user declines, or the state does not become `READY`:
 
 **Do not loop.** Ask once, re-probe once after the user says they are done, then
 take the answer as final and move on.
+
+### Step 3c — agy: choose the model of each tier
+
+Run only when Step 3b ended in `READY` or `STALE`. Read
+`.claude/skills/agy-models/SKILL.md` and follow it — it is the `/agy-models`
+skill, which the user runs again later on `STALE` or to change tiers.
 
 ## Step 4 — CLAUDE.md
 
@@ -327,7 +334,7 @@ the bug this step exists to prevent.
   contract (0 = pass and silent, non-zero = fail with a reason); the gate has
   been seen to fail once on an injected violation.
 - `.claude/bin/agy-probe` prints the state agreed in
-  Step 3b. `READY` exits 0; any other state must already be recorded in
+  Step 3b (after 3c, never `STALE`). `READY` exits 0; any other state must already be recorded in
   `DESIGN.md` Open Questions with today's date.
 - Report in Korean: detected stack, the final model matrix, agy's state and
   what it costs if not `READY`, which verification
