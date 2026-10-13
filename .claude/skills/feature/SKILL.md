@@ -88,7 +88,7 @@ Task tool parameters:
        3. Library recommendations
        4. Technical considerations
        Do not create or modify any files; return everything in your response.
-       " --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 9m
+       " --model {T4 slug} --dangerously-skip-permissions --sandbox --print-timeout 9m
 
        Run it with the Bash tool timeout set to 600000 (agy may take minutes;
        past the default 2 min the call is backgrounded and logged as FAILED).

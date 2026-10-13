@@ -36,7 +36,7 @@
 ```
 Task(subagent_type="deep-reasoning", prompt="Review this design ... Return concise summary")
 Task(subagent_type="general-purpose", prompt="Research X via agy, save to .claude/docs/research/, return a concise summary")
-Bash("agy -p '한 문장으로 답변' --model gemini-3.7-flash-low")   # 아주 짧은 질문만 직접
+Bash("agy -p '한 문장으로 답변' --model <T1 slug>")   # 아주 짧은 질문만 직접. slug: rules/antigravity-delegation.md 의 Model policy 표
 ```
 
 ## 라우팅은 주제가 아니라 비용으로 (CRITICAL)

@@ -442,7 +442,7 @@ class ModelTierConsistencyTests(unittest.TestCase):
     """
 
     TIER = re.compile(r"\bT([1-4])\b")
-    SLUG = re.compile(r"gemini-[0-9a-z.\-]*-(?:low|high)")
+    SLUG = re.compile(r"gemini-[0-9a-z.\-]*-(?:low|medium|high)")
     CANONICAL = REPO / ".claude" / "rules" / "antigravity-delegation.md"
 
     def _files(self) -> list[Path]:
@@ -517,6 +517,21 @@ class ModelTierConsistencyTests(unittest.TestCase):
             if used - known:
                 unknown[str(path.relative_to(REPO))] = sorted(used - known)
         self.assertEqual({}, unknown, f"unknown model slugs: {unknown}")
+
+    def test_only_the_canonical_table_writes_a_slug(self) -> None:
+        """
+        Copies name the tier, not the slug. agy 1.3.3 dropped every slug at once
+        (2026-10-13) and six files carried them; /initproject Step 3c rewrites
+        the table only, so a literal elsewhere would keep the old choice. This
+        also catches a tier swap the pairing check above cannot see.
+        """
+        literals = {
+            str(path.relative_to(REPO)): sorted(set(self.SLUG.findall(text)))
+            for path in self._files()
+            if path != self.CANONICAL
+            and self.SLUG.search(text := path.read_text(encoding="utf-8"))
+        }
+        self.assertEqual({}, literals, f"slugs written outside the table: {literals}")
 
 
 class SectionPointerTests(unittest.TestCase):

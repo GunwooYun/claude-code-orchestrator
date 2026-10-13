@@ -81,17 +81,18 @@ consults the `deep-reasoning` subagent for those.
 When research or large-scale analysis is needed:
 
 ```bash
-# Research — the orchestrator picks the tier in the Task prompt (rules/antigravity-delegation.md → Model policy)
-# T1, T2, T3:
-agy -p "{one-fact question}" --model gemini-3.7-flash-low
-agy -p "{summarize one source}" --model gemini-3.7-flash-high
-agy -p "{research question}" --model gemini-3.1-pro-high
+# Research — the orchestrator picks the tier in the Task prompt. {T1 slug} etc. are
+# the slugs in the Model policy table of .claude/rules/antigravity-delegation.md;
+# if the prompt names no slug, read that table (it is the only place they are written).
+agy -p "{one-fact question}" --model {T1 slug}
+agy -p "{summarize one source}" --model {T2 slug}
+agy -p "{research question}" --model {T3 slug}
 
 # Codebase analysis (reads repo files → headless flags required; CWD is the workspace)
-agy -p "{question} Do not create or modify any files; return everything in your response." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox --print-timeout 9m
+agy -p "{question} Do not create or modify any files; return everything in your response." --model {T4 slug} --dangerously-skip-permissions --sandbox --print-timeout 9m
 
 # Multimodal (image/PDF verified; video/audio untested) — path in prompt; no stdin redirection
-agy -p "Read the file at {absolute_path} and {extraction prompt}. Do not create or modify any files." --model gemini-3.1-pro-high --dangerously-skip-permissions --sandbox
+agy -p "Read the file at {absolute_path} and {extraction prompt}. Do not create or modify any files." --model {T4 slug} --dangerously-skip-permissions --sandbox
 
 # Scripted (soft-deny safe): gate on .status == "SUCCESS"
 agy -p "{question}" --model {slug} --output-format json --print-timeout 9m
