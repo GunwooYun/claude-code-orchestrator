@@ -50,12 +50,6 @@
 | This repository is not a package (`[tool.uv] package = false`) | A hatchling build-system for a non-existent `src/` made every `uv run` fail, which took down `poe lint`/`test`/`all` with it | Add `tool.hatch.build.targets.wheel` and keep the build backend | 2026-09-25 |
 | This repository type-checks with `ty`; the checker is chosen per project by `/initproject` | Pure-Python repo with no Django, and the rules and lint hook already assumed `ty`. Measured: on Django models `ty` reports 3 false positives on 3 correct lines because it has no plugin for the field descriptors, while `mypy` + `django-stubs` is clean — so the choice cannot be a template-wide default | Template-wide mypy; template-wide ty | 2026-09-25 |
 | `poe lint` no longer auto-fixes; the gate is read-only and `poe fix` mutates | A gate that rewrites files can never fail on a lint or format issue, so `poe all` gave false assurance | Leave `--fix` in the gate | 2026-09-25 |
-| The lens review's product is the CONFLICTS, not the findings list | Concatenating three reports is the easy version and loses the most valuable signal: where two lenses recommend opposite things is the real design decision. The aggregate step is forbidden from resolving a conflict silently — it presents both sides and what each choice gives up | Merge the reports and pick the best recommendation | 2026-09-26 |
-| A lens that finds nothing must say so, and is told not to invent | A lens under pressure to look useful produces noise that buries real findings. "Found nothing" and "did not look" are also reported separately, because they are different facts | Expect every lens to return findings | 2026-09-26 |
-| Lenses must declare what they do NOT cover | Non-orthogonal lenses report the same thing three times: triple cost, single value. The exclusion goes into each lens prompt verbatim, not just into the skill's table | Define lenses only by what they look at | 2026-09-26 |
-| The pre-filter runs once and every lens gets the same list | Per-lens pre-filtering triples the cost AND gives each lens a different view, which makes the aggregate's comparison impossible — so the conflict detection, the whole point, stops working | Pre-filter inside each lens | 2026-09-26 |
-| `/lens-review` does not replace the separate-session review | The lenses run in isolated contexts, but the orchestrator writes their prompts, so its framing survives. Isolation is not neutrality. It runs BEFORE the separate session to clear the obvious, so the neutral review spends itself on the hard parts | Treat multi-lens as sufficient review | 2026-09-26 |
-| Named `lens-review`, not `review` or `code-review` | Both collide with built-in commands, which is the mistake `/init` already made in this repository once | `/review` | 2026-09-26 |
 | Routing is by cost (token volume × reasoning difficulty), not by topic | The rules classified by subject — "research goes to agy" — which left the two token-heavy cells of the matrix empty, so log triage, repo-wide impact analysis, file pre-filtering and boilerplate all flowed to Claude. That is the structural cause of the token imbalance the user reported | Keep topic-based routing and ask for more agy calls | 2026-09-26 |
 | The agy pre-filter returns `file:line` and facts, never verdicts | If agy summarises, deep-reasoning reasons about the summary instead of the code, and the funnel becomes a quality regression rather than a saving. The pre-filter narrows what is read; it does not decide anything | Let agy summarise its findings | 2026-09-26 |
 | The always-loaded rules carry DECISIONS; syntax lives with the process that runs it | `.claude/rules/antigravity-delegation.md` was 425 lines / 21,890 bytes — 38% of the always-loaded layer — and most of it was command syntax, prompt templates and reference prose already present in `.claude/agents/general-purpose.md` and the antigravity skill. Verbatim overlap was only ~6%, so the copies were independently worded and could contradict each other with no test noticing. The rule now holds routing, the agy fallback ladder, the tier table and "judgement is never delegated"; 12,754 bytes, and the layer went from 57,378 to 48,236 | Move the syntax into a new `references/` file (a fourth home); shrink by deleting the fallback ladder | 2026-09-26 |
@@ -63,7 +57,6 @@
 | The shrink-vs-keep conflict between two review lenses was FALSE | One lens wanted the rule smaller, the other wanted the fallback ladder kept always-loaded. The ladder is 1,545 characters, 9% of the file; the bulk was reference material neither lens was defending. Both were satisfied by the same cut, so it was recorded as a measurement error rather than resolved as a trade-off. What the ladder must stay for is narrower than first stated: `agy-probe` does print an install/login remedy, but it cannot say what to do INSTEAD of agy in this work unit, and that is what the ladder holds | Split the difference; treat it as a genuine trade-off | 2026-09-26 |
 | The pre-filter is recall-oriented and its consumer is told the input was filtered | A pre-filter that misses a location hides it from deep-reasoning for ever, and a consumer that believes it saw everything concludes that what it cannot see does not exist | Optimise the pre-filter for precision | 2026-09-26 |
 | Below 5 files / 500 lines there is no funnel, and that number is defined in exactly one place | The round trip costs more than it saves on a small input, and a rule with no threshold funnels everything. Three decisions consult the same boundary (pre-filter, `/lens-review`, `/feature` Phase 6) and each had restated it, which drifted to 500 in the routing rules and 300 in the review paths — fifteen lines apart in the same file, with nothing failing. CLAUDE.md now owns the number and a test fails the moment two sites disagree, so restating it where it helps the model read it stays safe | A separate threshold per decision; pointers with no number anywhere | 2026-09-26 |
-| The routing claim is marked as weakly measurable | `log-cli-tools.py` records only `"tool": "antigravity"`, so the log can show agy's call count and tier distribution but NOT the work Claude did instead. The metric supports the claim and cannot falsify it — stating that prevents over-reading it later | Present the tier distribution as proof of re-allocation | 2026-09-26 |
 | `/jira-setup` asks for the project key instead of listing projects | Measured against a real connector: one organisation has 141 Jira projects. Listing them burns context and the user knows their own key anyway | Show a picker of projects | 2026-09-26 |
 | Project `style` (classic vs next-gen) is recorded, and transition names are read rather than guessed | Measured: the same site mixes company-managed and team-managed projects, whose issue types and workflow transitions differ. A guessed transition name either fails or moves the ticket to the wrong state | Assume one workflow; hard-code "In Progress"/"Done" | 2026-09-26 |
 | Confluence access does not imply Jira access, and a site can appear more than once | Measured: `getAccessibleAtlassianResources` returned the same cloudId twice, once with Confluence scopes and once with `read:jira-work`/`write:jira-work`. Treating the first entry as the site would have missed Jira entirely | One entry per site | 2026-09-26 |
@@ -79,10 +72,6 @@
 | Degrading without agy must be declared in the artefact's first line | A research document written with Grep and WebSearch has different breadth from a Gemini sweep. A later reader who cannot tell which they are holding will over-trust it, and `/feature` Phase 3 will review a plan whose evidence base it cannot judge | Degrade silently; skip research entirely | 2026-09-25 |
 | Every hook has a trigger case AND a silence case, and the pair is required structurally | The contract tests assert tolerance (exit 0, valid-or-empty stdout, survives junk) and empty stdout is a legal answer, so a hook that reads its payload and returns satisfies all of them — measured: a no-op `main()` in any of the eight hooks left all 13 contract tests green. That is the exact shape of this template's most expensive defect (`lint-on-save.py` read an env var Claude Code never sets). A trigger case alone passes for a hook that fires on everything and a silence case alone for one that never fires, so both are required, and `CoverageTests` fails when a hook on disk has neither | More contract properties; a coverage percentage | 2026-09-26 |
 | Which files count as implementation is decided by EXCLUSION, not by a list of languages | The hook listed seven extensions, so work in any other language was invisible — the same hard-coding the template is being cured of elsewhere. Missing a language costs a hook that never fires; counting one extra file type costs one early suggestion, so the asymmetry favours excluding documents, config, data, assets and lockfiles and counting the rest | Extend the inclusion list; read the extensions from a config file | 2026-09-25 |
-| Per-session state removes the need for a SessionStart reset hook | The suggestion must fire once per session, which the original implemented as a flag in shared state and therefore never reset. Keying the file by session id makes a new session start empty by construction, with no second hook to keep in sync | Add a SessionStart hook that clears the flag | 2026-09-25 |
-| A log entry with an unusable timestamp is skipped and counted, not grouped | It has no place in a chronological history. `local_date` fell back to the timestamp's first ten characters, so a corrupt line became a heading. Skipping silently would hide data loss, so the count is printed | Group them under an "unknown date" bucket | 2026-09-25 |
-| The history section is located by a line scan that skips fenced code blocks, not by a regex | The checkpointing skill documents the section it writes inside a ```markdown fence. The regex matched that line, so the section started inside the example and everything up to the next heading — the fence's closing backticks included — was replaced, leaving the rest of the document inside an unterminated code block. The mirror case matters too: a `## ...` line inside a fence must not end the section. The scan also matches a header on the last line with no trailing newline, which the regex required and therefore appended a second section below on every run | Keep the regex and add a fence-stripping pre-pass; document the limitation | 2026-09-26 — **superseded 2026-10-07**: `/checkpointing` removed (see the skill-removal row) |
-| Each context file declares the heading its history lives under | `CLAUDE.md` uses `## Session History` and `AGENTS.md` uses `## Consultation History`. Assuming one header made the script append a second, parallel section to AGENTS.md on every run | Rename AGENTS.md's section to match | 2026-09-25 — **superseded 2026-10-07**: `/checkpointing` removed (see the skill-removal row) |
 | Output on exit 0 is informational and is passed through, not discarded | The first version dropped all output when the script succeeded. Tools that warn but succeed are common (eslint warnings, clippy, deprecation notices); swallowing that output makes the model report "clean". The contract had also stated the rule three different ways in three files | Keep "silent on pass" strictly, and have scripts never print on success | 2026-09-25 |
 | Every tier accepts optional trailing arguments | With a no-argument-only contract a monorepo could not express scope: `verify-task` would have to check everything (breaking the 5-minute budget) or guess from `git diff`. Callers still pass none | Arguments only on verify-save | 2026-09-25 |
 | The caller resolves `verify-<tier>` or `verify-<tier>.{py,sh,ps1,cmd,bat}` | Requiring an extensionless executable with a shebang excluded Windows checkouts outright, where neither the execute bit nor the shebang exists. A file with a known extension runs through its interpreter | Unix-only, stated as a limitation | 2026-09-25 |
@@ -95,9 +84,7 @@
 | The per-project contract is the **filesystem** (four scripts), not a profile schema | An adversarial review falsified the premise. Measured: exactly ONE hook runs stack tools, and the real generality bug was `/initproject` Step 5 omitting `tdd`/`simplify` (6 hardcoded `uv run pytest` lines surviving setup). A profile would also have been a 4th copy of the test command — after `pyproject.toml`, `rules/testing.md` and `CLAUDE.md` — creating exactly the drift Step 3 exists to prevent. `runs_in: container` alone would force the hook to become a path-mapping execution adapter | A `project-profile.toml` schema; reading existing files (`pyproject.toml` is Python-only, Yocto has neither) | 2026-09-25 |
 | Verification plan comes FIRST, before any tooling | It is prose, it was already the highest-leverage step, and applying it to a real Yocto and a real Django repo is what reveals which commands need names. Designing a schema before observing its consumers was the core mistake | Schema first, then hooks, then the plan | 2026-09-25 |
 | Verification tiers are defined by DURATION, not by the words unit/e2e | "e2e" means an HTTP request to a compose stack in one project and a QEMU `testimage` run in another; the word cannot drive a decision, the budget can | Model unit/integration/e2e as first-class | 2026-09-25 |
-| All three `checkpoint.py` walkers cover the same range, and renames are reported as delete + add | `git log --name-status` emits `R<score>` for a rename, which matched none of the A/M/D branches, so a renamed file disappeared from the checkpoint; `--numstat` gave `old => new`, not a path. Separately the commit walker had no range at all (`-n 100` over the whole history) while the file walkers used `HEAD~10..HEAD`, so one Summary block put two spans side by side as if they were one. `--no-renames` on both file walkers keeps them symmetric and the keys usable; the commit walker now resolves the same range. Measured on this repository: 50 commits beside 29 files became 10 beside 29 | Special-case `R` in the parser; leave the commit count as "recent activity" | 2026-09-26 — **superseded 2026-10-07**: `/checkpointing` removed (see the skill-removal row) |
 | The executor's agent file CARRIES the agy fallback ladder | It previously said "follow the ladder in the rule" and "do not duplicate this — the rule is the single source", which contradicts the conclusion of the same change: a subagent is not documented to receive `.claude/rules/` and skills do not auto-invoke there. The states and the alternative paths now live in `general-purpose.md` too, marked as deliberate duplication with the reason, and a test asserts they are there | Keep the pointer; rely on the orchestrator always pasting the ladder into the Task prompt | 2026-09-26 |
-| The design-review hook's SIZE rule applies to source only | It fired on any write over 500 characters of any kind — the separate-session review watched it fire on its own markdown report — against this repository's own argument in `lint-on-save.py` that a notice repeated on every save trains people to ignore hook output. Prose, data and config no longer trigger the size rule; a path that looks like design still does, whatever it holds, so `DESIGN.md` is still caught. Behaviour was pinned by tests written earlier in this branch, so the change is recorded in those tests rather than slipped in | Raise the byte threshold; leave it and accept the noise | 2026-09-26 |
 | A test docstring states dated measurements, never a current total | The always-loaded budget docstring asserted "It is now 48,236" and was 367 bytes stale two commits later while staying green — found by measurement, not by the test. The two historical figures are kept with their dates; the live number is whatever the assertion computes, and the only maintained figure is the cap | Update the number each time; assert the docstring matches the measurement | 2026-09-26 |
 | A save-tier gate is READ-ONLY, and a test hands it a file the tier actually processes | `verify-save` ran `ruff format` and `ruff check --fix`, so the hook rewrote every file the model had just written: an unused import deleted, exit 0, no output — the silence the contract defines as "nothing to report". `/initproject` Step 5 already said "never put an auto-fixing command in a gate" and this repository's own gate did. No test caught it because `SaveTierContractTests` used only paths the tier IGNORES and said so in its docstring. Found by the separate-session review | Keep `--fix` and document the hazard; report the change instead of removing it | 2026-09-26 |
 | The review worktree is checked out at the WORK branch, never at `main` | `/feature` Phase 6 Option A said to check out `main` and then run `git diff main...HEAD`, which inside that worktree compares main with itself and prints nothing — the review session sees "no changes" and stops, silently. README described the same procedure differently (`git diff <base>..main`), so the two files disagreed about where the work lives. Introduced by the restructure that carried CLAUDE.md's worktree command into the skill. The cloud case (no interactive `claude`) is now written down too: push the branch and start a fresh session against it, since the isolation that matters is context, not files | Leave the recipe local-only; keep two wordings | 2026-09-26 |
@@ -113,252 +100,19 @@
 | `lint-on-save` reports through JSON `additionalContext`, not stderr. **Correction**: README's verified-state table called the hooks "동작 확인", but for this hook the effect was never visible to the model | The hooks reference: stderr from a hook that exits 0 "goes to the debug log only ... and Claude never sees it". The hook and its tests both used stderr, so the tests passed while the save tier never reached Claude (seen in this repo: Edit-written test files failed `ruff format --check` three times, found only at verify-task). Confirmed live after the fix: a misformatted file written with Write produced the `[lint-on-save]` message in the session | Exit 2 with stderr (the docs allow it for PostToolUse, but it renders as a hook error, and every other hook here already uses `additionalContext`) | 2026-09-28 |
 | `bash-write-check` hook (Pre+Post Bash) runs verify-save on files a Bash command modified; plus a CLAUDE.md / general-purpose rule to edit with Edit/Write | Observed on two real runs: the model wrote files — including the gate scripts — via `sed -i` and python heredocs, skipping lint-on-save. Detection by mtime, not git (the files were gitignored). The mark's OWN mtime is the reference, not a `time.time_ns()` written into it: file mtimes use the kernel's coarse clock, so a file written just after a precise timestamp can carry an earlier mtime — the hook's tests failed on exactly that before the change. Walk prunes build/vendor/log dirs; at most 5 files checked; whole run under the registered timeout; git-only commands skipped; the "use Edit/Write" nudge only when the command text looks like a write. Confirmed live in this repo's session | Parse the command text only (misses heredoc scripts); git status diff (misses ignored files — the observed case); the rule alone (the model already bypassed without one) | 2026-09-28 |
 | `/isolated-review`: Phase 6 A1 runs a `claude -p` reviewer the orchestrator launches; isolation by tool set (`--restricted --tools Read,Grep,Glob --strict-mcp-config --disable-slash-commands`), checked per run from the `system/init` event and by a pre-flight probe; fixed prompt, no free text; implementer's CLAUDE.md denied (verification plan passed as claims); report shown verbatim, verdict never "approved" | Phase 6 Option A never actually ran — it needed a person to open a worktree. Proposed from an adopting project; measured before and after implementation (docs/isolated-review.md): `--allowedTools` does not restrict (a reviewer wrote a file under it), `--bare` drops OAuth login and CLAUDE.md, MCP connectors survive without `--strict-mcp-config`. Live fixture run found a planted bug and reported, not obeyed, a prompt injection | Worktree + allow list (the proposal: M4 shows it leaks writes, and the worktree hides gitignored CLAUDE.md); `--bare` (auth); user concerns in the prompt (user: no — a steering channel); chunked review of large diffs (loses cross-file view; refused above 3000 lines instead) | 2026-09-29 |
-| Remove the skills real use never invoked: `deep-reasoning`, `antigravity-system` (folded into `general-purpose.md`), `/checkpointing` (deleted) | Measured 2026-10-07 over 9 recorded sessions in 3 projects (`.claude/docs/research/usage-3.1.0.md`, local): no Skill-tool invocation or slash command of any of the three, and no read of their files outside template maintenance (an auto-activation that leaves no tool call cannot be seen in transcripts), while the deep-reasoning subagent ran 30 times and agy 79 times without them. The rule and agent files already carried what the two wrapper skills said; `/checkpointing` never wrote a Session History yet took 17 commits. `agy-probe` moved to `.claude/bin/` (three callers, no owner; `.claude/scripts/` stays the verification contract). The `log-cli-tools` hook stays — its log is what usage is measured from. Restore from tag `v3.1.0` if real use asks for them | Keep them frozen (still loaded descriptions and tests on every gate) | 2026-10-07 |
+| Remove the skills real use never invoked: `deep-reasoning`, `antigravity-system` (folded into `general-purpose.md`), `/checkpointing` (deleted) | Measured 2026-10-07 over 9 recorded sessions in 3 projects (`.claude/docs/research/usage-3.1.0.md`, local): no Skill-tool invocation or slash command of any of the three, and no read of their files outside template maintenance (an auto-activation that leaves no tool call cannot be seen in transcripts), while the deep-reasoning subagent ran 30 times and agy 79 times without them. The rule and agent files already carried what the two wrapper skills said; `/checkpointing` never wrote a Session History yet took 17 commits. `agy-probe` moved to `.claude/bin/` (three callers, no owner; `.claude/scripts/` stays the verification contract). The `log-cli-tools` hook stays — its log is what usage is measured from (superseded 2026-10-13: removed, see the last row). Restore from tag `v3.1.0` if real use asks for them | Keep them frozen (still loaded descriptions and tests on every gate) | 2026-10-07 |
 | Path-scope what only applies to some files; keep principles and the security kernel always loaded | Claude Code loads a rule with `paths:` frontmatter only when a matching file is read or edited, and loads it every session if the YAML does not parse (code.claude.com/docs/en/memory.md). `coding-principles.md` (Python, and ruff `ANN` already enforces type hints) and the new `test-writing.md` (split from `testing.md`) are scoped; `security.md` keeps a language-agnostic kernel unscoped because secrets leak through settings and CI files too. One quoted-glob frontmatter shape is pinned by `tests/test_loading_surface.py`, since the budget test only looks for `paths:`. Always-loaded 30,361 → 22,864 bytes on 2026-10-08. Whether rules reach subagents stays unknown (the "reaches a SUBAGENT" row), so nothing a subagent must have moved. `antigravity-delegation.md` was left as it is: the target was met without it and it is the most test-pinned file | Scope `security.md` fully; fold test-writing into the `/feature` skill (tests are also edited outside `/feature`) | 2026-10-08 |
 | The gate runs pytest with `-n auto` (pytest-xdist, default `--dist load`), in the poe `test` task only | Measured 2026-10-12: gate 90 s, pytest 82 s real against 50 s CPU — the isolated-review tests spend ~0.65 s each spawning git, `run-review` and a fake `claude`, not sleeping. Five parallel runs: max 25.3 s, 335 passed / 1 skipped like the serial run. The one cross-worker collision (a leak test globbing the shared `/tmp` for a name another test plants) was fixed first. `loadfile` would pin the 36 s file to one worker. Scoped `verify-task <path>` and bare `pytest` stay serial for debugging. No test pins `-n`: dropping it shows as 90 s, a missing extra fails at once | Shrink the waits in the tests; move isolated-review tests to a new `verify-unit` tier (the gate would check less) | 2026-10-12 |
 | Remove two shipped files nothing used: `.claude/docs/libraries/_TEMPLATE.md` and `.agents/skills/context-loader/` | Found while classifying README 「업그레이드 절차」, which had left six template-owned files unclassified. No instruction pointed at the library template (the general-purpose agent's prompt defines its own layout). agy's conversation store (`~/.gemini/antigravity-cli/conversations/*.db`) showed `context-loader` in 0 of 61 conversations, 21 of them in an adopting project that has it — Open Questions has the method and the one [unverified] assumption. `.agents/rules/AGENTS.md` stays. Restore from tag `v4.1.0` | Classify both as template-owned and keep shipping them | 2026-10-12 |
+| Remove the `log-cli-tools` hook and `field-report`; usage is measured by `.claude/bin/usage-report` from Claude Code's own transcripts | In a real work project the hook failed on every Bash call for two weeks (1,933 errors, 12 successes: `datetime.UTC` on the server's Python 3.10) and nobody saw it; nothing read its log. `field-report` ran 0 times in both adopting projects. The gate now type-checks at Python 3.10. Evidence and the full list: `docs/direction-review-2026-10-13.md`. Restore from tag `v4.3.1` | Fix the import and keep the hook (a log no one reads, a hook on every Bash call) | 2026-10-13 |
 
 ## TODO
 
-Direction: the template must serve any stack, so it should not *know* stacks — it
-should know what to ask, and the per-project contract should be the filesystem
-(scripts with exit codes) rather than a schema. Revised after an adversarial
-review falsified the original profile design; see Key Decisions.
-
-- [x] **Verification plan in `/feature`.** Phase 2b writes scenarios, commands,
-      tiers and a negative-test column before code exists; Phase 3 reviews
-      verification adequacy; Phase 4 pairs every implementation task with a
-      `verify:` task; Phase 6 judges tests against the plan's scenario IDs.
-      `rules/testing.md` rewritten stack-agnostic; `CLAUDE.md` carries the
-      principle; `/plan` steps must cite tier + command + failure condition.
-- [x] **Four scripts as the contract.** `.claude/scripts/verify-{save,task,unit,full}`
-      plus `README.md` holding the contract. Named after the tiers in
-      `rules/testing.md` so the two cannot drift. Exit code is the interface;
-      execution location, path translation and tool discovery live inside the
-      script, where a person can run it by hand.
-- [x] **`lint-on-save.py` delegates to `verify-save` and names no tool.** A test
-      asserts it mentions no toolchain. `Bash(.claude/scripts/*)` allowed;
-      `.claude/scripts/verify-` added to `TEST_BUILD_COMMANDS`.
-- [x] **`/initproject` Step 5 writes the scripts.** The procedure is
-      stack-agnostic by construction: four questions per tier (what command can
-      fail / where does it run / how long / how does it go red), no recipe to
-      match against, and a tier with no honest answer gets no script.
-- [x] **`initproject/references/known-pitfalls.md`** — measured facts with dates
-      only, no per-stack recipes.
-- [x] `checkpoint.py` hardening — seven defects, each with a regression test
-      written first (`tests/test_checkpoint_hardening.py`, scenario IDs C1-C7):
-      the section regex ended only at `^## ` so an intervening H1 was destroyed;
-      one malformed timestamp aborted the whole run; `--since` was unvalidated
-      and compared in UTC while grouping is local; context files were rewritten
-      non-atomically with no backup; `HEAD~10` was hard-coded; `AGENTS.md` uses
-      `## Consultation History` so a second parallel section was appended; and
-      entries from any tool other than agy were discarded. Two further bugs were
-      found by running the fixed script for real: an unparseable timestamp still
-      produced a garbage `### broken-tim` heading when `--since` was absent, and
-      the atomic-write tests passed while its caller was reverted to a plain
-      write, so a test now asserts the backup exists.
-
-      **Correction (2026-09-26):** the `HEAD~10` entry above was recorded as
-      closed while it was not. Only `get_file_changes` had been switched to
-      `resolve_commit_range`; `get_file_stats` kept
-      `git diff --numstat HEAD~10 HEAD` and therefore returned nothing on any
-      repository with fewer than eleven commits — the same silent
-      "no changes detected" the fix was for. Found by `/lens-review`, reproduced
-      on a two-commit repository, and fixed by walking the same range with the
-      same walker (`git log --numstat`, which also covers the root commit where
-      `git diff` has no parent). `tests/test_checkpoint_hardening.py`
-      `FileStatsRangeTests` now asserts that every file listed as changed has
-      line counts, so the two call sites cannot drift apart again.
-- [x] `checkpointing/SKILL.md` brought back in line with `checkpoint.py`: it
-      showed `**agy조사:**` and `✓` while the script writes `**agy:**` and
-      `[OK]`/`[FAILED]` (labels moved to English per `rules/language.md`), and it
-      said both context files use `## Session History` while `AGENTS.md` uses
-      `## Consultation History`. `DocumentedFormatTests` asserts the document
-      against *generated* output rather than against a copy of the format, so the
-      two cannot drift apart in either direction.
-- [x] `checkpoint.py` C8 — tri-state outcome. `log-cli-tools` now writes
-      `success: null` when agy's stdout did not reach the Bash tool unaltered
-      (redirected, piped, captured) and nothing else says how the call ended;
-      `bool()` rendered that as `[FAILED]`. It now renders `[UNKNOWN]`; a missing
-      field stays `[FAILED]` (`UnknownOutcomeTests`). Origin: an adopting
-      project's log where 10 of 28 agy calls were the caller's own
-      `EXIT_CODE=0` echo, logged as successes.
-- [x] `log-cli-tools` judges by allowlist, not by parsing (2026-10-06). Two
-      rounds classified every shell shape (redirects, pipes, compound commands,
-      fds, newlines, comments); each isolated review found new false successes
-      and round 2 introduced three regressions (heredoc bodies logged as calls,
-      comments with an apostrophe dropping the call). The goal is narrower —
-      never log a false success — so only one shape is judged: a single-line
-      `agy …` alone, with at most `2>file`, `<file`, a final `| tee`. Every
-      other shape is `success: null` with a blank response; envelopes are
-      ignored outside that shape (they may belong to another command). Any
-      parser mistake therefore errs toward unknown. Dropped with it: the
-      trailing-line envelope scan (a trailing line implies a second command,
-      so that shape is never judged) and the `mixed` / compound-command logic.
-      Cost: complex calls with a real answer are `[UNKNOWN]`; the agent docs
-      already ask for one agy call per Bash command.
-
-      **Correction (2026-10-06, PR #31 review):** "any parser mistake errs
-      toward unknown" above was false when written. Detection kept shlex's `#`
-      comments, and shlex starts a comment mid-word (`~/c#proj`, `q#tag`) where
-      bash does not, so the dropped rest of the line (`> out.log; echo
-      EXIT_CODE=$?`, `|| echo FAILED`, a backslash-continued `echo`) was never
-      seen and three such calls were logged `direct`, success true — reproduced
-      before the fix. Instead of a bash-accurate comment stripper (the
-      shell-parsing path the allowlist replaced), a `#` outside quotes now
-      leaves the call unjudged; inline comments become unknown. Also from that
-      review: `run_in_background` calls are `background` (stdout is the
-      harness's notice), and leading comments are removed before
-      backslash-newline joining.
-
-      **Second correction (2026-10-06, isolated review of 84cdf2b):** the `#`
-      check above still let two false successes through — an escaped quote
-      (`~/it\'s#1`) and bash `$'…'` quoting, which shlex reads differently from
-      bash and which hid a redirect and `; echo`. Instead of teaching the
-      checker bash's escape rules, a `direct` call may not contain a backslash,
-      backtick, `$'` or `$"`; without them quoting is plain `'…'`/`"…"`, and a
-      ten-line scanner finds an unquoted `#` or newline exactly. `2>file` left
-      the allowlist too: it hides the soft-deny notice. Since reading the code
-      did not settle this three times, `tests/test_log_cli_tools_oracle.py`
-      now runs every judged shape in real bash with a fake `agy` and requires
-      stdout to be agy's alone and agy's stderr to reach the tool.
-
-      **Third correction (2026-10-06, isolated review of 0cc9cf0):** the flat
-      quote scanner was still wrong inside `"$(…)"` and `"${…}"`, where bash
-      nests quotes — `agy -p "$(echo "'")" > out.log; echo EXIT_CODE=$? # '`
-      was logged a success, reproduced in bash. The oracle had no nested-quote
-      input, so it could not catch this. `$(` and `${` joined the forbidden
-      list (with the old `$[…]` arithmetic form), and the oracle now generates
-      nested-quote prompts. These are the quote-nesting constructs known to
-      us; the oracle, not this list, is the check that the scanner agrees
-      with bash.
-
-- [x] `post-implementation-review.py` — state is now per project and per session
-      under `.claude/logs/implementation-state/`, with stale files pruned after
-      7 days and symlinks refused. Which files count is exclusion-based rather
-      than a list of seven extensions, and comment stripping covers the common
-      syntaxes instead of only `#`. 16 regression tests
-      (`tests/test_post_implementation_review.py`, scenario IDs R1-R6).
-- [x] agy-unavailable fallback. Two layers, because they answer different
-      questions: `/initproject` Step 3b probes at setup time, while a person is
-      present, and asks for installation or login as the state requires; the
-      runtime path in `/feature` Phase 1 cannot wait for anybody and degrades to
-      Claude's own tools instead. `agy-probe` distinguishes MISSING /
-      UNAUTHENTICATED / DEGRADED because the remedies differ. The fallback ladder
-      lives once in `.claude/rules/antigravity-delegation.md`; the other files
-      point at it rather than copying it. 16 tests.
-
-Dropped after review:
-- ~~Hooks read a project profile~~ — one hook runs stack tools; a project-owned
-  script covers it with no loader code in every hook.
-- ~~Per-stack recipe files (Layer 3)~~ — see `known-pitfalls.md` above.
-- ~~Commit gate with freshness receipts~~ — a receipt cannot stay fresh across a
-  two-hour image build, and the fail-open policy that keeps it safe also makes
-  it trivially bypassed. `.git/hooks/pre-commit` running `check` is the same
-  guard in one line and works outside Claude too (measured: repo git hooks do
-  run under the Bash tool; `--no-verify` bypasses them).
-- ~~Stop hook that blocks "done" without a test run~~ — a `command` hook cannot
-  force continuation, so it would be the only non-Python hook here, and the
-  8-block cap makes it unreliable.
-
-- [x] Separate-session neutral review performed (the procedure this file's
-      Phase 6 Option A prescribes), on commit `45c4afa`. A fresh session with no
-      context from the implementing one reviewed `main...HEAD` and pushed its
-      report to the branch `claude/review-45c4afa`. It found 13 defects and
-      three mutations that left all 312 tests green. **Twelve of its claims were
-      re-reproduced here before anything was accepted; all twelve reproduced
-      exactly**, including byte-identical md5 sums on the verify-save case.
-
-      Fixed in this session: F1 (review worktree / empty diff, in `/feature`,
-      README and CLAUDE.md), F2 (`verify-save` made read-only, contract amended,
-      non-mutation test added), F3 (`poe` → `uv run poe` where the always-loaded
-      files point), F4 (`dev-environment.md` realigned with `pyproject.toml`:
-      py311, no `src/`, real task list), and the four verification gaps — the
-      symlink refusal, the soft-deny success flag, the line-count trigger, and a
-      vacuous tier test of my own that passed with every `verify-*` stripped out
-      of the skill.
-
-      The remaining nine (F5-F13) were then fixed too, each with a test written
-      first where code changed: renames and the commit range in `checkpoint.py`
-      (F5, F6); the executor carrying the fallback ladder (F8); DESIGN.md's false
-      absence claim corrected in place (F9); the budget docstring no longer
-      stating a current total (F10); README's test command (F11); the permission
-      the scripts contract implies, now written down (F12); and the design-review
-      hook's size rule narrowed to source files (F13). Five mutations confirm the
-      new tests bite in both directions — rename detection back on, the commit
-      walker unbounded, the executor losing the states, and the F13 narrowing
-      both removed and over-applied.
-
-      What the review did NOT cover, in its own words: it never ran `/feature`,
-      `/initproject`, `/lens-review`, `/doc-write`, `/jira-setup` or `/ticket`;
-      agy, Jira and Windows are all unverified; and six test modules were read
-      but not mutation-checked.
-
-- [x] `/feature` restructured into execution order with the missing
-      implementation-loop section written, and the duplication around it closed:
-      the tier table (whose rows were byte-identical to `rules/testing.md` 원칙 4,
-      with a second copy of the Yocto/Django illustration) became a pointer; the
-      loop rules moved out of Phase 4 rather than being copied; the background
-      unit-tier run got the Task-prompt template it never had, carrying the
-      script contract explicitly because a general-purpose subagent is not
-      guaranteed to load the rules; and three stale restatements of the sequence
-      (`README.md` twice, `CLAUDE.md` 진행 순서) plus a pointer in
-      `.claude/scripts/README.md` to a section that did not exist were corrected.
-      `references/task-patterns.md`, referenced by nothing and teaching "Testing"
-      as a final category against Phase 4's mandatory pairing, was fixed and
-      wired in.
-
-- [x] Always-loaded context split by WHO needs it, with three tests added before
-      the cut so they would go red on the likely mistakes: tier/slug equality
-      across the five copies (also fails if the table leaves the rule),
-      section-anchor resolution, and a byte ratchet plus a negative check that
-      `--dangerously-skip-permissions` never returns to a rule file. All
-      confirmed by mutation. The ratchet's docstring states what it is not: bytes
-      are not tokens, the layer mixes Korean prose with English command blocks,
-      and the subagent multiplier is unknown.
-
-- [x] Hooks are fed real triggering payloads (`tests/test_hook_effects.py`,
-      33 tests). Each of the eight hooks now has a payload it must react to and
-      one it must ignore, with the effect asserted where it is observable:
-      `additionalContext` in stdout JSON, text on stderr, a JSONL line, a state
-      file. Side effects are redirected, not mocked — `CLAUDE_PROJECT_DIR` points
-      at a temporary project, and `log-cli-tools.py` is copied into a temporary
-      tree because its log path is relative to its own `__file__`.
-
-      Verified by mutation rather than by counting: all 8 no-op mutations pass
-      the contract tests and fail these; 5 always-fire mutations, plus
-      `is_source_file -> True`, the removed agy-binary check and the removed
-      `os.path.isfile` check, all fail these. Three silence cases exist because
-      that second run exposed them — the originals returned early (a skip list,
-      an explicit success flag, a command with no bare `-p`) and the always-fire
-      mutants survived. The suite looked complete at 29 tests and was not.
-
-      Still open: nothing here proves Claude Code sends this payload shape, that
-      the `settings.json` matchers route to these files, or that the emitted
-      context changes what the model does. Only a real session shows that.
-
-- [x] Phrase tests declare what they are. `/lens-review` measured that roughly
-      90 of this suite's assertions are substring matches against markdown and
-      that 14 template mutations leave the suite green — appending a sentence
-      that reverses an asserted rule stays green, while a meaning-preserving
-      reword goes red. Each markdown-asserting module now says in its docstring
-      that it is a drift tripwire and not behavioural coverage, and
-      `PhraseTestHonestyTests` requires that of any module added later. The limit
-      itself is not fixed by this — feeding hooks and skills real triggering
-      input is a separate piece of work.
+None open. Open items are under Open Questions.
 
 ## Open Questions
 
 <!-- Unresolved issues, things to investigate -->
-
-- [x] **Does agy ever activate `.agents/skills/context-loader`? — no; removed 2026-10-12.**
-      `cli-tools.jsonl` cannot show it, but agy keeps every conversation in
-      `~/.gemini/antigravity-cli/conversations/*.db` (SQLite; step payloads are
-      readable text). Of 61 conversations on the maintainer's machine (2026-08-29 ..
-      2026-10-12) — 21 in an adopting project that has the skill, 18 in this
-      repository — none mentions `context-loader`, while the same query finds
-      `isolated-review` and `AGENTS.md`. [unverified] that agy names a skill in the
-      transcript when it activates one. Restore from tag `v4.1.0` if needed.
 
 - [ ] **Bash-mark sweep race (2026-10-12) — recorded, not fixed, no occurrence.**
       `bash-write-check.py` `sweep_stale` removes marks older than an hour without
@@ -399,69 +153,11 @@ Dropped after review:
       verification plan's scenario IDs, and `/lens-review`'s verification-adequacy
       lens. Both are judgement, not enforcement. **Standing limitation**, not a
       task — do not expect this one to close.
-- [x] **`/initproject` interactive completion — resolved 2026-09-28.** Run
-      interactively on a Node/TS project (npm workspaces), it completed Steps
-      1–8: two AskUserQuestion calls, no refused writes, verify-save/verify-task
-      written and proven to fail (re-checked independently from outside that
-      session). So the headless stop is not a bug to fix with defaults: the
-      skill and README now say headless runs are not supported. The run's own
-      findings — tagline left under the H1, `language.md` missing from Step 6,
-      Python examples surviving the drift grep, the before-write reminder
-      firing inside a subagent — are closed in the same change.
-- [ ] The skills README lists as never run (`/feature` first) still have not. Method: hand one to a
-      session with no context and make it quote the sentence it got stuck on.
+- [ ] `/feature` has not been handed to a session with no context. Method: hand it over and make
+      the session quote the sentence it got stuck on.
 - [ ] Loop/graph orchestration on top of `/feature` — the user's option, not yet
       researched. Real use of `/feature` should come first.
-- [ ] `/lens-review`, `/doc-write`, `/jira-setup`, `/ticket` and `agy-probe`'s
-      READY path have never actually run. Their tests assert their instructions,
-      not their behaviour in use.
-- [ ] **Deferred: split `log-cli-tools.py` (2026-10-07).** It is 567 lines, which is
-      over the 200–400 target but under the 800 maximum in `coding-principles.md`.
-      It works and is guarded by unit, bash-oracle and mutation tests.
-      - What a split would involve: move detection (tokenize/segments, about 130
-        lines with its constants) to a `_shell_lex.py` helper, as `_savecheck.py`
-        is. `test_hook_effects` copies the hook file alone, so it would have to copy
-        the helper too.
-      - Why deferred: no observed problem, and a refactor of a hook stabilised over
-        five review rounds risks more than it gains.
-      - **When to do it:** the next time this hook must change for a functional
-        reason, split it in the same change.
-- [ ] **Deferred, record only: other `log-cli-tools` follow-ups (2026-10-07).**
-      Each one is reopened only if the condition named for it is observed.
-      - Several agy calls in one non-direct command: a soft-deny on a later call
-        marks the first `[FAILED]`. That is a false failure, not a false success.
-        The docs already ask for one call per command. Reopen if a real log shows
-        it.
-      - `agy -p "$(cat f)"` is `[UNKNOWN]` by design. Measured: 0 of 28 real calls
-        used `$(`. Reopen with a narrow exception if real logs show it is common.
-      - A call that ignores the Bash `timeout: 600000` guidance is still
-        auto-backgrounded and logged `[FAILED]`. A hook-side safety net needs the
-        backgrounding marker in the PostToolUse payload; it is not in stdout and is
-        undocumented. Measure the payload first if such entries appear.
-
-Closed, so that a later session does not reopen them:
-
-- ~~Profile schema granularity~~ — the profile was rejected; the contract is four
-  scripts and an exit code. See Key Decisions.
-- ~~Whether to add a Stop hook that blocks "done" without a test run~~ — dropped.
-  A `command` hook cannot force continuation, and the commit gate plus
-  `.git/hooks/pre-commit` cover the same ground more simply.
-
-## Changelog
-
-| Date | Changes |
-|------|---------|
-| 2026-10-08 | Path-scoped `coding-principles.md` and new `test-writing.md`; condensed `testing.md`, `security.md`, `writing-style.md`; trimmed `doc-write`/`ticket` descriptions; budget cap 31,000 → 23,500 |
-| 2026-10-07 | Removed the `deep-reasoning`, `antigravity-system` and `/checkpointing` skills (0 recorded uses); agy prompt templates now in `general-purpose.md`; `agy-probe` → `.claude/bin/` |
-| 2026-09-26 | `/lens-review`: orthogonal lenses in parallel, one shared pre-filter, aggregation that surfaces inter-lens conflicts rather than resolving them, conditional adversarial verification; 30 tests |
-| 2026-09-26 | Cost-based routing: token volume × reasoning difficulty replaces topic-only routing; two-stage funnel (agy narrows, Claude judges) wired into /feature Phase 3 and Phase 6, with a size threshold and a locations-not-verdicts contract; 17 tests |
-| 2026-09-26 | Jira integration: `/jira-setup` (manual, once per project — connection state, project context, write policy) and `/ticket` (auto-invoked, ticket to implementation to comment/transition); 29 tests, design grounded in measurements against a real connector |
-| 2026-09-26 | `/doc-write` skill: auto-invoked document writing under the user's style rules, with the trigger boundary in its description, an asymmetric publish policy, and no project- or connector-specific values; 16 tests |
-| 2026-09-25 | agy fallback: `agy-probe` reports READY/MISSING/UNAUTHENTICATED/DEGRADED; `/initproject` Step 3b asks for install or login at setup time; `/feature` Phase 1 degrades to Claude's own tools and records that it did |
-| 2026-09-25 | post-implementation-review.py: per-project/per-session state with pruning and symlink refusal, exclusion-based source detection, multi-language comment stripping; 16 regression tests written first |
-| 2026-09-25 | checkpoint.py hardened against data loss (section boundary, atomic writes with backup, timestamp and --since handling, git range, per-file history heading, all tools kept); 17 regression tests written before the fixes |
-| 2026-09-25 | Contract review: pass-through of success output, optional scope arguments, interpreter resolution for Windows, shared helpers, tiers reduced to the two this repo honestly has, template self-checks moved into the gate, coverage theatre reverted |
-| 2026-09-25 | Verification contract as four executables (`.claude/scripts/verify-*`); `lint-on-save` delegates and names no tool; `/initproject` Step 5 writes them; `known-pitfalls.md` for measured facts |
-| 2026-09-25 | Verification-first: `/feature` Phase 2b verification plan, paired verify tasks, adequacy review; stack-agnostic `rules/testing.md`; duration-based tiers |
-| 2026-09-25 | Pinned deep-reasoning to Fable; renamed the two entry skills; added the writing-style rule; repaired the quality gate (`uv run`, `lint-on-save`, `post-test-analysis`) and added hook contract tests; recorded the stack-agnostic direction |
-| | Initial |
+- [ ] **Correction (2026-10-13):** this item said `/doc-write`, `/jira-setup` and `/ticket` had
+      never run. They were used in a real work project (2026-09/10, about 150 Jira/Confluence MCP
+      calls). Still not run in use: `agy-probe`'s READY path. Their tests assert their
+      instructions, not their behaviour in use.

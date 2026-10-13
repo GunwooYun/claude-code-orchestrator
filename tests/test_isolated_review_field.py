@@ -1,5 +1,5 @@
 """
-Fixes from the first field report (Immich fork, 2026-10-02). Three real runs
+Fixes for the incidents of the first real-use report (Immich fork, 2026-10-02). Three real runs
 gave INVALID, INCOMPLETE, INCOMPLETE, and none of the three was the reviewer's
 fault:
 
@@ -26,7 +26,6 @@ from test_isolated_review import (
     IsolatedReviewCase,
     load_script,
 )
-from test_isolated_review_hardening import load_field_report
 
 RR = load_script()
 CONFIG = ".claude/isolated-review.json"
@@ -157,6 +156,10 @@ class CapExclusionTests(IsolatedReviewCase):
     def test_d_without_the_config_the_same_range_is_refused(self) -> None:
         result = self.sandbox(changed=self.over_cap()).run()
         self.assertEqual(EXIT_REFUSED, result.returncode)
+        # The cap was hit in two real projects (4,104 and 4,311 lines) and the
+        # option was used in neither: the refusal itself must name it.
+        self.assertIn("cap_exclude", result.stderr)
+        self.assertIn(CONFIG, result.stderr)
 
     def test_d_excluded_files_are_still_reviewed(self) -> None:
         # The cap is about size, not scope: a file the config excludes must
@@ -184,34 +187,3 @@ class CapExclusionTests(IsolatedReviewCase):
         result = box.run()
         self.assertEqual(EXIT_REFUSED, result.returncode)
         self.assertIn("isolated-review.json", result.stderr)
-
-
-class DriftTests(IsolatedReviewCase):
-    def test_new_reasons_have_a_field_report_shape(self) -> None:
-        box = self.sandbox(
-            base_files={CONFIG: json.dumps({"cap_exclude": []})},
-            changed={
-                CONFIG: json.dumps({"cap_exclude": ["x/**"]}),
-                "src/work.py": "w\n",
-            },
-        )
-        reasons = [
-            line[len("- reason: ") :]
-            for line in box.run().stdout.splitlines()
-            if line.startswith("- reason: ")
-        ]
-        box2 = self.sandbox()
-        reasons += [
-            line[len("- reason: ") :]
-            for line in box2.run(
-                scenario="modify_ignored_claude_file"
-            ).stdout.splitlines()
-            if line.startswith("- reason: ")
-        ]
-        self.assertGreaterEqual(len(reasons), 2)
-        field_report = load_field_report()
-        for reason in reasons:
-            with self.subTest(reason=reason):
-                self.assertNotEqual(
-                    field_report.HIDDEN, field_report.hide_reason(reason, False)
-                )

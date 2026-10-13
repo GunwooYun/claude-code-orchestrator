@@ -18,10 +18,9 @@
 7. [리뷰 받기 — `/isolated-review`](#7-리뷰-받기--isolated-review)
 8. [검증 계약 — `verify-*` 스크립트](#8-검증-계약--verify--스크립트)
 9. [버전 확인과 업그레이드](#9-버전-확인과-업그레이드)
-10. [실사용 리포트 보내기](#10-실사용-리포트-보내기)
-11. [자주 밟는 함정](#11-자주-밟는-함정)
-12. [지금 무엇이 검증됐나](#12-지금-무엇이-검증됐나)
-13. [이 저장소를 개발하는 사람에게](#13-이-저장소를-개발하는-사람에게)
+10. [자주 밟는 함정](#10-자주-밟는-함정)
+11. [지금 무엇이 검증됐나](#11-지금-무엇이-검증됐나)
+12. [이 저장소를 개발하는 사람에게](#12-이-저장소를-개발하는-사람에게)
 
 ---
 
@@ -99,6 +98,7 @@ your-project/
     ├── rules/                     # 세부 규칙 — 대부분 매 세션, paths: 가 있으면 맞는 파일을 열 때만
     ├── scripts/                   # 검증 계약: verify-save, verify-task (+README)
     ├── bin/                       # agy-probe — agy 를 지금 쓸 수 있는지 확인
+    │                              # usage-report — 이 프로젝트에서 템플릿을 어떻게 썼는지 개수만 집계
     └── docs/                      # 설계 기록·조사 결과·작성 가이드
 ```
 
@@ -120,7 +120,6 @@ your-project/
 |---|---|---|
 | `lint-on-save.py` | Claude 가 Edit/Write 로 파일을 고칠 때 | 그 파일 하나에 `.claude/scripts/verify-save <파일>` 을 돌려 결과를 Claude 에게 알린다 |
 | `bash-write-check.py` | Bash 명령 전후 | `sed -i`·리다이렉션처럼 Bash 로 쓴 파일(최대 5개)에도 같은 검사를 돌린다 — 안전망 |
-| `log-cli-tools.py` | Bash 로 agy 를 부른 뒤 | agy 입출력을 `.claude/logs/cli-tools.jsonl` 에 기록. **한 줄에 단독으로 부른 호출만** 성공·실패를 판정하고, 나머지(리다이렉트·`\|\| echo`·여러 줄 등)는 `success: null`(UNKNOWN)과 그 이유(`stdout_target`)로 남긴다 |
 | `_savecheck.py` | (공용 모듈) | 위 두 검사 훅이 함께 쓰는 코드 |
 
 훅은 **아무것도 막지 않는다** — 알리기만 한다.
@@ -199,7 +198,7 @@ Remove-Item -Recurse -Force .starter
 - **`--branch main` 을 꼭 붙인다.** `main` 에는 릴리스된 버전만 있다. 기본 브랜치 `develop` 에는 아직
   검증 중인 변경이 들어 있다.
 - 받은 버전은 `.claude/ORCHESTRATOR_VERSION` 에 기록된다.
-- **Windows 는 아직 실제로 검증하지 않았다**([12장](#12-지금-무엇이-검증됐나)). 훅은 `python3` 명령으로
+- **Windows 는 아직 실제로 검증하지 않았다**([11장](#11-지금-무엇이-검증됐나)). 훅은 `python3` 명령으로
   등록돼 있으므로, PowerShell 에서 `python3 --version` 이 Python 3.10 이상을 출력하는지 먼저 확인한다
   (Microsoft Store 설치 안내 창이 뜨면 `python3` 이 실제 Python 을 가리키지 않는 것이다).
   `verify-*` 는 sh 셸 스크립트라 PowerShell·cmd 에서 직접 실행되지 않는다 — `/initproject` 에 Windows 라고
@@ -529,7 +528,7 @@ flowchart TD
 - 대개 그대로 교체해도 되는 것(템플릿 소유): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`,
   `.claude/bin/`, `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
   `rules/security.md`, `rules/language.md`, `rules/writing-style.md`, `docs/writing-style.md`,
-  `docs/templates/field-report.md`, `scripts/README.md`, `ORCHESTRATOR_VERSION`(새 버전 값이 된다)
+  `scripts/README.md`, `ORCHESTRATOR_VERSION`(새 버전 값이 된다)
   — 단, 프로젝트가 고친 흔적이 있으면 병합한다. `/agy-models` 로 agy 모델을 바꿨다면
   `rules/antigravity-delegation.md` 는 MERGE 로 나온다: 모델 표 4줄은 내 값을 유지한다.
 - 업그레이드 뒤 `.claude/bin/agy-probe` 를 한 번 돌린다. `STALE` 이면 `/agy-models` 로 모델을 다시 고른다.
@@ -544,30 +543,7 @@ flowchart TD
 
 ---
 
-## 10. 실사용 리포트 보내기
-
-이 템플릿은 **실제로 쓰면서 나온 리포트로만** 고친다. 쓰다가 불편하거나 이상했던 점을 남겨 주면 다음
-버전의 근거가 된다.
-
-| 종류 | 언제 | 무엇을 |
-|---|---|---|
-| 불편·버그 메모 | 생기는 즉시 | 세 줄: **무엇을 하려 했나 / 무슨 일이 있었나 / 어떻게 우회했나** |
-| 작업 기록 | 기능 하나가 끝날 때 | 걸린 시간 / 비용 / 막히거나 헷갈린 단계 |
-| 격리 리뷰 리포트 | 작업 3~5건마다 | 발견마다 real / false / unsure, 나중에 드러난 놓친 문제 |
-
-코드를 밖으로 가져갈 수 없는 저장소라면 초안 생성 스크립트를 쓴다. 코드·리뷰 본문·비밀값은 넣지 않고
-숫자와 판정만 뽑는다(파일 경로도 기본으로 가린다).
-
-```bash
-.claude/skills/isolated-review/field-report > /tmp/field-report.md
-```
-
-작성법: [`.claude/docs/templates/field-report.md`](.claude/docs/templates/field-report.md).
-**보내기 전에 전체를 한 번 읽는다** — 외부로 보내는 것이다.
-
----
-
-## 11. 자주 밟는 함정
+## 10. 자주 밟는 함정
 
 - **템플릿을 다시 통째로 복사하지 않는다.** 맞춤화가 사라진다 → [9장 업그레이드 절차](#업그레이드-절차).
 - **훅 파일명을 바꾸거나 지우면 `settings.json` 등록도 같은 커밋에서 바꾼다.** 어긋나면 모든 편집이 막힌다.
@@ -575,8 +551,7 @@ flowchart TD
 - **서브에이전트는 서브에이전트를 못 띄운다.** 조사 중에 설계 판단이 필요하면 메인으로 돌아와 deep-reasoning 을 부른다.
 - **agy 헤드리스 호출이 빈 답을 주면 실패다**(exit 0 이어도). 조용히 넘어가지 않는다.
 - **agy 는 한 줄에 단독으로, Bash 도구 `timeout: 600000` 으로 부른다.** Bash 기본 제한(2분)을 넘으면
-  명령이 백그라운드로 옮겨지고, 정상 완료돼도 로그에는 `[FAILED]` 로 남는다(측정됨). 리다이렉트·`|| echo`·
-  인라인 주석을 붙이면 로그는 결과를 판정하지 못하고 `[UNKNOWN]` 으로 남긴다.
+  명령이 백그라운드로 옮겨져 답이 돌아오지 않는다. 리다이렉트·`|| echo` 를 붙이면 출력이 agy 의 답이 아니게 된다.
 - **파일 편집은 Edit/Write 로 한다.** Bash(`sed -i`·heredoc)로 고치면 저장 검사가 바로 돌지 않는다.
   예외: 컨테이너·원격·권한 필요 파일, 바이너리, 도구 실행 결과, 대량 치환.
 - **`verify-save` 가 조용하다고 동작하는 것은 아니다.** 다루지 않는 파일에는 침묵하는 게 계약이다.
@@ -587,12 +562,10 @@ flowchart TD
 - **`CLAUDE.md` 는 매 세션, 모든 서브에이전트 호출에 통째로 로드된다.** 매 세션 필요한 것만 둔다.
   코드 규칙은 `paths:` 조건이 붙은 `.claude/rules/` 파일로, 운영 절차는 "언제 읽을지"를 적은 별도 문서로 뺀다.
 - **맨몸 `poe`·`pytest` 를 문서에 적지 않는다.** 프로젝트 환경 밖에서는 exit 127 이나 "0개 실행, OK" 가 난다.
-- **2026-09-28 이전에 복사한 사본의 `.claude/docs/DESIGN.md` 에는 이 템플릿 자신의 설계 기록이 섞여 있다.**
-  (`/initproject`, `/feature`, `/lens-review` 를 다루는 항목) 지우고 프로젝트 내용만 남긴다.
 
 ---
 
-## 12. 지금 무엇이 검증됐나
+## 11. 지금 무엇이 검증됐나
 
 무엇이 실제로 확인됐고 무엇이 아닌지 알고 쓰는 편이 낫다.
 
@@ -603,15 +576,26 @@ flowchart TD
 | `/isolated-review` | 실작업 3회 + 지난 작업 6건 재검증. 사람이 연 리뷰가 놓친 진짜 문제를 찾았고 오탐은 없었다. 실행이 필요한 결함은 놓친다 |
 | deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중 (2026-10-07 측정: deep-reasoning 30회, agy 79회). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
 | `/orchestrator-version` | 업그레이드에 사용. `--plan` 은 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치) |
-| 훅 4개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
-| `log-cli-tools` 의 판정 | 판정하는 모든 모양을 실제 bash 로 돌려 대조하는 테스트(무작위 600개 + 리뷰 지적 입력)로 확인. Bash 시간 제한·백그라운드 동작은 가짜 agy 로 실측 |
+| 훅 2개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `/agy-models` | 템플릿 저장소에서 실제 agy 1.3.3 으로 1회 완주(2026-10-13): Gemini 3개 제시 → 등급별 선택 → 표 기록 → 프로브 `READY`. 선택지가 4개를 넘는 경우와 `/initproject` Step 3c 경유 실행은 아직 돌려 보지 않았다 |
-| `/doc-write`, `/jira-setup`, `/ticket` | **아직 실제로 돌려 본 적 없다** |
+| `/doc-write`, `/jira-setup`, `/ticket` | 실제 업무 프로젝트에서 사용(2026-09~10, 각 1회 호출 + Jira·Confluence 작업 약 150회). 이전 판의 "돌려 본 적 없다"는 그 프로젝트를 집계하기 전의 기록이었다 |
 | Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다 |
+
+### 사용 근거 남기기
+
+이 표는 실제로 쓰면서 나온 근거로만 고친다. 근거는 두 가지다.
+
+- **사용 횟수** — `.claude/bin/usage-report --since <날짜>`. Claude Code 가 이미 남기는 세션 기록에서 스킬·
+  서브에이전트·훅(오류 포함)·검증 티어·거부된 호출 등을 **개수만** 센다. 세션 기록은 기본 30일 뒤 지워지므로
+  주기적으로 돌려 리포트만 남긴다. 다른 머신의 프로젝트는 아무것도 복사하지 않고 돌릴 수 있다:
+  `ssh <호스트> 'cd <프로젝트> && python3 - --since <날짜>' < .claude/bin/usage-report`
+- **불편·버그 메모** — 생기는 즉시 세 줄: **무엇을 하려 했나 / 무슨 일이 있었나 / 어떻게 우회했나**.
+
+밖으로 보내기 전에 전체를 한 번 읽는다.
 
 ---
 
-## 13. 이 저장소를 개발하는 사람에게
+## 12. 이 저장소를 개발하는 사람에게
 
 ### 브랜치와 릴리스
 
@@ -623,7 +607,7 @@ flowchart TD
 - 기능 PR 은 변경을 `CHANGELOG.md` 의 `## [Unreleased]` 에 적는다.
 - 릴리스: `## [Unreleased]` 를 `## [X.Y.Z] - 날짜` 로 바꾸고 `.claude/ORCHESTRATOR_VERSION` 을 같은 버전으로
   올린다. **같은 PR 에서 README 를 그 릴리스 내용에 맞게 고친다** — 버전 표기만이 아니라 새 스킬·상태·절차와
-  12장 검증 현황까지(4.3.0 은 이걸 빠뜨렸다) → `develop` 을 `main` 으로 PR, **merge commit 으로 머지**
+  11장 검증 현황까지(4.3.0 은 이걸 빠뜨렸다) → `develop` 을 `main` 으로 PR, **merge commit 으로 머지**
   (squash 하면 다음 릴리스 PR 이 충돌한다 — 4.3.0 의 #59) → `main` 의 머지 커밋에 태그를 달고 push.
 - 다음 변경은 실사용 리포트를 근거로 정한다. 방향과 운영 원칙: [`docs/direction-review-2026-10-03.md`](docs/direction-review-2026-10-03.md)
 

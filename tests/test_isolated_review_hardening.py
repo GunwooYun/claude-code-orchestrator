@@ -1,7 +1,7 @@
 """
 Round-4 separate-session review of /isolated-review: the findings that survived
 three earlier rounds — paths and headings handled as strings, a parent that dies
-mid-run, what field-report lets out, and the Python floor. Numbers (#1, #4, ...)
+mid-run, and the Python floor. Numbers (#1, #4, ...)
 are that review's finding numbers; X1–X3 are its conflicts, decided by the user
 on 2026-09-30.
 
@@ -10,11 +10,10 @@ Uses the fake `claude` and the sandbox from test_isolated_review.py.
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -22,7 +21,6 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from types import ModuleType
 from unittest import mock
 
 from test_isolated_review import (
@@ -40,17 +38,7 @@ from test_isolated_review import (
 )
 
 RR = load_script()
-FIELD_REPORT = SKILL / "field-report"
 WAIT_S = 30
-
-
-def load_field_report() -> ModuleType:
-    loader = importlib.machinery.SourceFileLoader("field_report", str(FIELD_REPORT))
-    spec = importlib.util.spec_from_loader("field_report", loader)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
-    return module
 
 
 def header(stdout: str) -> str:
@@ -234,13 +222,13 @@ class CleanupAndRefusalTests(IsolatedReviewCase):
         self.assertIn("REFUSED", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
 
-    def test_7_a_secret_in_a_refusal_reason_is_not_recorded(self) -> None:
+    def test_7_a_secret_in_a_refusal_reason_is_not_printed(self) -> None:
         box = self.sandbox()
         token = "ghp_" + "a" * 36
-        box.run(base=f"https://x:{token}@example.com/r")
-        log = box.root / RR.LOG_REL / "refusals.jsonl"
-        self.assertTrue(log.exists())
-        self.assertNotIn(token, log.read_text(encoding="utf-8"))
+        result = box.run(base=f"https://x:{token}@example.com/r")
+        self.assertEqual(EXIT_REFUSED, result.returncode, result.stderr)
+        self.assertIn("REFUSED", result.stderr)
+        self.assertNotIn(token, result.stderr)
 
 
 class DenyChangeTests(IsolatedReviewCase):
@@ -287,14 +275,17 @@ class DenyChangeTests(IsolatedReviewCase):
 class PythonFloorTests(IsolatedReviewCase):
     """
     #5: adopting projects run these scripts with whatever python3 they have.
-    The formatter (target py311) turned `with a, b:` into the parenthesised
-    form, which is a SyntaxError before 3.10 — the round-3 fix was undone by
-    `ruff format` and nobody saw it.
+    The lowest seen in a real adopter is 3.10, and the gate type-checks at 3.10,
+    so run-review must run there. A newer-only stdlib name (`datetime.UTC`, 3.11)
+    parses fine but fails at import on the floor, which only a real run shows.
     """
 
-    FLOOR = "3.8"
+    FLOOR = "3.10"
 
-    def old_python(self) -> str:
+    def floor_python(self) -> str:
+        on_path = shutil.which(f"python{self.FLOOR}")
+        if on_path:
+            return on_path
         found = subprocess.run(
             ["uv", "python", "find", "--no-project", self.FLOOR],
             capture_output=True,
@@ -305,8 +296,8 @@ class PythonFloorTests(IsolatedReviewCase):
             self.skipTest(f"no Python {self.FLOOR} (uv python install {self.FLOOR})")
         return path
 
-    def test_5_run_review_and_field_report_run_on_the_floor(self) -> None:
-        python = self.old_python()
+    def test_5_run_review_runs_on_the_floor(self) -> None:
+        python = self.floor_python()
         box = self.sandbox(
             # Modified, not added: an added file is fully in the diff and counts as read.
             base_files={"src/a.py": "a = 0\n", "src/b.py": "b = 0\n"},
@@ -314,188 +305,6 @@ class PythonFloorTests(IsolatedReviewCase):
         )
         result = box.run(scenario="coverage_no_read", python=python)
         self.assertEqual(EXIT_INCOMPLETE, result.returncode, result.stderr)
-        report = subprocess.run(
-            [python, str(box.root / ".claude/skills/isolated-review/field-report")],
-            cwd=box.root,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        self.assertEqual(0, report.returncode, report.stderr)
-        self.assertIn("INCOMPLETE", report.stdout)
-
-    def test_5_no_construct_the_floor_cannot_parse(self) -> None:
-        # A tripwire for machines without the old interpreter: the two forms
-        # that have already slipped in.
-        for name in ("run-review", "field-report"):
-            source = (SKILL / name).read_text(encoding="utf-8")
-            with self.subTest(script=name):
-                self.assertIsNone(re.search(r"^\s*with \(\s*$", source, re.M))
-                self.assertNotIn(".removeprefix(", source)
-                self.assertNotIn(".removesuffix(", source)
-
-
-class FieldReportPrivacyTests(IsolatedReviewCase):
-    """#6: without --include-paths, only known reason shapes leave the machine."""
-
-    SECRETS = (
-        "Makefile",
-        "LICENSE",
-        "pw12345",
-        "example.com",
-        "123456789012",
-        "acme",
-        "feature/secret-project",
-    )
-
-    def write_run(self, box: Sandbox, reasons: list[str], model: str) -> None:
-        reports = box.root / RR.REPORT_REL
-        reports.mkdir(parents=True, exist_ok=True)
-        lines = [
-            "# Isolated review — FAILED",
-            "",
-            "- verdict: **FAILED** (never an approval)",
-            *[f"- reason: {r}" for r in reasons],
-            "- base: origin/main  merge-base: abc  HEAD: def  branch: feature/secret-project",
-            "- changed: 2 files, 10 lines, diff inline",
-            f"- model: {model}  cost: $1.00  time: 10s",
-            "- transcript: .claude/logs/isolated-review/run1/",
-        ]
-        (reports / "feature-secret-project-20260930-120000.md").write_text(
-            "\n".join(lines) + "\n\n---\n\n## Findings\nNone.\n", encoding="utf-8"
-        )
-        log = box.root / RR.LOG_REL / "run1"
-        log.mkdir(parents=True, exist_ok=True)
-        init = {
-            "type": "system",
-            "subtype": "init",
-            "tools": ["Glob", "Grep", "Read", "mcp__acme_jira__search"],
-            "slash_commands": [],
-        }
-        (log / "review.jsonl").write_text(json.dumps(init) + "\n", encoding="utf-8")
-        refusals = [
-            "HEAD is the merge-base with feature/secret-project: nothing to review",
-            "the working tree must be clean (commit first): ['Makefile', 'LICENSE']",
-            "git merge-base HEAD origin/acme failed: fatal: Not a valid object name",
-            "claude is not on PATH",
-            "an unknown shape mentioning acme",
-        ]
-        with (box.root / RR.LOG_REL / "refusals.jsonl").open("w") as handle:
-            for reason in refusals:
-                handle.write(json.dumps({"time": "t", "reason": reason}) + "\n")
-
-    def field_report(self, box: Sandbox, *args: str) -> str:
-        out = subprocess.run(
-            [
-                sys.executable,
-                str(box.root / SKILL.relative_to(REPO) / "field-report"),
-                *args,
-            ],
-            cwd=box.root,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        self.assertEqual(0, out.returncode, out.stderr)
-        return out.stdout
-
-    def reasons(self) -> list[str]:
-        return [
-            "coverage: Makefile not listed",
-            "coverage: LICENSE listed but never read",
-            "run ended as error_during_execution: ['fetch https://u:pw12345@example.com/x']",
-            "pinned model 'fable' did not run (modelUsage: ['arn:aws:bedrock:us-east-1:123456789012:m'])",
-            "isolation: tools granted were ['Glob', 'Grep', 'Read', 'mcp__acme_jira__search'], expected ['Glob', 'Grep', 'Read']",
-            "cli stderr: acme proxy said no",
-            "something nobody anticipated about acme",
-            "missing section: ## Tests",
-            "timed out after 45 min — partial stream kept, not a verdict",
-        ]
-
-    def test_6_nothing_project_specific_leaves_without_include_paths(self) -> None:
-        box = self.sandbox()
-        self.write_run(box, self.reasons(), "arn:aws:bedrock:us-east-1:123456789012:m")
-        text = self.field_report(box)
-        for secret in self.SECRETS:
-            with self.subTest(secret=secret):
-                self.assertNotIn(secret, text)
-
-    def test_6_known_safe_reasons_are_kept_whole(self) -> None:
-        box = self.sandbox()
-        self.write_run(box, self.reasons(), "claude-fable-5-1")
-        text = self.field_report(box)
-        for kept in (
-            "missing section: ## Tests",
-            "timed out after 45 min",
-            "coverage: <path> not listed",
-            "claude is not on PATH",
-            "claude-fable-5-1",
-            "Glob, Grep, Read",
-            "tools granted were [Glob, Grep, Read, <mcp tool>]",
-        ):
-            with self.subTest(kept=kept):
-                self.assertIn(kept, text)
-
-    def test_6_include_paths_shows_them(self) -> None:
-        box = self.sandbox()
-        self.write_run(box, self.reasons(), "claude-fable-5-1")
-        text = self.field_report(box, "--include-paths")
-        self.assertIn("Makefile", text)
-        self.assertIn("mcp__acme_jira__search", text)
-
-
-class ReasonShapeDriftTests(IsolatedReviewCase):
-    """
-    field-report lets a reason out only in a shape it knows. A reason run-review
-    starts to write without a matching shape is hidden — safe, but the field
-    report loses it silently. This ties the two together: every reason these
-    scenarios make must come through as more than <hidden>.
-    """
-
-    SCENARIOS = (
-        "coverage_no_read",
-        "coverage_missing",
-        "init_bash",
-        "init_slash",
-        "probe_leak",
-        "probe_same_twice",
-        "empty_result",
-        "not_completed",
-        "budget",
-        "missing_section",
-        "wrong_model",
-        "no_result",
-        "startup_error",
-        "startup_error_main",
-        "bad_model_usage",
-    )
-
-    def test_16_every_reason_run_review_writes_has_a_known_shape(self) -> None:
-        box = self.sandbox(
-            # Modified, not added: an added file is fully in the diff and counts as read.
-            base_files={"src/a.py": "a = 0\n", "src/b.py": "b = 0\n"},
-            changed={"src/a.py": "a = 1\n", "src/b.py": "b = 2\n"},
-        )
-        # From stdout, not the report files: runs within one second share a
-        # report name. modify_tree runs last; it leaves the tree dirty, so the
-        # run after it is a refusal.
-        reasons: list[str] = []
-        for scenario in (*self.SCENARIOS, "modify_tree", "ok"):
-            out = box.run(scenario=scenario).stdout
-            reasons += [
-                line[len("- reason: ") :]
-                for line in out.splitlines()
-                if line.startswith("- reason: ")
-            ]
-        log = box.root / RR.LOG_REL / "refusals.jsonl"
-        reasons += [json.loads(x)["reason"] for x in log.read_text().splitlines()]
-        self.assertGreater(len(reasons), len(self.SCENARIOS))
-        field_report = load_field_report()
-        for reason in reasons:
-            with self.subTest(reason=reason):
-                self.assertNotEqual(
-                    field_report.HIDDEN, field_report.hide_reason(reason, False)
-                )
 
 
 class UsabilityTests(unittest.TestCase):
@@ -544,10 +353,6 @@ class UsabilityTests(unittest.TestCase):
             reason.startswith("the working tree must be clean (commit first):")
         )
         self.assertIn(".git/info/exclude", reason)
-        field_report = load_field_report()
-        self.assertNotEqual(
-            field_report.HIDDEN, field_report.hide_reason(reason, False)
-        )
 
 
 class DocumentedNumbersTests(unittest.TestCase):
@@ -569,11 +374,6 @@ class DocumentedNumbersTests(unittest.TestCase):
         for verdict, code in RR.EXIT.items():
             with self.subTest(verdict=verdict):
                 self.assertIn(f"| {code} | {verdict} |", skill)
-
-    def test_x3_feature_tells_the_orchestrator_to_pass_the_base(self) -> None:
-        feature = (REPO / ".claude/skills/feature/SKILL.md").read_text(encoding="utf-8")
-        a1 = feature.split("**A1 — `/isolated-review`", 1)[1].split("**A2", 1)[0]
-        self.assertIn("--base", a1)
 
 
 class RoundFiveTests(IsolatedReviewCase):
@@ -605,34 +405,6 @@ class RoundFiveTests(IsolatedReviewCase):
                 self.assertEqual((text, 0), RR.redact(text))
         key = "sk-" + "a1" * 12
         self.assertEqual(("key [REDACTED]", 1), RR.redact(f"key {key}"))
-
-    def findings(self, body: str) -> list[str]:
-        with tempfile.TemporaryDirectory() as tmp:
-            report = Path(tmp) / "feat-20260930-120000.md"
-            report.write_text(
-                "# Isolated review — COMPLETE\n\n---\n\n## Findings\n"
-                + body
-                + "\n\n## Tests\n- x — high\n",
-                encoding="utf-8",
-            )
-            return load_field_report().parse_report(report)["confidences"]
-
-    def test_f3_field_report_counts_findings_in_every_common_form(self) -> None:
-        cases = {
-            "- `a.py:1` — breaks — high\n- `b.py:2` — breaks — low": ["high", "low"],
-            "1. `a.py:1` — breaks — high\n2. `b.py:2` — breaks — low": ["high", "low"],
-            "- `a.py:1` — breaks — confidence: high\n- `b.py:2` — breaks (medium)": [
-                "high",
-                "medium",
-            ],
-            "- `a.py:1` — bad input\n  produces wrong output — high": ["high"],
-            "- **`a.py:1`** — breaks — **high**": ["high"],
-            "* `a.py:1` — slow path is low priority — medium": ["medium"],
-            "None found.": [],
-        }
-        for body, expected in cases.items():
-            with self.subTest(body=body):
-                self.assertEqual(expected, self.findings(body))
 
     def test_f3_the_prompt_fixes_the_finding_line_format(self) -> None:
         prompt = " ".join((SKILL / "prompt.md").read_text(encoding="utf-8").split())
@@ -694,52 +466,6 @@ class RoundFiveTests(IsolatedReviewCase):
         self.assertEqual(EXIT_REFUSED, result.returncode, result.stderr)
         self.assertIn("TMPDIR", result.stderr)
 
-    def test_f11_skill_md_says_grep_counts_as_reading(self) -> None:
-        skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
-        row = next(x for x in skill.splitlines() if x.startswith("| 0 | COMPLETE |"))
-        self.assertIn("Grep", row)
-
-    def test_f12_field_report_judges_the_probe_like_run_review(self) -> None:
-        box = self.sandbox()
-        box.run(scenario="probe_same_twice")
-        out = subprocess.run(
-            [sys.executable, str(FIELD_REPORT)],
-            cwd=box.root,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        ).stdout
-        row = next(line for line in out.splitlines() if line.startswith("| 1 |"))
-        self.assertNotEqual("passed", row.split("|")[12].strip(), row)
-
-
-class RedactionEvidenceTests(IsolatedReviewCase):
-    """
-    F8 was decided "keep, revisit only with evidence" (2026-10-01). The evidence
-    can only come from field reports, so both the drafted report and the guide
-    must ask for it.
-    """
-
-    def test_field_report_asks_whether_redaction_blocked_a_judgement(self) -> None:
-        box = self.sandbox()
-        box.run(scenario="findings")
-        out = subprocess.run(
-            [sys.executable, str(FIELD_REPORT)],
-            cwd=box.root,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        ).stdout
-        self.assertIn(
-            "A hidden value in the report kept you from judging a finding", out
-        )
-
-    def test_the_guide_asks_for_it_too(self) -> None:
-        guide = (REPO / ".claude/docs/templates/field-report.md").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("[REDACTED]", guide)
-
 
 class ReportNameTests(unittest.TestCase):
     """Two runs ending in the same second wrote the same file; the first was lost."""
@@ -753,14 +479,6 @@ class ReportNameTests(unittest.TestCase):
             self.assertNotEqual(first, second)
             self.assertIn("one", first.read_text(encoding="utf-8"))
             self.assertIn("two", second.read_text(encoding="utf-8"))
-
-    def test_field_report_reads_the_date_of_a_numbered_report(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            report = Path(tmp) / "feat-20260930-120000-2.md"
-            report.write_text("# Isolated review — COMPLETE\n", encoding="utf-8")
-            self.assertEqual(
-                "2026-09-30", load_field_report().parse_report(report)["date"]
-            )
 
 
 if __name__ == "__main__":
