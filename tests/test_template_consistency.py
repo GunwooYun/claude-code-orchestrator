@@ -521,8 +521,8 @@ class ModelTierConsistencyTests(unittest.TestCase):
     def test_only_the_canonical_table_writes_a_slug(self) -> None:
         """
         Copies name the tier, not the slug. agy 1.3.3 dropped every slug at once
-        (2026-10-13) and six files carried them; /initproject Step 3c rewrites
-        the table only, so a literal elsewhere would keep the old choice. This
+        (2026-10-13) and six files carried them; /agy-models rewrites the
+        table only, so a literal elsewhere would keep the old choice. This
         also catches a tier swap the pairing check above cannot see.
         """
         literals = {
