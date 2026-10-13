@@ -46,8 +46,8 @@ project changed, back up a gitignored `.claude/` first).
   are rejected (exit 1). T1 is now 3.8 Flash low, T2–T4 3.8 Flash high (agy
   replaced 3.1 Pro High with 3.8 Flash High). The table in
   `.claude/rules/antigravity-delegation.md` is now the only place a slug is
-  written; the agent file, `/feature`, `CLAUDE.md` and `AGENTS.md` name the
-  tier. Upgrading: take those files as they are, and keep your own table rows
+  written; the agent file, `/feature` and `CLAUDE.md` name the tier, and
+  `AGENTS.md` uses a generic `{slug}`. Upgrading: take those files as they are, and keep your own table rows
   if you changed them.
 - **`agy-probe` reports `STALE`** (exit 1) when agy no longer offers a slug
   the table names, or a tier row has none — checked with `agy models` before
