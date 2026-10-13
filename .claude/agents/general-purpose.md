@@ -28,34 +28,15 @@ slug 를 agy 가 더는 제공하지 않음 — slug 를 직접 고르지 말고
 남긴다.
 
 이 표는 `.claude/rules/antigravity-delegation.md` 의 "When agy is unavailable" 와 **의도적으로
-중복**이다 — 서브에이전트가 `.claude/rules/` 를 받는다는 보장이 없고(Claude Code 문서는
-`CLAUDE.md` 만 명시한다), 스킬도 서브에이전트에서 자동 발동하지 않는다. 실행에 필요한
-것은 실행자 파일에 있어야 한다. 규칙 쪽을 고치면 여기도 같은 커밋에서 고친다.
+중복**이다(서브에이전트가 rules 를 받는다는 보장이 없다). 규칙 쪽을 고치면 여기도 같은 커밋에서 고친다.
 
 ## Why Subagents Matter: Context Management
 
-**CRITICAL**: The main Claude Code orchestrator has limited context. Heavy operations (agy research, large file analysis) should run in subagents to preserve main context.
-
-```
-┌────────────────────────────────────────────────────────────┐
-│  Main Claude Code (Orchestrator)                           │
-│  → Minimal context usage                                   │
-│  → Delegates heavy work to subagents                       │
-│                                                            │
-│  ┌──────────────────────────────────────────────────────┐ │
-│  │  Subagent (You)                                       │ │
-│  │  → Consumes own context (isolated)                    │ │
-│  │  → Directly calls agy                                 │ │
-│  │  → Returns concise summary to main                    │ │
-│  └──────────────────────────────────────────────────────┘ │
-└────────────────────────────────────────────────────────────┘
-```
+**CRITICAL**: The main orchestrator has limited context. You run isolated, call agy directly, and return a concise summary to main.
 
 ## Language Rules
 
-- **Thinking/Reasoning**: English
-- **Code**: English (variable names, function names, comments, docstrings)
-- **Output to user**: Korean
+Think and write code in English; output to the user in Korean.
 
 ## Role
 

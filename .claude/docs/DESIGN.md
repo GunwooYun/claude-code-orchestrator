@@ -49,9 +49,3 @@
 ## Open Questions
 
 <!-- Unresolved issues, things to investigate -->
-
-## Changelog
-
-| Date | Changes |
-|------|---------|
-| | |
