@@ -939,7 +939,7 @@ def _redact_transcript_files(log_dir: Path) -> int:
     Redact string values inside each JSON line, so the escaping of the JSON does
     not hide a secret from the patterns; non-JSON lines are redacted as text.
     The files are rewritten, so the transcript is no longer byte-for-byte the
-    CLI's output (field-report parses it as JSON, which survives).
+    CLI's output.
     """
     total = 0
     if not log_dir.is_dir():
@@ -994,21 +994,6 @@ def write_report(root: Path, branch: str, header: list[str], body: str) -> Path:
         except FileExistsError:
             continue
     raise OSError(f"no free report name for {safe}-{stamp}")
-
-
-def record_refusal(root: Path, reason: str) -> None:
-    """
-    Refusals write no report, so field-report would never see them. How often
-    the preconditions stop a review is part of judging whether it is usable.
-    """
-    try:
-        path = root / LOG_REL / "refusals.jsonl"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        entry = {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "reason": reason}
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except OSError:
-        pass  # recording must never change the verdict
 
 
 def check_preconditions(
@@ -1112,7 +1097,6 @@ def main(argv: list[str]) -> int:
         # given as the base was printed and logged as-is (round-4 review #7).
         reason = redact(str(exc))[0]
         print(f"run-review: REFUSED — {reason}", file=sys.stderr)
-        record_refusal(root, reason)
         return EXIT["REFUSED"]
 
     run_id = f"{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}"

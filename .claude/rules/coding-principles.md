@@ -2,7 +2,6 @@
 paths:
   - "**/*.py"
   - ".claude/skills/isolated-review/run-review"
-  - ".claude/skills/isolated-review/field-report"
   - ".claude/skills/orchestrator-version/check"
 ---
 # Coding Principles (Python)

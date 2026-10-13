@@ -26,7 +26,6 @@ from test_isolated_review import (
     IsolatedReviewCase,
     load_script,
 )
-from test_isolated_review_hardening import load_field_report
 
 RR = load_script()
 CONFIG = ".claude/isolated-review.json"
@@ -184,34 +183,3 @@ class CapExclusionTests(IsolatedReviewCase):
         result = box.run()
         self.assertEqual(EXIT_REFUSED, result.returncode)
         self.assertIn("isolated-review.json", result.stderr)
-
-
-class DriftTests(IsolatedReviewCase):
-    def test_new_reasons_have_a_field_report_shape(self) -> None:
-        box = self.sandbox(
-            base_files={CONFIG: json.dumps({"cap_exclude": []})},
-            changed={
-                CONFIG: json.dumps({"cap_exclude": ["x/**"]}),
-                "src/work.py": "w\n",
-            },
-        )
-        reasons = [
-            line[len("- reason: ") :]
-            for line in box.run().stdout.splitlines()
-            if line.startswith("- reason: ")
-        ]
-        box2 = self.sandbox()
-        reasons += [
-            line[len("- reason: ") :]
-            for line in box2.run(
-                scenario="modify_ignored_claude_file"
-            ).stdout.splitlines()
-            if line.startswith("- reason: ")
-        ]
-        self.assertGreaterEqual(len(reasons), 2)
-        field_report = load_field_report()
-        for reason in reasons:
-            with self.subTest(reason=reason):
-                self.assertNotEqual(
-                    field_report.HIDDEN, field_report.hide_reason(reason, False)
-                )

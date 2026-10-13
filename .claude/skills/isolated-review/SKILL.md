@@ -102,8 +102,7 @@ denied both, so a second round cannot anchor on the first.
 
 **The transcript holds the full text of every file the reviewer read** (each
 `tool_result`). Secrets are redacted by pattern only, so treat that directory
-like the source itself: do not share or attach it. `field-report` never copies
-it.
+like the source itself: do not share or attach it.
 
 If the run-review process is signalled (SIGTERM, SIGHUP, Ctrl-C) it stops the
 reviewer, redacts the transcript and still writes a FAILED report. SIGKILL
@@ -132,17 +131,6 @@ ceiling, and nothing is redacted.
   person-opened A2 review instead. `/initproject` says so.
 - The scripts run with the project's `python3`, 3.8 or newer; they use only the
   standard library.
-
-## Field reports
-
-This skill is being validated on real work in repositories its developers cannot
-see. After a few runs, the user sends a field report:
-`.claude/skills/isolated-review/field-report` drafts it (facts only — verdicts,
-costs, tool set, finding counts; never review text, code or secrets; paths
-hidden unless `--include-paths`), and the person adds a real / false / unsure
-verdict per finding and anything the review missed. How to fill it in:
-`.claude/docs/templates/field-report.md`. REFUSED runs write no report, so
-`run-review` records them in `.claude/logs/isolated-review/refusals.jsonl`.
 
 ## Limits
 

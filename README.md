@@ -18,10 +18,9 @@
 7. [리뷰 받기 — `/isolated-review`](#7-리뷰-받기--isolated-review)
 8. [검증 계약 — `verify-*` 스크립트](#8-검증-계약--verify--스크립트)
 9. [버전 확인과 업그레이드](#9-버전-확인과-업그레이드)
-10. [실사용 리포트 보내기](#10-실사용-리포트-보내기)
-11. [자주 밟는 함정](#11-자주-밟는-함정)
-12. [지금 무엇이 검증됐나](#12-지금-무엇이-검증됐나)
-13. [이 저장소를 개발하는 사람에게](#13-이-저장소를-개발하는-사람에게)
+10. [자주 밟는 함정](#10-자주-밟는-함정)
+11. [지금 무엇이 검증됐나](#11-지금-무엇이-검증됐나)
+12. [이 저장소를 개발하는 사람에게](#12-이-저장소를-개발하는-사람에게)
 
 ---
 
@@ -199,7 +198,7 @@ Remove-Item -Recurse -Force .starter
 - **`--branch main` 을 꼭 붙인다.** `main` 에는 릴리스된 버전만 있다. 기본 브랜치 `develop` 에는 아직
   검증 중인 변경이 들어 있다.
 - 받은 버전은 `.claude/ORCHESTRATOR_VERSION` 에 기록된다.
-- **Windows 는 아직 실제로 검증하지 않았다**([12장](#12-지금-무엇이-검증됐나)). 훅은 `python3` 명령으로
+- **Windows 는 아직 실제로 검증하지 않았다**([11장](#11-지금-무엇이-검증됐나)). 훅은 `python3` 명령으로
   등록돼 있으므로, PowerShell 에서 `python3 --version` 이 Python 3.10 이상을 출력하는지 먼저 확인한다
   (Microsoft Store 설치 안내 창이 뜨면 `python3` 이 실제 Python 을 가리키지 않는 것이다).
   `verify-*` 는 sh 셸 스크립트라 PowerShell·cmd 에서 직접 실행되지 않는다 — `/initproject` 에 Windows 라고
@@ -529,7 +528,7 @@ flowchart TD
 - 대개 그대로 교체해도 되는 것(템플릿 소유): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`,
   `.claude/bin/`, `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
   `rules/security.md`, `rules/language.md`, `rules/writing-style.md`, `docs/writing-style.md`,
-  `docs/templates/field-report.md`, `scripts/README.md`, `ORCHESTRATOR_VERSION`(새 버전 값이 된다)
+  `scripts/README.md`, `ORCHESTRATOR_VERSION`(새 버전 값이 된다)
   — 단, 프로젝트가 고친 흔적이 있으면 병합한다. `/agy-models` 로 agy 모델을 바꿨다면
   `rules/antigravity-delegation.md` 는 MERGE 로 나온다: 모델 표 4줄은 내 값을 유지한다.
 - 업그레이드 뒤 `.claude/bin/agy-probe` 를 한 번 돌린다. `STALE` 이면 `/agy-models` 로 모델을 다시 고른다.
@@ -544,30 +543,7 @@ flowchart TD
 
 ---
 
-## 10. 실사용 리포트 보내기
-
-이 템플릿은 **실제로 쓰면서 나온 리포트로만** 고친다. 쓰다가 불편하거나 이상했던 점을 남겨 주면 다음
-버전의 근거가 된다.
-
-| 종류 | 언제 | 무엇을 |
-|---|---|---|
-| 불편·버그 메모 | 생기는 즉시 | 세 줄: **무엇을 하려 했나 / 무슨 일이 있었나 / 어떻게 우회했나** |
-| 작업 기록 | 기능 하나가 끝날 때 | 걸린 시간 / 비용 / 막히거나 헷갈린 단계 |
-| 격리 리뷰 리포트 | 작업 3~5건마다 | 발견마다 real / false / unsure, 나중에 드러난 놓친 문제 |
-
-코드를 밖으로 가져갈 수 없는 저장소라면 초안 생성 스크립트를 쓴다. 코드·리뷰 본문·비밀값은 넣지 않고
-숫자와 판정만 뽑는다(파일 경로도 기본으로 가린다).
-
-```bash
-.claude/skills/isolated-review/field-report > /tmp/field-report.md
-```
-
-작성법: [`.claude/docs/templates/field-report.md`](.claude/docs/templates/field-report.md).
-**보내기 전에 전체를 한 번 읽는다** — 외부로 보내는 것이다.
-
----
-
-## 11. 자주 밟는 함정
+## 10. 자주 밟는 함정
 
 - **템플릿을 다시 통째로 복사하지 않는다.** 맞춤화가 사라진다 → [9장 업그레이드 절차](#업그레이드-절차).
 - **훅 파일명을 바꾸거나 지우면 `settings.json` 등록도 같은 커밋에서 바꾼다.** 어긋나면 모든 편집이 막힌다.
@@ -592,7 +568,7 @@ flowchart TD
 
 ---
 
-## 12. 지금 무엇이 검증됐나
+## 11. 지금 무엇이 검증됐나
 
 무엇이 실제로 확인됐고 무엇이 아닌지 알고 쓰는 편이 낫다.
 
@@ -610,7 +586,7 @@ flowchart TD
 
 ---
 
-## 13. 이 저장소를 개발하는 사람에게
+## 12. 이 저장소를 개발하는 사람에게
 
 ### 브랜치와 릴리스
 
@@ -622,7 +598,7 @@ flowchart TD
 - 기능 PR 은 변경을 `CHANGELOG.md` 의 `## [Unreleased]` 에 적는다.
 - 릴리스: `## [Unreleased]` 를 `## [X.Y.Z] - 날짜` 로 바꾸고 `.claude/ORCHESTRATOR_VERSION` 을 같은 버전으로
   올린다. **같은 PR 에서 README 를 그 릴리스 내용에 맞게 고친다** — 버전 표기만이 아니라 새 스킬·상태·절차와
-  12장 검증 현황까지(4.3.0 은 이걸 빠뜨렸다) → `develop` 을 `main` 으로 PR, **merge commit 으로 머지**
+  11장 검증 현황까지(4.3.0 은 이걸 빠뜨렸다) → `develop` 을 `main` 으로 PR, **merge commit 으로 머지**
   (squash 하면 다음 릴리스 PR 이 충돌한다 — 4.3.0 의 #59) → `main` 의 머지 커밋에 태그를 달고 push.
 - 다음 변경은 실사용 리포트를 근거로 정한다. 방향과 운영 원칙: [`docs/direction-review-2026-10-03.md`](docs/direction-review-2026-10-03.md)
 
