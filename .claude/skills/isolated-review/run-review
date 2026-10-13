@@ -68,6 +68,25 @@ REPORT_REL = ".claude/docs/reviews"
 CONFIG_REL = ".claude/isolated-review.json"
 # Paths this script writes, or that hold other runs: not part of the snapshot.
 SNAPSHOT_EXCLUDES = (WORK_REL, ".claude/logs", REPORT_REL)
+# Claude Code's own runtime state: the `# claude-code-runtime` block it appends
+# to `.git/info/exclude`, copied as is. Any session in the project, the reviewer
+# included, may write these; `.claude/scheduled_tasks.lock` appearing mid-run
+# made a real review INVALID (2026-10-13). A new name: copy the block again.
+CLAUDE_RUNTIME = tuple(
+    ".claude/" + name
+    for name in (
+        "scheduled_tasks.lock",
+        "scheduled_tasks.json",
+        "routines/.state",
+        "worktrees",
+        "checkpoints",
+        "mailbox",
+        "agent-registry.json",
+        "agent-memory-local",
+        "first-run",
+        "assistant-daemon-state.json",
+    )
+)
 
 FIXED_DENY = [
     # Secrets (the template's own deny list).
@@ -183,7 +202,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def excluded(path: str) -> bool:
-    return any(path == p or path.startswith(p + "/") for p in SNAPSHOT_EXCLUDES)
+    return any(
+        path == p or path.startswith(p + "/")
+        for p in SNAPSHOT_EXCLUDES + CLAUDE_RUNTIME
+    )
 
 
 def dirty_paths(root: Path) -> list[str]:
