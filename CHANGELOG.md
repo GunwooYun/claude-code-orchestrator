@@ -29,11 +29,12 @@ is 5.0.0.
    sentence from `.agents/rules/AGENTS.md`.
 4. Optional: delete `.claude/logs/cli-tools.jsonl` and
    `.claude/logs/isolated-review/refusals.jsonl`; nothing reads them.
-5. A copy older than 4.x also carries hooks removed in 2.0.0/3.0.0. A hook
-   **file** left on disk keeps running silently while it is registered:
-   `/orchestrator-version --plan` lists them; delete file and registration
-   together. Then run `.claude/bin/usage-report --since <today>` after a day
-   of work: every hook's `errors` column should be 0.
+5. A copy upgraded in place from before 2.0.0 may still carry hooks removed
+   then. `/orchestrator-version --plan` lists such files under PROJECT-ONLY
+   "last shipped in X" but does not flag their `settings.json` entries: check
+   those by hand, and delete file and registration together (a registered
+   leftover keeps running). Then run `.claude/bin/usage-report --since <today>`
+   after a day of work: every hook's `errors` column should be 0.
 
 ### Removed (breaking)
 - Hook `log-cli-tools`. On a real adopter whose system `python3` is 3.10 it
