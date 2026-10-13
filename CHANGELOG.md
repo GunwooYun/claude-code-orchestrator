@@ -11,6 +11,20 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [4.3.1] - 2026-10-13
+
+README only. 4.3.0 was released with the README behind it. Upgrading from
+4.3.0: only `.claude/ORCHESTRATOR_VERSION` changes in an adopted copy.
+
+### Changed
+- README, brought up to 4.3.0: `/initproject` Step 3 names the `STALE` probe
+  state and Step 3c (`/agy-models`). The review verdicts say Claude Code's
+  runtime files and `.claude/` dotfiles do not make INVALID. The upgrade
+  procedure says to keep your Model policy table rows and to re-probe after.
+- README §13 (developing this repository): a release updates README to its
+  own changes in the release-prep PR, and the develop → main PR is merged
+  with a merge commit — a squash (4.2.0, #52) made the next release conflict.
+
 ## [4.3.0] - 2026-10-13
 
 **Upgrade soon if you use agy:** on agy 1.3.3 every tier slug this template
