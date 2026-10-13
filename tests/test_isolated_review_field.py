@@ -156,6 +156,10 @@ class CapExclusionTests(IsolatedReviewCase):
     def test_d_without_the_config_the_same_range_is_refused(self) -> None:
         result = self.sandbox(changed=self.over_cap()).run()
         self.assertEqual(EXIT_REFUSED, result.returncode)
+        # The cap was hit in two real projects (4,104 and 4,311 lines) and the
+        # option was used in neither: the refusal itself must name it.
+        self.assertIn("cap_exclude", result.stderr)
+        self.assertIn(CONFIG, result.stderr)
 
     def test_d_excluded_files_are_still_reviewed(self) -> None:
         # The cap is about size, not scope: a file the config excludes must

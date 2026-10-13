@@ -156,7 +156,6 @@ templates above as they are).
 ### Context Awareness
 - Check `.claude/docs/` for existing documentation
 - Follow patterns established in the codebase
-- Respect library constraints in `.claude/docs/libraries/`
 
 ## Output Format
 
@@ -199,7 +198,7 @@ Include: common patterns and anti-patterns, library recommendations with a
 comparison, performance and security considerations, code examples.
 ```
 
-agy prompt for one library (web; save to `.claude/docs/libraries/{library}.md`,
+agy prompt for one library (web; save to `.claude/docs/research/{library}.md`,
 and compare with that file if it already exists):
 
 ```

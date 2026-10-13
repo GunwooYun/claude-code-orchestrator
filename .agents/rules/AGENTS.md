@@ -42,7 +42,6 @@ You may read project context, but you must **never create or modify files**:
 .claude/
 ├── docs/DESIGN.md        # Architecture decisions (read)
 ├── docs/research/        # Previous research (read)
-├── docs/libraries/       # Library docs (read)
 └── rules/                # Coding principles (read)
 ```
 

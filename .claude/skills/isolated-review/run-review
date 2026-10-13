@@ -1023,7 +1023,10 @@ def check_preconditions(
     counted = capped_lines(counts, patterns)
     if counted > HARD_CAP_LINES:
         raise Refused(
-            f"{counted} changed lines exceeds the {HARD_CAP_LINES}-line cap — split the branch"
+            f"{counted} changed lines exceeds the {HARD_CAP_LINES}-line cap — split the "
+            f"branch, or, if docs or evidence files inflate the count, list them in a "
+            f'committed {CONFIG_REL} as {{"cap_exclude": ["<glob>"]}} (they are still '
+            "reviewed; only the cap ignores them)"
         )
     if which("claude") is None:
         raise Refused("claude is not on PATH")
