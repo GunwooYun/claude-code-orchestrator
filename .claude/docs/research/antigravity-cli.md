@@ -112,6 +112,23 @@ claude-sonnet-4-6, claude-opus-4-6-thinking, gpt-oss-120b-medium
 ```
 Unknown slugs fail loudly (non-zero, status ERROR). `gemini-3-pro-preview` no longer exists.
 
+### 4a. agy 1.3.3 (2026-10-13, measured)
+
+```
+gemini-3.8-flash-high|medium|low
+claude-opus-5-5-low|medium|high, claude-sonnet-5-5-low|medium|high, gpt-oss-120b-medium
+```
+- stdout is `slug<TAB>display name` per line; `Fetching available models...` goes to
+  stderr; exit 0.
+- Every slug §4 listed is gone, 3.1 Pro included. The interactive CLI says
+  "Gemini 3.1 Pro (High) is no longer available. Using Gemini 3.8 Flash (High)";
+  headless `-p --model gemini-3.1-pro-high` does not substitute: `error: invalid model
+  selection (... --effort "")`, exit 1, empty stdout, the available models listed by
+  display name.
+- agy's own error names an `--effort` value, so the rule's "no `--effort` flag" is
+  unverified for 1.3.3 — not chased (slugs carry the effort).
+- Not measured: `agy models` without a logged-in session.
+
 ## 5. Multimodal
 
 Documented input path is clipboard paste (ctrl+v) in the interactive TUI for images
