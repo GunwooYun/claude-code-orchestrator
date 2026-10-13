@@ -11,6 +11,20 @@ Upgrading an adopted copy: do not copy the template over it — follow README
 「자주 밟는 함정」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
+## [Unreleased]
+
+### Added
+- `.claude/bin/usage-report`: counts how a project used the template, from
+  what is already recorded — Claude Code's session transcripts. Per template
+  skill (0 included), subagent type, hook file (runs, output, **errors**);
+  denied tool calls; verify-tier runs and failures; how far `/feature`
+  sessions get; main vs subagent tokens; agy calls and probe states. Counts
+  only: no text, paths, or names that are not the template's. No new hook.
+  Transcripts are deleted after `cleanupPeriodDays` (default 30), so run it
+  periodically with `--since` and keep the reports. On another machine,
+  without copying anything there:
+  `ssh <host> 'cd <project> && python3 - --since <date>' < .claude/bin/usage-report`.
+
 ## [4.3.1] - 2026-10-13
 
 README only. 4.3.0 was released with the README behind it. Upgrading from

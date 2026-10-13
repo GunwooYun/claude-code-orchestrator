@@ -99,6 +99,7 @@ your-project/
     ├── rules/                     # 세부 규칙 — 대부분 매 세션, paths: 가 있으면 맞는 파일을 열 때만
     ├── scripts/                   # 검증 계약: verify-save, verify-task (+README)
     ├── bin/                       # agy-probe — agy 를 지금 쓸 수 있는지 확인
+    │                              # usage-report — 이 프로젝트에서 템플릿을 어떻게 썼는지 개수만 집계
     └── docs/                      # 설계 기록·조사 결과·작성 가이드
 ```
 

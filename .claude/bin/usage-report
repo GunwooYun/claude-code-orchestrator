@@ -1,0 +1,522 @@
+#!/usr/bin/env python3
+"""
+usage-report — count how this project used the template, from what is already
+recorded: Claude Code's session transcripts (and the isolated-review run log).
+
+Usage: usage-report [--project DIR] [--transcripts DIR] [--since YYYY-MM-DD] [--json]
+Output: Markdown (or JSON) on stdout. Exit 0, or 2 when there is nothing to read.
+
+Every number answers a decision: a template skill or hook with 0 uses is a
+removal candidate; denied calls and hook output tune rules and hooks; how far
+/feature sessions get shows which phases are skipped; main vs subagent tokens
+shows whether delegation happens; agy outcomes tune the tiers and fallback. A
+hook's `errors` column catches a hook that fails on every call without anyone
+seeing it — a non-blocking hook error is invisible in the session (measured:
+1,933 in one project, on a Python older than the hook needed).
+
+What it NEVER emits: message text, tool inputs or outputs, hook output, paths,
+the project's name, or the name of a command, skill, agent, hook or tool that is
+not the template's (those are summed as "other"). Still, read the report before
+it leaves the project.
+
+Claude Code deletes transcripts after `cleanupPeriodDays` (default 30): run this
+periodically with --since and keep the reports, not the transcripts. The
+transcript format is undocumented; a field renamed by another Claude Code
+version shows up as zeros, not as an error.
+
+Lives in .claude/bin/, not .claude/scripts/ — that directory is the project's
+verification contract and nothing else belongs in it.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from collections import Counter
+from datetime import date
+from pathlib import Path
+
+# The template's own names — kept equal to its files by tests/test_usage_report.py.
+TEMPLATE_SKILLS = (
+    "agy-models",
+    "doc-write",
+    "feature",
+    "initproject",
+    "isolated-review",
+    "jira-setup",
+    "orchestrator-version",
+    "ticket",
+)
+TEMPLATE_HOOKS = ("bash-write-check.py", "lint-on-save.py", "log-cli-tools.py")
+TEMPLATE_AGENTS = ("deep-reasoning", "general-purpose", "Explore", "Plan")
+PROBE_STATES = ("READY", "MISSING", "UNAUTHENTICATED", "DEGRADED", "STALE")
+DENIED_MARKERS = (
+    "Permission for this action was denied",
+    "The user doesn't want to proceed",
+    "Permission to use ",
+)
+TOKEN_FIELDS = {
+    "input": "input_tokens",
+    "cache_creation": "cache_creation_input_tokens",
+    "cache_read": "cache_read_input_tokens",
+    "output": "output_tokens",
+}
+
+COMMAND_TAG = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
+HOOK_FILE = re.compile(r"\.claude/hooks/([\w.-]+)")
+VERIFY_TIER = re.compile(r"\.claude/scripts/verify-([a-z]+)\b")
+# Only in command position: `grep agy-probe x` names it, it does not run it.
+AT_COMMAND = r"(?:^|[;&|(\n])\s*"
+AGY_CALL = re.compile(AT_COMMAND + r"agy\s")
+PROBE_CALL = re.compile(AT_COMMAND + r"(?:\S*/)?agy-probe\b")
+BUILTIN_TOOL = re.compile(r"^[A-Z][A-Za-z]+$")
+EXIT_LINE = re.compile(r"^Exit code \d+\s*\n?")
+Pending = tuple[str, list[str]]  # (tool name, kinds of command a Bash call ran)
+EXIT_USAGE = 2
+
+
+def transcript_dir(project: Path) -> Path:
+    """Where Claude Code keeps this project's sessions (documented naming)."""
+    base = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+    name = os.environ.get("CLAUDE_CODE_PROJECT_DIR_NAME") or re.sub(
+        r"[^A-Za-z0-9]", "-", str(project.resolve())
+    )
+    return base / "projects" / name
+
+
+def read_jsonl(path: Path) -> tuple[list[dict], int]:
+    """Records of a JSONL file, and how many lines could not be read."""
+    records: list[dict] = []
+    bad = 0
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                bad += 1
+                continue
+            if isinstance(record, dict):
+                records.append(record)
+    return records, bad
+
+
+def text_of(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            part.get("text", "")
+            for part in content
+            if isinstance(part, dict) and isinstance(part.get("text"), str)
+        )
+    return ""
+
+
+def blocks(record: dict) -> list[dict]:
+    message = record.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    return (
+        [b for b in content if isinstance(b, dict)] if isinstance(content, list) else []
+    )
+
+
+def tool_bucket(name: str) -> str:
+    if name.startswith("mcp__"):
+        return "mcp"
+    return name if BUILTIN_TOOL.match(name) else "other"
+
+
+def hook_counts() -> Counter[str]:
+    return Counter(runs=0, nonzero=0, with_output=0, errors=0)
+
+
+def first_word(output: str) -> str:
+    words = EXIT_LINE.sub("", output.lstrip(), count=1).split()
+    word = words[0] if words else ""
+    return word if word in PROBE_STATES else "unknown"
+
+
+class Tally:
+    """Counts over every transcript record kept by the --since filter."""
+
+    def __init__(self) -> None:
+        self.dates: list[str] = []
+        self.typed: Counter[str] = Counter()
+        self.model: Counter[str] = Counter()
+        self.last: dict[str, str] = {}
+        self.other_commands = Counter({"typed": 0, "model": 0})
+        self.subagents: Counter[str] = Counter({name: 0 for name in TEMPLATE_AGENTS})
+        self.other_subagents = 0
+        self.hooks = {name: hook_counts() for name in TEMPLATE_HOOKS}
+        self.other_hooks = hook_counts()
+        self.hook_messages: Counter[str] = Counter()
+        self.denied: Counter[str] = Counter()
+        self.gate: dict[str, Counter[str]] = {}
+        self.tokens = {
+            side: Counter({key: 0 for key in TOKEN_FIELDS})
+            for side in ("main", "subagent")
+        }
+        self.agy = Counter(calls=0, failed=0, probe_runs=0)
+        self.probe_states: Counter[str] = Counter()
+        self.unreadable = 0
+        self.feature_progress: dict[str, int] = {}
+
+    def skill_use(self, name: str, how: str, day: str) -> None:
+        if name not in TEMPLATE_SKILLS:
+            self.other_commands[how] += 1
+            return
+        (self.typed if how == "typed" else self.model)[name] += 1
+        self.last[name] = max(self.last.get(name, ""), day)
+
+
+class Session:
+    """What one session (main transcript + its subagents) did, for /feature progress."""
+
+    def __init__(self) -> None:
+        self.feature = False
+        self.design_review = False
+        self.verify_run = False
+        self.isolated_review = False
+
+
+def scan_file(
+    path: Path, side: str, since: str, tally: Tally, session: Session
+) -> None:
+    records, bad = read_jsonl(path)
+    tally.unreadable += bad
+    pending: dict[str, Pending] = {}  # tool_use id -> (tool, kinds)
+    seen_messages: set[str] = set()
+    for record in records:
+        day = str(record.get("timestamp", ""))[:10]
+        if not day or (since and day < since):
+            continue
+        tally.dates.append(day)
+        scan_record(record, day, side, tally, session, pending, seen_messages)
+
+
+def scan_record(
+    record: dict,
+    day: str,
+    side: str,
+    tally: Tally,
+    session: Session,
+    pending: dict[str, Pending],
+    seen_messages: set[str],
+) -> None:
+    kind = record.get("type")
+    if kind == "attachment":
+        scan_hook(record.get("attachment"), tally)
+        return
+    if kind == "user":
+        message = record.get("message")
+        if side == "main" and isinstance(message, dict):
+            for name in COMMAND_TAG.findall(text_of(message.get("content"))):
+                tally.skill_use(name, "typed", day)
+                session.feature |= name == "feature"
+                session.isolated_review |= name == "isolated-review"
+        for block in blocks(record):
+            if block.get("type") == "tool_result":
+                scan_result(block, tally, pending)
+        return
+    if kind == "assistant":
+        count_tokens(record, side, tally, seen_messages)
+        for block in blocks(record):
+            if block.get("type") == "tool_use":
+                scan_tool_use(block, day, tally, session, pending)
+
+
+def count_tokens(record: dict, side: str, tally: Tally, seen: set[str]) -> None:
+    message = record.get("message")
+    if not isinstance(message, dict) or not isinstance(message.get("usage"), dict):
+        return
+    message_id = str(message.get("id", ""))
+    if message_id in seen:
+        return
+    seen.add(message_id)
+    for key, field in TOKEN_FIELDS.items():
+        value = message["usage"].get(field)
+        if isinstance(value, int):
+            tally.tokens[side][key] += value
+
+
+def scan_tool_use(
+    block: dict,
+    day: str,
+    tally: Tally,
+    session: Session,
+    pending: dict[str, Pending],
+) -> None:
+    name = str(block.get("name", ""))
+    raw_input = block.get("input")
+    tool_input: dict = raw_input if isinstance(raw_input, dict) else {}
+    tool_id = str(block.get("id", ""))
+    pending[tool_id] = (name, [])
+    if name == "Skill":
+        skill = str(tool_input.get("skill", ""))
+        tally.skill_use(skill, "model", day)
+        session.feature |= skill == "feature"
+        session.isolated_review |= skill == "isolated-review"
+    elif name in ("Agent", "Task"):
+        agent = str(tool_input.get("subagent_type", "general-purpose"))
+        if agent in TEMPLATE_AGENTS:
+            tally.subagents[agent] += 1
+        else:
+            tally.other_subagents += 1
+        session.design_review |= agent == "deep-reasoning"
+    elif name == "Bash":
+        # One call may chain several of these; each is counted. A failure is
+        # charged to each, since only the call's last exit code is recorded.
+        command = str(tool_input.get("command", ""))
+        kinds: list[str] = []
+        for tier in dict.fromkeys(VERIFY_TIER.findall(command)):
+            kinds.append(f"gate:{tier}")
+            tally.gate.setdefault(tier, Counter(runs=0, failed=0))["runs"] += 1
+            session.verify_run = True
+        if PROBE_CALL.search(command):
+            kinds.append("probe")
+            tally.agy["probe_runs"] += 1
+        if AGY_CALL.search(command):
+            kinds.append("agy")
+            tally.agy["calls"] += 1
+        pending[tool_id] = (name, kinds)
+
+
+def scan_result(block: dict, tally: Tally, pending: dict[str, Pending]) -> None:
+    tool, kinds = pending.pop(str(block.get("tool_use_id", "")), ("", []))
+    output = text_of(block.get("content"))
+    failed = block.get("is_error") is True
+    if failed and output.startswith(DENIED_MARKERS):
+        tally.denied[tool_bucket(tool)] += 1
+        return
+    for kind in kinds:
+        if kind.startswith("gate:") and failed:
+            tally.gate[kind.removeprefix("gate:")]["failed"] += 1
+        elif kind == "agy" and failed:
+            tally.agy["failed"] += 1
+        elif kind == "probe":
+            tally.probe_states[first_word(output)] += 1
+
+
+def scan_hook(attachment: object, tally: Tally) -> None:
+    """Records that carry the hook's command are charged to that hook file;
+    the rest name only the event."""
+    if not isinstance(attachment, dict):
+        return
+    kind = str(attachment.get("type", ""))
+    if not kind.startswith("hook"):
+        return
+    command = attachment.get("command")
+    if kind != "hook_success" and not (isinstance(command, str) and "error" in kind):
+        event = str(attachment.get("hookEvent", ""))
+        kind = kind if re.fullmatch(r"hook_[a-z_]+", kind) else "hook_other"
+        event = event if BUILTIN_TOOL.match(event) else "other"
+        tally.hook_messages[f"{event}:{kind}"] += 1
+        return
+    match = HOOK_FILE.search(str(command))
+    counts = tally.hooks.get(match.group(1) if match else "", tally.other_hooks)
+    if kind != "hook_success":
+        counts["errors"] += 1
+        return
+    counts["runs"] += 1
+    counts["nonzero"] += attachment.get("exitCode", 0) not in (0, None)
+    counts["with_output"] += bool(str(attachment.get("stdout", "")).strip())
+
+
+def scan_transcripts(directory: Path, since: str) -> tuple[Tally, dict[str, int]]:
+    tally = Tally()
+    progress = Counter(sessions=0, design_review=0, verify_run=0, isolated_review=0)
+    mains = sorted(directory.glob("*.jsonl"))
+    subagent_files = 0
+    for main in mains:
+        session = Session()
+        scan_file(main, "main", since, tally, session)
+        for sub in sorted((directory / main.stem / "subagents").glob("*.jsonl")):
+            subagent_files += 1
+            scan_file(sub, "subagent", since, tally, session)
+        if session.feature:
+            progress["sessions"] += 1
+            progress["design_review"] += session.design_review
+            progress["verify_run"] += session.verify_run
+            progress["isolated_review"] += session.isolated_review
+    tally.feature_progress = dict(progress)
+    return tally, {"main_sessions": len(mains), "subagent_transcripts": subagent_files}
+
+
+def isolated_review_runs(project: Path, since: str) -> int:
+    logs = project / ".claude" / "logs" / "isolated-review"
+    if not logs.is_dir():
+        return 0
+    stamp = since.replace("-", "")
+    return sum(1 for run in logs.iterdir() if run.is_dir() and run.name[:8] >= stamp)
+
+
+def build_report(
+    tally: Tally, coverage: dict[str, int], project: Path, since: str
+) -> dict:
+    return {
+        "coverage": {
+            **coverage,
+            "first": min(tally.dates, default=None),
+            "last": max(tally.dates, default=None),
+            "since": since or None,
+            "unreadable_lines": tally.unreadable,
+        },
+        "skills": {
+            name: {
+                "typed": tally.typed[name],
+                "model": tally.model[name],
+                "last": tally.last.get(name),
+            }
+            for name in TEMPLATE_SKILLS
+        },
+        "other_commands": dict(tally.other_commands),
+        "subagents": dict(tally.subagents),
+        "other_subagents": tally.other_subagents,
+        "hooks": {name: dict(counts) for name, counts in tally.hooks.items()},
+        "other_hooks": dict(tally.other_hooks),
+        "hook_messages": dict(sorted(tally.hook_messages.items())),
+        "denied": dict(sorted(tally.denied.items())),
+        "gate": {tier: dict(c) for tier, c in sorted(tally.gate.items())},
+        "feature_sessions": tally.feature_progress,
+        "tokens": {side: dict(c) for side, c in tally.tokens.items()},
+        "agy": {**tally.agy, "probe_states": dict(sorted(tally.probe_states.items()))},
+        "isolated_review_runs": isolated_review_runs(project, since),
+    }
+
+
+def table(header: tuple[str, ...], rows: list[tuple[object, ...]]) -> list[str]:
+    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
+    lines += [
+        "| " + " | ".join("-" if v is None else str(v) for v in row) + " |"
+        for row in rows
+    ]
+    return lines + [""]
+
+
+def render_markdown(report: dict) -> str:
+    cov = report["coverage"]
+    out = [
+        "# Usage report",
+        "",
+        f"Transcripts: {cov['main_sessions']} main sessions, {cov['subagent_transcripts']} "
+        f"subagent transcripts, {cov['first'] or '-'} .. {cov['last'] or '-'}"
+        + (f" (since {cov['since']})" if cov["since"] else "")
+        + f". Unreadable lines: {cov['unreadable_lines']}. Older sessions may have been "
+        "deleted by Claude Code (`cleanupPeriodDays`, default 30).",
+        "",
+        "## Skills (0 = removal candidate)",
+        "",
+    ]
+    skills = report["skills"]
+    out += table(
+        ("skill", "typed", "by model", "last"),
+        [(n, s["typed"], s["model"], s["last"]) for n, s in skills.items()]
+        + [
+            (
+                "(other)",
+                report["other_commands"]["typed"],
+                report["other_commands"]["model"],
+                None,
+            )
+        ],
+    )
+    out += ["## Subagents", ""]
+    out += table(
+        ("type", "calls"),
+        [*report["subagents"].items(), ("(other)", report["other_subagents"])],
+    )
+    out += [
+        "## Hooks",
+        "",
+        "Recorded runs only: Claude Code does not record every hook run (measured: "
+        "61 Edit/Write, 11 lint-on-save records in one project). Read them as a floor.",
+        "",
+    ]
+    hooks = [*report["hooks"].items(), ("(other)", report["other_hooks"])]
+    out += table(
+        ("hook", "recorded runs", "non-zero exit", "with output", "errors"),
+        [(n, h["runs"], h["nonzero"], h["with_output"], h["errors"]) for n, h in hooks],
+    )
+    out += ["Messages hooks injected (the record names the event, not the hook):", ""]
+    out += table(("event:record", "count"), list(report["hook_messages"].items()))
+    out += ["## Denied tool calls", ""]
+    out += table(("tool", "denied"), list(report["denied"].items()))
+    out += ["## Gate (`.claude/scripts/verify-<tier>`)", ""]
+    out += table(
+        ("tier", "runs", "failed"),
+        [(t, g["runs"], g["failed"]) for t, g in report["gate"].items()],
+    )
+    fs = report["feature_sessions"]
+    out += [
+        "## /feature sessions",
+        "",
+        f"{fs['sessions']} sessions ran /feature; of them {fs['design_review']} called "
+        f"deep-reasoning, {fs['verify_run']} ran a verify tier, {fs['isolated_review']} ran "
+        "/isolated-review. Counted per session: a unit split over sessions undercounts.",
+        "",
+        "## Tokens",
+        "",
+    ]
+    out += table(
+        ("side", "input", "cache creation", "cache read", "output"),
+        [(side, *t.values()) for side, t in report["tokens"].items()],
+    )
+    agy = report["agy"]
+    out += [
+        "## agy",
+        "",
+        f"Calls from Bash: {agy['calls']} ({agy['failed']} exited non-zero). "
+        f"agy-probe runs: {agy['probe_runs']} "
+        + (", ".join(f"{k} {v}" for k, v in agy["probe_states"].items()) or "-")
+        + ".",
+        "",
+        f"/isolated-review runs logged: {report['isolated_review_runs']}.",
+    ]
+    return "\n".join(out) + "\n"
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="usage-report", description=__doc__.split("\n\n")[0]
+    )
+    parser.add_argument("--project", type=Path, default=Path.cwd())
+    parser.add_argument(
+        "--transcripts", type=Path, help="default: Claude Code's dir for --project"
+    )
+    parser.add_argument("--since", default="", help="YYYY-MM-DD")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+    if args.since:
+        try:
+            date.fromisoformat(args.since)
+        except ValueError:
+            print("usage-report: --since takes YYYY-MM-DD", file=sys.stderr)
+            return EXIT_USAGE
+    directory = args.transcripts or transcript_dir(args.project)
+    if not directory.is_dir():
+        print(
+            "usage-report: no transcripts for this project "
+            "(pass --transcripts, or run it from the project root)",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+    tally, coverage = scan_transcripts(directory, args.since)
+    report = build_report(tally, coverage, args.project, args.since)
+    print(
+        json.dumps(report, indent=2) if args.json else render_markdown(report),
+        end="\n" if args.json else "",
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
