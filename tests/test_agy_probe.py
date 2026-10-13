@@ -267,6 +267,11 @@ class SlugCheckTests(unittest.TestCase):
         self.slugs = table_slugs()
 
     def stub(self, offered: list[str], call_fails: bool = False) -> None:
+        # Real agy always lists slugs the table does not use. Without one, a
+        # table with one slug on every tier (high everywhere, as /agy-models
+        # suggests) leaves an empty listing once that slug is removed, and the
+        # probe rightly skips the check instead of reporting STALE.
+        offered = [*offered, "gpt-oss-120b-medium"]
         listing = "".join(f"{slug}\\tName ({slug})\\n" for slug in offered)
         answer = (
             'echo "error: invalid model selection" >&2; exit 1'
