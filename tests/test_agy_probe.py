@@ -423,6 +423,21 @@ class DegradationRuleTests(unittest.TestCase):
         for token in ("MISSING", "UNAUTHENTICATED", "STALE"):
             self.assertIn(token, skill, f"/initproject does not handle {token}")
 
+    def test_initproject_lets_the_user_choose_each_tier(self) -> None:
+        # V6: the step STALE points to must exist and touch the table only.
+        skill = (REPO / ".claude" / "skills" / "initproject" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        step = skill.split("### Step 3c", 1)[1].split("\n## ", 1)[0]
+        for token in (
+            "agy models",
+            "T1, T2, T3, T4",
+            ".claude/bin/agy-probe",
+            ".claude/rules/antigravity-delegation.md",
+            "READY",
+        ):
+            self.assertIn(token, step, f"Step 3c does not mention {token}")
+
     def test_feature_phase_1_degrades_instead_of_failing(self) -> None:
         skill = (REPO / ".claude" / "skills" / "feature" / "SKILL.md").read_text(
             encoding="utf-8"

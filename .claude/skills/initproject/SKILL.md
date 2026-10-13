@@ -113,7 +113,7 @@ and ask whether to keep it or change it.
 | Main orchestrator | the user's session (`/model`) | Opus | Orchestration, user dialogue, final decisions |
 | `deep-reasoning` | `.claude/agents/deep-reasoning.md` → `model:` | `fable` | Deep reasoning on a cheaper tier than the main session; pinned so an Opus main session does not silently make it Opus |
 | `general-purpose` | `.claude/agents/general-purpose.md` → `model:` | `sonnet` | Thin wrapper around agy and file work — the tokens should go to agy, not to this agent |
-| agy research | `--model` per call | see the Model Policy in `.claude/rules/antigravity-delegation.md` | Gemini tiers T1–T4, pinned per call |
+| agy research | `--model` per call | see the Model Policy in `.claude/rules/antigravity-delegation.md` | Gemini tiers T1–T4, pinned per call; chosen in Step 3c |
 | `/isolated-review` reviewer | `.claude/skills/isolated-review/run-review` → `MODEL` | `fable` | **Not reassignable.** Its neutrality was measured on Fable. Tell the user: without Fable access this skill always ends FAILED, and Phase 6 uses a person-opened (A2) review instead |
 
 Procedure:
@@ -166,6 +166,28 @@ If the user declines, or the state does not become `READY`:
 
 **Do not loop.** Ask once, re-probe once after the user says they are done, then
 take the answer as final and move on.
+
+### Step 3c — agy: choose the model of each tier
+
+Skip when agy is not `READY` or `STALE` after Step 3b. This step is also the
+remedy for `STALE` later — any session can run it again, with the user present.
+
+The Model policy table in `.claude/rules/antigravity-delegation.md` is the only
+place a slug is written (the probe and every copy read it), so a choice here
+edits that table and nothing else.
+
+1. Show the current table (tier, task, slug) and the Gemini slugs agy offers:
+   `agy models` — the first column of each `gemini-*` line. The others it lists
+   are out of scope: agy is used for Gemini's breadth and grounding.
+2. One AskUserQuestion with four questions, T1, T2, T3, T4: options are the
+   offered Gemini slugs, the current slug first when it is still offered. Say
+   the trade-off once — a higher tier per call costs more agy quota; with
+   quota to spare, high everywhere is a reasonable choice.
+3. Write the four slugs into the table rows (keep T4's `--print-timeout 9m`).
+4. Re-run `.claude/bin/agy-probe`; the step is done at `READY`. On `STALE`,
+   the table and `agy models` disagree — fix the row it names.
+
+The template's next upgrade shows the rule file as MERGE: keep the table rows.
 
 ## Step 4 — CLAUDE.md
 
@@ -328,7 +350,7 @@ the bug this step exists to prevent.
   contract (0 = pass and silent, non-zero = fail with a reason); the gate has
   been seen to fail once on an injected violation.
 - `.claude/bin/agy-probe` prints the state agreed in
-  Step 3b. `READY` exits 0; any other state must already be recorded in
+  Step 3b (after 3c, never `STALE`). `READY` exits 0; any other state must already be recorded in
   `DESIGN.md` Open Questions with today's date.
 - Report in Korean: detected stack, the final model matrix, agy's state and
   what it costs if not `READY`, which verification
