@@ -25,10 +25,11 @@ project changed, back up a gitignored `.claude/` first).
   changes nothing. Why: a real 3.1.0 copy still carried 18 files earlier
   upgrades should have deleted (hooks, and skills colliding with built-ins), and
   the README procedure had no tool; the plan lists exactly those 18.
-- **`/initproject` Step 3c: choose the agy model of each tier.** Shows the
-  table and the Gemini slugs agy offers, asks for T1–T4, writes the table,
-  re-probes to `READY`. `STALE` points to it, so it is run again whenever agy
-  renames its models. Why: agy quota differs per person — with quota to
+- **`/agy-models`: choose the agy model of each tier** (user-invoked; also
+  `/initproject` Step 3c). Shows the table and the Gemini slugs agy offers,
+  asks for T1–T4, writes the table, re-probes to `READY`. `STALE` points to
+  it, so it is run again whenever agy renames its models — without re-running
+  all of `/initproject`. Why: agy quota differs per person — with quota to
   spare, high on every tier is a reasonable choice.
 
 ### Fixed
@@ -49,7 +50,8 @@ project changed, back up a gitignored `.claude/` first).
   tier. Upgrading: take those files as they are, and keep your own table rows
   if you changed them.
 - **`agy-probe` reports `STALE`** (exit 1) when agy no longer offers a slug
-  the table names — checked with `agy models` before its own call. It used to
+  the table names, or a tier row has none — checked with `agy models` before
+  its own call. It used to
   report DEGRADED, "wait", for a fault that waiting never fixes. It reads its
   own slug from the table.
 

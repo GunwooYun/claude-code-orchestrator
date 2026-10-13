@@ -302,7 +302,7 @@ class SlugCheckTests(unittest.TestCase):
         self.assertEqual("STALE", state(result), result.stdout)
         self.assertNotEqual(0, result.returncode)
         self.assertIn(f"T3 names {t3}", result.stdout)
-        self.assertIn("Step 3c", result.stdout)
+        self.assertIn("/agy-models", result.stdout)
 
     def test_a_missing_t1_slug_is_stale_not_degraded(self) -> None:
         # The observed case: the T1 slug is gone, so the call itself fails.
@@ -454,20 +454,31 @@ class DegradationRuleTests(unittest.TestCase):
         for token in ("MISSING", "UNAUTHENTICATED", "STALE"):
             self.assertIn(token, skill, f"/initproject does not handle {token}")
 
-    def test_initproject_lets_the_user_choose_each_tier(self) -> None:
-        # V6: the step STALE points to must exist and touch the table only.
-        skill = (REPO / ".claude" / "skills" / "initproject" / "SKILL.md").read_text(
+    def test_agy_models_lets_the_user_choose_each_tier(self) -> None:
+        # V6: the skill STALE points to must exist and touch the table only.
+        skill = (REPO / ".claude" / "skills" / "agy-models" / "SKILL.md").read_text(
             encoding="utf-8"
         )
-        step = skill.split("### Step 3c", 1)[1].split("\n## ", 1)[0]
         for token in (
             "agy models",
             "T1, T2, T3, T4",
             ".claude/bin/agy-probe",
             ".claude/rules/antigravity-delegation.md",
             "READY",
+            "2–4 options",
+            "disable-model-invocation: true",
         ):
-            self.assertIn(token, step, f"Step 3c does not mention {token}")
+            self.assertIn(token, skill, f"/agy-models does not mention {token}")
+
+    def test_initproject_step_3c_runs_agy_models(self) -> None:
+        # Isolated review 2026-10-13 #5: STALE pointed into /initproject, which
+        # only restarts from Step 1. The procedure lives in one skill.
+        skill = (REPO / ".claude" / "skills" / "initproject" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        step = skill.split("### Step 3c", 1)[1].split("\n## ", 1)[0]
+        self.assertIn(".claude/skills/agy-models/SKILL.md", step)
+        self.assertNotIn("AskUserQuestion", step, "the procedure is copied back")
 
     def test_feature_phase_1_degrades_instead_of_failing(self) -> None:
         skill = (REPO / ".claude" / "skills" / "feature" / "SKILL.md").read_text(

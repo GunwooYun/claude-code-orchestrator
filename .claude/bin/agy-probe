@@ -14,7 +14,7 @@
 #                               quota, or network) — treat as unusable for now
 #              STALE            a tier slug in the Model policy table is not
 #                               offered by `agy models`: pick slugs again
-#                               (/initproject Step 3c)
+#                               (/agy-models)
 #
 # Callers gate on the exit code and read the word to pick the remedy. The states
 # exist because the remedies differ: installing, logging in and waiting are three
@@ -56,7 +56,7 @@ for tier in 1 2 3 4; do
     printf '%s\n' "$rows" | grep -E "^\| T$tier " | grep -qE "$slug_re" && continue
     say "STALE"
     say "T$tier has no slug in the Model policy table of $rules."
-    say "Pick the tier slugs again (/initproject Step 3c), then re-run the probe."
+    say "Pick the tier slugs again (/agy-models), then re-run the probe."
     exit 1
 done
 t1=$(printf '%s\n' "$rows" | grep -E '^\| T1 ' | grep -oE "$slug_re" | head -n 1)
@@ -81,7 +81,7 @@ if [ -n "$missing" ]; then
         say "${entry%%:*} names ${entry#*:}, which agy does not offer."
     done
     say "agy offers: $(printf '%s\n' "$offered" | grep '^gemini-' | tr '\n' ' ')"
-    say "Pick the tier slugs again (/initproject Step 3c), then re-run the probe."
+    say "Pick the tier slugs again (/agy-models), then re-run the probe."
     exit 1
 fi
 

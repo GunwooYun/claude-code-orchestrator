@@ -70,7 +70,7 @@ Phase 6: Multi-Session Review (New Session + deep-reasoning)
 종료 코드 0(`READY`)이면 아래 A, 그 외면 B 로 간다. 상태와 그 의미는
 `.claude/rules/antigravity-delegation.md` 의 "When agy is unavailable"를 따른다.
 **`STALE` 이면** 프로브 출력(어느 등급의 어떤 slug, agy 가 제공하는 것)을 보여주고 한 번
-묻는다 — 지금 `/initproject` Step 3c 로 slug 를 다시 골라 재확인할지, B 로 갈지.
+묻는다 — 사용자가 `/agy-models` 로 slug 를 다시 골라 재확인할지, B 로 갈지.
 
 ### A. agy 가 READY 일 때
 

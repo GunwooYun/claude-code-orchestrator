@@ -22,8 +22,8 @@ first word is the state: `MISSING` (not on PATH), `UNAUTHENTICATED` (log in),
 `DEGRADED` (empty answers: soft-deny, quota, network), `STALE` (a slug in the
 Model policy table is no longer offered by agy).
 
-**`STALE`:** show the probe's lines and ask the user once — re-pick slugs
-(`/initproject` Step 3c) or use the fallbacks. Never pick a slug yourself.
+**`STALE`:** show the probe's lines and ask the user once — they run
+`/agy-models`, or you use the fallbacks. Never pick a slug yourself.
 
 | agy's job | Fallback | What is lost |
 |---|---|---|
@@ -74,7 +74,7 @@ The orchestrator picks the tier when it writes the Task prompt. A call without
 
 **This table is the only place a slug is written.** Other files name the tier;
 `.claude/bin/agy-probe` reads the slugs from here and reports `STALE` when agy no
-longer offers one. Choosing them per project: `/initproject` Step 3c.
+longer offers one. Choosing them per project: `/agy-models`.
 
 1. Unsure between two tiers → the higher one. T4 is never lowered.
 2. The user's instruction ("low 로", "high 로", a named slug) wins.
