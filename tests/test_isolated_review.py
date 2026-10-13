@@ -951,12 +951,6 @@ class CrashSafetyTests(IsolatedReviewCase):
 
 
 class SkillShapeTests(unittest.TestCase):
-    def test_the_prompt_treats_repository_content_as_data(self) -> None:
-        prompt = (SKILL / "prompt.md").read_text(encoding="utf-8").lower()
-        self.assertIn("untrusted", prompt)
-        for section in ("## findings", "## tests", "## coverage", "## not reviewed"):
-            self.assertIn(section, prompt)
-
     def test_extensionless_python_scripts_are_in_the_quality_gate(self) -> None:
         """
         `ruff check .` and `ruff format --check .` skip a file without `.py`

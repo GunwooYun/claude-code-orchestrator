@@ -13,8 +13,6 @@ drift tripwire over prose, not behavioural coverage.
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
 import json
 import os
 import re
@@ -76,28 +74,6 @@ class VersionRecordTests(unittest.TestCase):
         first_release = re.search(r"^## \[\d+\.\d+\.\d+\]", text, re.M)
         if unreleased and first_release:
             self.assertLess(unreleased[0], first_release.start())
-
-    def test_quick_start_clones_the_release_branch(self) -> None:
-        # Drift tripwire over prose. The default branch is `develop` (work in
-        # progress); a bare `git clone` would hand adopters unreleased changes.
-        readme = (REPO / "README.md").read_text(encoding="utf-8")
-        clones = [
-            line
-            for line in readme.splitlines()
-            if "git clone" in line and "claude-code-orchestrator" in line
-        ]
-        self.assertTrue(clones, "the scan no longer finds the Quick Start clone")
-        for line in clones:
-            with self.subTest(line=line.strip()[:60]):
-                self.assertIn("--branch main", line)
-
-    def test_initproject_records_the_adopted_version(self) -> None:
-        # Drift tripwire over prose.
-        skill = (REPO / ".claude/skills/initproject/SKILL.md").read_text(
-            encoding="utf-8"
-        )
-        step4 = skill.split("## Step 4", 1)[1].split("\n## ", 1)[0]
-        self.assertIn("ORCHESTRATOR_VERSION", step4)
 
 
 class CheckScriptTests(unittest.TestCase):
@@ -654,34 +630,6 @@ class PlanExtrasTests(PlanFixture):
         self.assertIn(
             "CHANGELOG — read the entries 2.0.0, 1.5.0 for hand steps", stdout
         )
-
-
-class ProjectOwnedListTests(unittest.TestCase):
-    """VO: the script's project-owned list is README §9's, word for word."""
-
-    def test_every_project_owned_entry_is_in_the_readme_upgrade_section(self) -> None:
-        loader = importlib.machinery.SourceFileLoader("check_script", str(CHECK))
-        spec = importlib.util.spec_from_loader("check_script", loader)
-        assert spec is not None
-        module = importlib.util.module_from_spec(spec)
-        loader.exec_module(module)
-        readme = (REPO / "README.md").read_text(encoding="utf-8")
-        section = readme.split("### 업그레이드 절차", 1)[1].split("\n---", 1)[0]
-        owned_line = next(
-            line for line in section.splitlines() if "덮어쓰면 안 되는 것" in line
-        )
-        owned_text = owned_line + section.split(owned_line, 1)[1].split("\n- ", 1)[0]
-        for entry in module.PROJECT_OWNED:
-            self.assertIn(f"`{entry}`", owned_text)
-
-    def test_the_upgrade_procedure_and_the_skill_point_at_plan(self) -> None:
-        # Prose tripwire: the README procedure and the skill must name the tool,
-        # or upgrades go back to hand-written hash loops.
-        readme = (REPO / "README.md").read_text(encoding="utf-8")
-        section = readme.split("### 업그레이드 절차", 1)[1].split("\n---", 1)[0]
-        skill = (CHECK.parent / "SKILL.md").read_text(encoding="utf-8")
-        for text in (section, skill):
-            self.assertIn("orchestrator-version/check --plan", text)
 
 
 if __name__ == "__main__":

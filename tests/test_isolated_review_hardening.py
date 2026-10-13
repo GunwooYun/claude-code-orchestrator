@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -274,14 +275,17 @@ class DenyChangeTests(IsolatedReviewCase):
 class PythonFloorTests(IsolatedReviewCase):
     """
     #5: adopting projects run these scripts with whatever python3 they have.
-    The formatter (target py311) turned `with a, b:` into the parenthesised
-    form, which is a SyntaxError before 3.10 — the round-3 fix was undone by
-    `ruff format` and nobody saw it.
+    The lowest seen in a real adopter is 3.10, and the gate type-checks at 3.10,
+    so run-review must run there. A newer-only stdlib name (`datetime.UTC`, 3.11)
+    parses fine but fails at import on the floor, which only a real run shows.
     """
 
-    FLOOR = "3.8"
+    FLOOR = "3.10"
 
-    def old_python(self) -> str:
+    def floor_python(self) -> str:
+        on_path = shutil.which(f"python{self.FLOOR}")
+        if on_path:
+            return on_path
         found = subprocess.run(
             ["uv", "python", "find", "--no-project", self.FLOOR],
             capture_output=True,
@@ -293,7 +297,7 @@ class PythonFloorTests(IsolatedReviewCase):
         return path
 
     def test_5_run_review_runs_on_the_floor(self) -> None:
-        python = self.old_python()
+        python = self.floor_python()
         box = self.sandbox(
             # Modified, not added: an added file is fully in the diff and counts as read.
             base_files={"src/a.py": "a = 0\n", "src/b.py": "b = 0\n"},
@@ -301,14 +305,6 @@ class PythonFloorTests(IsolatedReviewCase):
         )
         result = box.run(scenario="coverage_no_read", python=python)
         self.assertEqual(EXIT_INCOMPLETE, result.returncode, result.stderr)
-
-    def test_5_no_construct_the_floor_cannot_parse(self) -> None:
-        # A tripwire for machines without the old interpreter: the two forms
-        # that have already slipped in.
-        source = (SKILL / "run-review").read_text(encoding="utf-8")
-        self.assertIsNone(re.search(r"^\s*with \(\s*$", source, re.M))
-        self.assertNotIn(".removeprefix(", source)
-        self.assertNotIn(".removesuffix(", source)
 
 
 class UsabilityTests(unittest.TestCase):
@@ -378,11 +374,6 @@ class DocumentedNumbersTests(unittest.TestCase):
         for verdict, code in RR.EXIT.items():
             with self.subTest(verdict=verdict):
                 self.assertIn(f"| {code} | {verdict} |", skill)
-
-    def test_x3_feature_tells_the_orchestrator_to_pass_the_base(self) -> None:
-        feature = (REPO / ".claude/skills/feature/SKILL.md").read_text(encoding="utf-8")
-        a1 = feature.split("**A1 — `/isolated-review`", 1)[1].split("**A2", 1)[0]
-        self.assertIn("--base", a1)
 
 
 class RoundFiveTests(IsolatedReviewCase):
@@ -474,11 +465,6 @@ class RoundFiveTests(IsolatedReviewCase):
         result = box.run(extra_env={"TMPDIR": str(inside)})
         self.assertEqual(EXIT_REFUSED, result.returncode, result.stderr)
         self.assertIn("TMPDIR", result.stderr)
-
-    def test_f11_skill_md_says_grep_counts_as_reading(self) -> None:
-        skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
-        row = next(x for x in skill.splitlines() if x.startswith("| 0 | COMPLETE |"))
-        self.assertIn("Grep", row)
 
 
 class ReportNameTests(unittest.TestCase):

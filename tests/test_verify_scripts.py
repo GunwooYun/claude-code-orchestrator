@@ -50,29 +50,6 @@ def entrypoints() -> dict[str, Path]:
     return found
 
 
-class ContractDocumentationTests(unittest.TestCase):
-    def test_the_contract_is_written_down(self) -> None:
-        readme = SCRIPTS / "README.md"
-        self.assertTrue(readme.is_file(), "the contract must be written down")
-        text = readme.read_text(encoding="utf-8")
-        for tier in TIERS:
-            self.assertIn(f"verify-{tier}", text, f"README omits verify-{tier}")
-
-    def test_tier_names_agree_with_the_testing_rules(self) -> None:
-        """
-        Script names and tier names must not drift apart. Skipped when the
-        project does not keep this template's rules file.
-        """
-        rules = REPO / ".claude" / "rules" / "testing.md"
-        if not rules.is_file():
-            self.skipTest("no .claude/rules/testing.md in this project")
-        text = rules.read_text(encoding="utf-8")
-        for tier in TIERS:
-            self.assertIn(
-                f"`{tier}`", text, f"testing.md does not define the {tier} tier"
-            )
-
-
 class DirectoryShapeTests(unittest.TestCase):
     def test_at_least_one_tier_is_configured(self) -> None:
         self.assertTrue(

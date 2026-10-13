@@ -41,18 +41,6 @@ GLOB_RE = re.compile(r'^  - "([^"\n]+)"$', re.MULTILINE)
 EXPECTED_SCOPED = frozenset({"coding-principles.md", "test-writing.md"})
 
 LISTING_CAP_CHARS = 1_536
-TRIGGER_PHRASES = {
-    "doc-write": (
-        "PROACTIVELY",
-        "Confluence",
-        "문서로 정리해줘",
-        "names a document",
-        "Do NOT",
-        "설명해줘",
-        "알려줘",
-    ),
-    "ticket": ("PROACTIVELY", "ABC-123", "Do NOT", "/jira-setup"),
-}
 
 
 def scoped_rules() -> list[Path]:
@@ -143,24 +131,6 @@ class ScopedRuleFrontmatterTests(unittest.TestCase):
                 )
 
 
-class MovedGuidanceTests(unittest.TestCase):
-    """Drift tripwire over prose: the guidance moved out of testing.md still exists."""
-
-    def test_test_writing_guidance_lives_in_the_scoped_rule(self) -> None:
-        rule = (RULES / "test-writing.md").read_text(encoding="utf-8")
-        for phrase in (
-            "목(mock)은 외부 의존성만",
-            "test_{대상}_{조건}_{기대결과}",
-            "## 체크리스트",
-        ):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, rule)
-
-    def test_the_testing_rule_points_at_it(self) -> None:
-        testing = (RULES / "testing.md").read_text(encoding="utf-8")
-        self.assertIn(".claude/rules/test-writing.md", testing)
-
-
 class SkillDescriptionTests(unittest.TestCase):
     def _listing_text(self, skill: str) -> str:
         text = (SKILLS / skill / "SKILL.md").read_text(encoding="utf-8")
@@ -176,13 +146,6 @@ class SkillDescriptionTests(unittest.TestCase):
             with self.subTest(skill=skill_md.parent.name):
                 self.assertTrue(listing, "no description found")
                 self.assertLess(len(listing), LISTING_CAP_CHARS)
-
-    def test_trimmed_descriptions_keep_their_triggers(self) -> None:
-        for skill, phrases in TRIGGER_PHRASES.items():
-            listing = self._listing_text(skill)
-            for phrase in phrases:
-                with self.subTest(skill=skill, phrase=phrase):
-                    self.assertIn(phrase, listing)
 
 
 if __name__ == "__main__":

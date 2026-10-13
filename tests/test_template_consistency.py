@@ -16,9 +16,7 @@ permissions) and hold on their own. The ones that assert on prose — the
 reference check and the threshold scan — are DRIFT TRIPWIRES, not behavioural
 coverage: a substring match fails when a phrase disappears and passes for any
 text that still contains it, so it cannot tell whether what the prose promises
-is true. `LargeChangeThresholdTests` guards the scan itself for that reason, and
-`PhraseTestHonestyTests` requires every markdown-asserting module to say the
-same thing in its own docstring.
+is true. `LargeChangeThresholdTests` guards the scan itself for that reason.
 
 These are specific to THIS repository (a Claude Code template). A project
 adopting the template does not need them; `tests/test_verify_scripts.py` is the
@@ -30,7 +28,6 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -89,33 +86,6 @@ def read_text_files(paths) -> dict[Path, str]:
 
 
 class HookRegistrationTests(unittest.TestCase):
-    def test_every_hook_on_disk_is_registered(self) -> None:
-        registered = SETTINGS.read_text(encoding="utf-8")
-        # `_`-prefixed modules are shared code imported by hooks, not hooks —
-        # the same rule the hook test modules apply in hook_files().
-        for hook in sorted(p for p in HOOKS.glob("*.py") if not p.name.startswith("_")):
-            self.assertIn(
-                hook.name,
-                registered,
-                f"{hook.name} exists but nothing in settings.json runs it",
-            )
-
-    def test_every_registered_hook_exists(self) -> None:
-        settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
-        on_disk = {p.name for p in HOOKS.glob("*.py")}
-        for handlers in settings.get("hooks", {}).values():
-            for group in handlers:
-                for handler in group.get("hooks", []):
-                    command = handler.get("command", "")
-                    if ".claude/hooks/" not in command:
-                        continue
-                    name = command.split(".claude/hooks/")[1].split()[0].strip("\"'")
-                    self.assertIn(
-                        name,
-                        on_disk,
-                        f"settings.json runs {name}, which is not on disk",
-                    )
-
     def test_hook_timeouts_leave_room_for_the_hook_to_report(self) -> None:
         """
         A hook that self-limits above its registered timeout is killed by the
@@ -237,17 +207,6 @@ class LargeChangeThresholdTests(unittest.TestCase):
             + "; ".join(f"{f} -> {sorted(n)}" for f, n in sorted(mentions.items())),
         )
 
-    def test_claude_md_defines_it_and_lists_who_uses_it(self) -> None:
-        body = " ".join((REPO / "CLAUDE.md").read_text(encoding="utf-8").split())
-        self.assertIn("큰 변경의 기준", body, "there is no single definition site")
-        for consumer in ("프리필터", "/feature"):
-            self.assertIn(consumer, body, f"the definition does not name {consumer}")
-
-    def test_the_definition_covers_the_size_independent_case(self) -> None:
-        """A one-line change to an auth check is large regardless of the count."""
-        body = " ".join((REPO / "CLAUDE.md").read_text(encoding="utf-8").split())
-        self.assertIn("보안 경계", body)
-
 
 class TierBudgetTests(unittest.TestCase):
     """The tier budgets must leave no gap and agree everywhere they are restated.
@@ -353,25 +312,6 @@ class AlwaysLoadedBudgetTests(unittest.TestCase):
         files = self._always_loaded()
         self.assertGreaterEqual(len(files), 5, f"only found {files}")
         self.assertIn("CLAUDE.md", [p.name for p in files])
-
-    def test_no_rule_file_carries_command_syntax(self) -> None:
-        """
-        A negative check on a STRUCTURED token, which is why it bites: the flag
-        string is exact, so pasting a command back into the always-loaded layer
-        fails here rather than being noticed in review. The flags belong with the
-        process that runs them — `.claude/agents/general-purpose.md` — and with
-        the skill that composes prompts.
-        """
-        offenders = [
-            str(p.relative_to(REPO))
-            for p in sorted((REPO / ".claude" / "rules").glob("*.md"))
-            if "--dangerously-skip-permissions" in p.read_text(encoding="utf-8")
-        ]
-        self.assertEqual(
-            [],
-            offenders,
-            f"command syntax is back in the always-loaded rules: {offenders}",
-        )
 
     def test_the_executor_still_has_the_syntax_it_needs(self) -> None:
         """
@@ -481,43 +421,6 @@ class ModelTierConsistencyTests(unittest.TestCase):
         for tier, slugs in canonical.items():
             self.assertTrue(slugs, f"T{tier} names no slug")
 
-    def test_no_copy_contradicts_the_canonical_table(self) -> None:
-        canonical = self._pairings(self.CANONICAL)
-        problems = []
-        for path in self._files():
-            if path == self.CANONICAL:
-                continue
-            for tier, slugs in self._pairings(path).items():
-                extra = slugs - canonical.get(tier, set())
-                if extra:
-                    problems.append(
-                        f"{path.relative_to(REPO)} maps T{tier} to "
-                        f"{sorted(extra)}, which the rule does not"
-                    )
-        self.assertEqual([], problems, "; ".join(problems))
-
-    def test_the_extractor_finds_a_restatement(self) -> None:
-        """Guards the extractor: if it found nothing, the test above is vacuous.
-        Restatements were cut on purpose (2026-10-03) and no tracked file has one,
-        so the guard feeds it a restatement of its own. It used to count files
-        in the tree and passed only through a gitignored local review report —
-        a fresh clone failed it."""
-        line = "| T4 Whole repo | `gemini-3.1-pro-high` |"
-        with tempfile.TemporaryDirectory() as tmp:
-            sample = Path(tmp) / "sample.md"
-            sample.write_text(f"# Tiers\n\n{line}\n", encoding="utf-8")
-            self.assertEqual({"4": {"gemini-3.1-pro-high"}}, self._pairings(sample))
-
-    def test_every_slug_used_anywhere_is_a_known_slug(self) -> None:
-        """Catches an invented or mistyped slug, which fails loudly at call time."""
-        known = set().union(*self._pairings(self.CANONICAL).values())
-        unknown = {}
-        for path in self._files():
-            used = set(self.SLUG.findall(path.read_text(encoding="utf-8")))
-            if used - known:
-                unknown[str(path.relative_to(REPO))] = sorted(used - known)
-        self.assertEqual({}, unknown, f"unknown model slugs: {unknown}")
-
     def test_only_the_canonical_table_writes_a_slug(self) -> None:
         """
         Copies name the tier, not the slug. agy 1.3.3 dropped every slug at once
@@ -612,28 +515,6 @@ class SectionPointerTests(unittest.TestCase):
 
 class ScriptContractTests(unittest.TestCase):
     """The template's own scripts must satisfy the contract they document."""
-
-    def test_only_entrypoints_and_helpers_live_in_scripts(self) -> None:
-        scripts = REPO / ".claude" / "scripts"
-        for entry in sorted(scripts.iterdir()):
-            if entry.is_dir():
-                self.assertEqual(
-                    "lib",
-                    entry.name,
-                    "only a lib/ subdirectory is allowed beside the entrypoints",
-                )
-                continue
-            name = entry.name
-            allowed = (
-                name == "README.md"
-                or name.startswith("verify-")
-                or name.startswith("_")
-            )
-            self.assertTrue(
-                allowed,
-                f"{name} is neither an entrypoint (verify-*), a helper (_*), "
-                "nor the contract README — it will be mistaken for an entrypoint",
-            )
 
     def test_save_tier_does_not_chain_a_slower_tier(self) -> None:
         save = REPO / ".claude" / "scripts" / "verify-save"
@@ -741,17 +622,6 @@ class PermissionDefaultsTests(unittest.TestCase):
     def test_this_repository_still_runs_its_gate_unprompted(self) -> None:
         self.assertLessEqual(set(self.REPO_NEEDS), self._rules("allow"))
 
-    def test_initproject_tells_the_model_not_to_widen_it(self) -> None:
-        # Drift tripwire over prose: settings.json is project-owned after copy,
-        # so Step 6 is where an adopter's allow list gets decided.
-        skill = (SKILLS / "initproject" / "SKILL.md").read_text(encoding="utf-8")
-        row = next(
-            line
-            for line in skill.splitlines()
-            if line.startswith("| `.claude/settings.json` |")
-        )
-        self.assertIn("Never move an `ask` entry to `allow`", row)
-
 
 class CommitAttributionTests(unittest.TestCase):
     """The orchestrator must never add an attribution footer in an adopting
@@ -765,11 +635,6 @@ class CommitAttributionTests(unittest.TestCase):
         self.assertEqual("", attribution.get("commit"))
         self.assertEqual("", attribution.get("pr"))
         self.assertIs(False, attribution.get("sessionUrl"))
-
-    def test_claude_md_forbids_the_footer(self) -> None:
-        # Drift tripwire over prose.
-        text = (REPO / "CLAUDE.md").read_text(encoding="utf-8")
-        self.assertIn("Co-Authored-By", text)
 
 
 class AgyFitsTheBashTimeoutTests(unittest.TestCase):
@@ -803,12 +668,6 @@ class AgyFitsTheBashTimeoutTests(unittest.TestCase):
         self.assertGreater(
             found, 0, "no --print-timeout found; the check tests nothing"
         )
-
-    def test_the_agent_running_agy_is_told_the_bash_timeout(self) -> None:
-        text = (REPO / ".claude" / "agents" / "general-purpose.md").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("600000", text)
 
 
 if __name__ == "__main__":

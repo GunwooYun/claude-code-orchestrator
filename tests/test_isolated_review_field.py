@@ -1,5 +1,5 @@
 """
-Fixes from the first field report (Immich fork, 2026-10-02). Three real runs
+Fixes for the incidents of the first real-use report (Immich fork, 2026-10-02). Three real runs
 gave INVALID, INCOMPLETE, INCOMPLETE, and none of the three was the reviewer's
 fault:
 
