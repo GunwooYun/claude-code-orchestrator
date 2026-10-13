@@ -26,6 +26,16 @@ project changed, back up a gitignored `.claude/` first).
   upgrades should have deleted (hooks, and skills colliding with built-ins), and
   the README procedure had no tool; the plan lists exactly those 18.
 
+### Fixed
+- **`/isolated-review`: Claude Code's runtime files no longer make a review
+  INVALID.** `.claude/scheduled_tasks.lock` (written by any Claude session in the
+  project, the reviewer included) appeared mid-run and a real review ended
+  INVALID with the reviewed commit unchanged. The snapshot and the clean-tree
+  check now skip the paths Claude Code lists in its `# claude-code-runtime`
+  block of `.git/info/exclude`; edits to any other file under `.claude/` are
+  still caught, gitignored or not. Hit INVALID naming one of those paths in an
+  adopted copy: upgrade `run-review`.
+
 ## [4.2.0] - 2026-10-12
 
 Maintenance from deferred items. Two shipped files that nothing used are gone

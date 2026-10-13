@@ -22,6 +22,7 @@ from test_isolated_review import (
     EXIT_INCOMPLETE,
     EXIT_INVALID,
     EXIT_REFUSED,
+    REPO,
     IsolatedReviewCase,
     load_script,
 )
@@ -91,6 +92,14 @@ class RuntimeFileTests(IsolatedReviewCase):
             "scheduled_tasks.lock",
         ):
             self.assertFalse(RR.excluded(path), path)
+
+    def test_every_runtime_path_is_named_in_the_design_doc(self) -> None:
+        # VD: the doc lists what the snapshot skips; a name only in the code
+        # leaves the next INVALID unexplained.
+        doc = (REPO / "docs/isolated-review.md").read_text(encoding="utf-8")
+        section = doc.split("Snapshot — ", 1)[1].split("\n\n", 1)[0]
+        for path in RR.CLAUDE_RUNTIME:
+            self.assertIn(f"`{path.removeprefix('.claude/')}`", section)
 
 
 class AddedFileTests(IsolatedReviewCase):
