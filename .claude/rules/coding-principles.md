@@ -2,7 +2,7 @@
 paths:
   - "**/*.py"
   - ".claude/skills/isolated-review/run-review"
-  - ".claude/skills/orchestrator-version/check"
+  - "tools/upgrade-plan"
   - ".claude/bin/usage-report"
 ---
 # Coding Principles (Python)

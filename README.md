@@ -122,7 +122,6 @@ your-project/
 | **`/initproject`** | 복사 직후 **프로젝트당 한 번** | 스택을 감지하고 템플릿을 이 프로젝트에 맞게 고친다 |
 | **`/feature <기능명>`** | **작업 하나마다** | 조사 → 요구사항 → 검증 계획 → 설계 리뷰 → 할 일 목록 → 승인 → 구현 → 리뷰 |
 | **`/isolated-review`** | 구현을 커밋한 뒤 | 이 세션과 무관한 격리된 리뷰어가 읽기 전용으로 리뷰한다 |
-| `/orchestrator-version` | 버전이 궁금할 때 | 설치된 버전과 최신 릴리스를 비교 |
 | `/agy-models` | agy 프로브가 `STALE` 일 때, 등급별 모델을 바꾸고 싶을 때 | agy 등급 T1~T4 의 모델을 사용자가 고른다 (`/initproject` 도 이 절차를 쓴다) |
 | `/jira-setup`, `/ticket` | Jira 를 쓰는 팀 | Jira 연결 설정, 티켓에서 작업 시작 |
 | `/doc-write` | Confluence·문서 작성 | 작성 규칙에 맞춰 문서를 쓰고 발행 |
@@ -519,11 +518,9 @@ git worktree add --detach ../<project>-review <작업 브랜치>
 
 ## 9. 버전 확인과 업그레이드
 
-```bash
-claude
-> /orchestrator-version                 # 설치된 버전
-> /orchestrator-version --check-latest  # 최신 릴리스와 비교, 바뀐 내역 요약
-```
+**내 프로젝트의 버전:** `cat .claude/ORCHESTRATOR_VERSION` (Windows: `Get-Content .claude\ORCHESTRATOR_VERSION`).
+**최신 버전:** 이 저장소의 [Releases](https://github.com/GunwooYun/claude-code-orchestrator/releases) 또는
+`CHANGELOG.md` 맨 위 항목. 그 사이에 무엇이 바뀌었는지는 아래 분류 도구가 CHANGELOG 항목까지 함께 보여 준다.
 
 ### 업그레이드 절차
 
@@ -538,16 +535,18 @@ flowchart TD
     C -- "고침" --> E["새 버전을 받고<br/>프로젝트 수정을 다시 적용"]
     C -- "새 버전에서 삭제됨" --> F["삭제<br/>(훅이면 settings.json 등록도 함께!)"]
     C -- "새 버전에 새로 생김" --> H["추가<br/>(실행 파일이면 settings.json 허용도 함께)"]
-    D --> G["4. 검사: 훅 등록 경로가 모두 실제 파일인지,<br/>/orchestrator-version 이 새 버전인지"]
+    D --> G["4. 검사: 훅 등록 경로가 모두 실제 파일인지,<br/>ORCHESTRATOR_VERSION 이 새 버전인지"]
     E --> G
     F --> G
     H --> G
 ```
 
-- **3번 분류표는 도구가 만든다** (읽기 전용, 아무것도 바꾸지 않는다). 템플릿 클론의 스크립트로 실행한다 —
-  프로젝트에 있는 사본은 옛 버전이라 이 옵션이 없을 수 있다:
+- **3번 분류표는 도구가 만든다** (읽기 전용, 아무것도 바꾸지 않는다). 이 저장소를 클론해 두고 거기서
+  실행한다. 도구는 프로젝트에 복사되지 않는다:
   `git -C <템플릿 클론> fetch --tags` 후
-  `python3 <템플릿 클론>/.claude/skills/orchestrator-version/check --plan <프로젝트 루트>`.
+  `python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>`.
+  옛 버전 = 프로젝트의 `.claude/ORCHESTRATOR_VERSION`(없으면 `--from X.Y.Z`), 새 버전 = 클론의 최신 태그
+  (`--to X.Y.Z` 로 중간 버전까지만).
   파일마다 REPLACE·MERGE·KEEP·DELETE·ADD·PROJECT-ONLY 등으로 나누고, 예전 업그레이드에서 지웠어야 할
   파일은 PROJECT-ONLY 아래 "last shipped in X" 로 모아 보여 준다. 실행 권한을 잃은 스크립트, 지워질 훅을
   가리키는 `settings.json` 등록, 읽어야 할 CHANGELOG 항목도 함께 나온다.
@@ -579,11 +578,13 @@ flowchart TD
 `[5.0.0]` 항목이다.
 
 1. 파일을 지운다: `.claude/hooks/` 의 `log-cli-tools.py` 훅, `/isolated-review` 의 `field-report` 스크립트와
-   그 템플릿, `/feature` 의 `references` 폴더. 정확한 경로는 CHANGELOG 1단계에 있다.
+   그 템플릿, `/feature` 의 `references` 폴더, `/orchestrator-version` 스킬 폴더(업그레이드 분류는 이제
+   템플릿 클론의 `tools/upgrade-plan` 이 한다). 정확한 경로는 CHANGELOG 1단계에 있다.
 2. `.claude/settings.json` 에서 `log-cli-tools.py` 를 부르는 PostToolUse `Bash` 항목을 지운다.
 3. `CLAUDE.md` 의 문서구조 표와 `.agents/rules/AGENTS.md` 에서 agy 호출 로그(`cli-tools.jsonl`)를 언급하는
    줄을 지운다(CHANGELOG 3단계).
-4. 나머지 템플릿 파일은 위 업그레이드 절차대로 교체한다(`check --plan` 의 분류표).
+4. 나머지 템플릿 파일은 위 업그레이드 절차대로 교체한다(`tools/upgrade-plan` 의 분류표). 1번의 파일들도
+   이 분류표에 DELETE 로 나온다.
 5. `.claude/docs/writing-style.md` 는 이제 프로젝트 소유다. 고치지 않았으면 새 파일로 바꾸고, 고쳤으면 그대로 둔다.
 6. `/jira-setup` 을 쓴 적이 있는데 `CLAUDE.md` 에 `### Jira` 가 없으면 `/jira-setup` 을 다시 실행한다.
 7. 하루 정도 쓴 뒤 `.claude/bin/usage-report --since <업그레이드한 날>` 을 돌려 "Hooks" 표의 `errors` 가
@@ -624,7 +625,7 @@ flowchart TD
 | `/isolated-review` | 실작업 3회 + 지난 작업 6건 재검증, 업무 프로젝트에서 4회 실행. 사람이 연 리뷰가 놓친 진짜 문제를 찾았고 오탐은 없었다. 실행이 필요한 결함은 놓친다 |
 | deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중. 업무 프로젝트(2026-08~10, `usage-report`): deep-reasoning 71회, general-purpose 20회, agy 23회(실패 1). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
 | `usage-report` | 도입 프로젝트 두 곳에서 실행(업무 서버는 ssh 로). 리뷰에서 집계 오류 4건(서브에이전트 토큰, 게이트 횟수, 프로브 상태, 날짜 경계)을 찾아 고친 뒤 다시 셌다. Claude Code 의 기록 형식은 문서화돼 있지 않아 버전이 바뀌면 틀릴 수 있다 |
-| `/orchestrator-version` | 업그레이드에 사용. `--plan` 은 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치) |
+| `tools/upgrade-plan` (4.x 의 `/orchestrator-version --plan`) | 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치). 5.0.0 업그레이드 안내는 v3.0.1·v4.3.1 사본으로 확인했다 |
 | 훅 2개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `/agy-models` | 템플릿 저장소에서 실제 agy 1.3.3 으로 1회 완주(2026-10-13): Gemini 3개 제시 → 등급별 선택 → 표 기록 → 프로브 `READY`. 선택지가 4개를 넘는 경우와 `/initproject` Step 3c 경유 실행은 아직 돌려 보지 않았다 |
 | `/doc-write`, `/jira-setup`, `/ticket` | 실제 업무 프로젝트에서 사용(2026-09~10, 각 1회 호출. 설치 뒤 Jira·Confluence 호출 17회는 모두 스킬을 실행한 세션 안). 이전 판의 "돌려 본 적 없다"는 그 프로젝트를 집계하기 전의 기록이었다 |
@@ -708,6 +709,7 @@ uv run poe fix              # 자동 수정은 사람이 의도해서
 uv run pytest -q            # 테스트만
 ```
 
+`tools/upgrade-plan` 은 도입 프로젝트의 업그레이드 분류표를 만드는 저장소 전용 도구다([9장](#9-버전-확인과-업그레이드)).
 `tests/` 는 대부분 이 저장소 자신을 검사하므로 프로젝트에 복사하지 않는다. 검증 계약을 스택과 무관하게
 확인하는 `tests/test_verify_scripts.py` 만 필요하면 따로 가져간다.
 

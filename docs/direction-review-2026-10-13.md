@@ -108,7 +108,7 @@ deep-reasoning 138.
 | 유지 | `/ticket` `/jira-setup` `/doc-write` | 실사용 |
 | 유지 | `/isolated-review` 본체 | 실사용 4회 |
 | 유지 | `cap_exclude` | 상한 초과가 실제로 2회. 대신 REFUSED 메시지가 `cap_exclude` 를 안내하게 했다 (`fd119eb`) |
-| 유지 | `/orchestrator-version` | 5.0.0 배포에 필요. 그 뒤 다시 판단 |
+| 이동 | `/orchestrator-version` → 저장소 전용 `tools/upgrade-plan` | 처음엔 "5.0.0 배포에 필요"로 유지했다가 2026-10-14 다시 판단: 실사용 0회이고, 쓸모 있는 `--plan` 은 늘 템플릿 클론에서 실행하므로 프로젝트에 복사될 이유가 없다. 버전 표시·`--check-latest` 는 삭제 |
 | 유지 | `/agy-models`, agy-probe, 남은 훅 2개, 규칙, 에이전트 | |
 | 추가 | `usage-report` (훅별 오류 칸 포함) | `c7c8d73` |
 | 추가 | 게이트의 Python 3.10 타입 검사 | `e86b02c` |
@@ -132,7 +132,7 @@ deep-reasoning 138.
 
 발생 근거가 없거나 다음 점검으로 미룬다.
 
-- `/orchestrator-version` 재판단 (5.0.0 뒤)
+- ~~`/orchestrator-version` 재판단 (5.0.0 뒤)~~ 5.0.0 에서 처리(위 결정 표)
 - ~~Jira 계열은 스킬보다 직접 MCP 호출이 대부분이다~~ 틀림(「바로잡은 것」). 스킬 설치 뒤에는 스킬 밖
   호출이 0회다. `/ticket` 의 마무리(댓글·전이)는 설치 뒤 아직 일어나지 않았다.
 - `--plan` 이 남은 옛 훅의 등록을 짚지 않는다.
