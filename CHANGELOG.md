@@ -1,27 +1,33 @@
 # Changelog
 
 `.claude/ORCHESTRATOR_VERSION` in an adopting project says which entry below it
-came from. Check it with `/orchestrator-version` (add `--check-latest` to compare
-with the newest release). Releases are tags `vX.Y.Z` on `main`; `develop` holds
+came from (`cat .claude/ORCHESTRATOR_VERSION`). Releases are tags `vX.Y.Z` on `main`; `develop` holds
 work that has not been released. From 1.0.0 the template is used across real
 projects, and changes are driven by evidence from that use (`usage-report`
 counts, or "what I tried, what happened, how I worked around it").
 
 Upgrading an adopted copy: do not copy the template over it — follow README
-「자주 밟는 함정」 (compare each file with the template's history, merge what the
+「업그레이드 절차」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-10-14
+
 The second direction review (`docs/direction-review-2026-10-13.md`), judged on
-counts from a real work project for the first time. Breaking: the next release
-is 5.0.0.
+counts from a real work project for the first time: what real use did not need
+is removed (breaking), `usage-report` makes that evidence re-runnable, and the
+Jira/Confluence skills are fixed where real use broke them. README is rewritten
+for a first-time reader (terms, Jira/Confluence map, a 5.0.0 upgrade list,
+`usage-report` step by step).
 
 **Upgrade — do this in one step**, or every Bash call reports a missing hook:
 1. Delete `.claude/hooks/log-cli-tools.py`,
    `.claude/skills/isolated-review/field-report`,
-   `.claude/docs/templates/field-report.md` and
-   `.claude/skills/feature/references/` (all still in tag `v4.3.1`).
+   `.claude/docs/templates/field-report.md`,
+   `.claude/skills/feature/references/` and
+   `.claude/skills/orchestrator-version/` (all still in tag `v4.3.1`).
+   `python3 <template clone>/tools/upgrade-plan <project>` lists them as DELETE.
 2. In your `.claude/settings.json`, remove the PostToolUse `Bash` entry
    `python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/log-cli-tools.py"`.
 3. Project-owned files, by hand: drop the `.claude/logs/cli-tools.jsonl` row
@@ -30,7 +36,7 @@ is 5.0.0.
 4. Optional: delete `.claude/logs/cli-tools.jsonl` and
    `.claude/logs/isolated-review/refusals.jsonl`; nothing reads them.
 5. A copy upgraded in place from before 2.0.0 may still carry hooks removed
-   then. `/orchestrator-version --plan` lists such files under PROJECT-ONLY
+   then. `tools/upgrade-plan` lists such files under PROJECT-ONLY
    "last shipped in X" but does not flag their `settings.json` entries: check
    those by hand, and delete file and registration together (a registered
    leftover keeps running). Then run `.claude/bin/usage-report --since <today>`
@@ -42,6 +48,12 @@ is 5.0.0.
    second `/initproject` could erase it), run `/jira-setup` again.
 
 ### Removed (breaking)
+- Skill `/orchestrator-version`. Its upgrade classifier (`--plan`) moves to
+  the repository-only `tools/upgrade-plan`: it was always run from a template
+  clone, never from the project's copy, so it no longer ships. Showing the
+  installed version and `--check-latest` are gone (`cat
+  .claude/ORCHESTRATOR_VERSION`; the plan lists the CHANGELOG entries in
+  between). 0 uses in both real adopters; its description cost every session.
 - Hook `log-cli-tools`. On a real adopter whose system `python3` is 3.10 it
   failed on every Bash call for two weeks (1,933 non-blocking errors,
   `ImportError: datetime.UTC`) and nothing showed it; nothing read its log.
@@ -94,7 +106,7 @@ is 5.0.0.
   `/doc-write` now edit only their own part and create the section if absent.
 - `.claude/docs/writing-style.md` shipped one team's Confluence links, its
   reference report and sentences from its own domain. Removed; the patterns
-  stay as general rules. It is project-owned from now on (`--plan` marks it).
+  stay as general rules. It is project-owned from now on (`tools/upgrade-plan` marks it).
 - `/ticket`, `/jira-setup`, `/doc-write` shortened where they restated the
   style guide, each other or their own steps.
 - "1 skill call vs ~150 MCP calls" (README, design docs) mixed two periods:

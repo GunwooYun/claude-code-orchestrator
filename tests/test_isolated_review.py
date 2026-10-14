@@ -956,13 +956,14 @@ class SkillShapeTests(unittest.TestCase):
         `ruff check .` and `ruff format --check .` skip a file without `.py`
         (measured: run-review was not in `ruff check . --show-files`), and so do
         the save hook and ty's directory scan. Named explicitly, all of them do
-        check it. So every extensionless Python script under .claude/ must be
-        named in each gate task, or the gate silently never sees it.
+        check it. So every extensionless Python script under .claude/ and
+        tools/ must be named in each gate task, or the gate silently never sees it.
         """
         tasks = (REPO / "pyproject.toml").read_text(encoding="utf-8")
         scripts = [
             p.relative_to(REPO).as_posix()
-            for p in (REPO / ".claude").rglob("*")
+            for top in (".claude", "tools")
+            for p in (REPO / top).rglob("*")
             if p.is_file()
             and not p.suffix
             and p.read_bytes()[:40].startswith(b"#!/usr/bin/env python3")

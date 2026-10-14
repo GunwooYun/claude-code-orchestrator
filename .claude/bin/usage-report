@@ -48,7 +48,6 @@ TEMPLATE_SKILLS = (
     "initproject",
     "isolated-review",
     "jira-setup",
-    "orchestrator-version",
     "ticket",
 )
 TEMPLATE_HOOKS = ("bash-write-check.py", "lint-on-save.py")

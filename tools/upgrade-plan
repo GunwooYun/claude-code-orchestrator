@@ -1,24 +1,15 @@
 #!/usr/bin/env python3
 """
-check — which claude-code-orchestrator release this project's copy came from.
+upgrade-plan — read-only upgrade plan for a project's copy of claude-code-orchestrator.
 
-Usage: check [--check-latest]
-       check --plan PROJECT [--from X.Y.Z] [--to X.Y.Z]
-  (no flag)       the installed version, from .claude/ORCHESTRATOR_VERSION.
-                  No network.
-  --check-latest  also the newest release upstream and the changelog entries
-                  since the installed one. Needs network to GitHub; if that
-                  fails (company proxies block it often) it says so and exits 0.
-  --plan PROJECT  read-only upgrade plan for the copy in PROJECT. Run THIS
-                  script from a template clone with its tags (the project's
-                  own copy is the old version). The old version is PROJECT's
-                  .claude/ORCHESTRATOR_VERSION (or --from), the new one the
-                  highest vX.Y.Z tag of the clone (or --to). Prints a class per
-                  file and changes nothing. Exit 2 when a precondition fails.
+Usage: python3 <template clone>/tools/upgrade-plan PROJECT [--from X.Y.Z] [--to X.Y.Z]
 
-Environment (for forks and tests):
-  ORCHESTRATOR_UPSTREAM       git URL or path of the template repository
-  ORCHESTRATOR_CHANGELOG_URL  URL of its CHANGELOG.md (file:// works)
+Run it from a clone of the template with its tags (`git fetch --tags`); it is
+a repository tool and is not copied into projects. The old version is PROJECT's
+.claude/ORCHESTRATOR_VERSION (or --from), the new one the highest vX.Y.Z tag of
+the clone (or --to). Prints a class per file, then exec bits, hook
+registrations and the CHANGELOG entries to read. Changes nothing. Exit 2 with a
+reason on stderr when a precondition fails.
 """
 
 from __future__ import annotations
@@ -30,20 +21,13 @@ import os
 import re
 import subprocess
 import sys
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import NamedTuple
 
-DEFAULT_UPSTREAM = "https://github.com/GunwooYun/claude-code-orchestrator.git"
-DEFAULT_CHANGELOG = "https://raw.githubusercontent.com/GunwooYun/claude-code-orchestrator/main/CHANGELOG.md"
-TIMEOUT_S = 15
-TAG = re.compile(r"refs/tags/v(\d+)\.(\d+)\.(\d+)$")
 ENTRY = re.compile(r"^## \[(\d+)\.(\d+)\.(\d+)\]", re.MULTILINE)
 
-# .claude/skills/orchestrator-version/check -> .claude/ -> repository root
-CLAUDE_DIR = Path(__file__).resolve().parents[2]
-TEMPLATE_ROOT = CLAUDE_DIR.parent
+# tools/upgrade-plan -> repository root
+TEMPLATE_ROOT = Path(__file__).resolve().parents[1]
 SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
 # What a copy carries (README Quick Start), and what a plan compares.
@@ -101,7 +85,7 @@ OWNED_NOTE = (
 
 
 class PlanError(Exception):
-    """A --plan precondition failed; the message tells the user what to do."""
+    """A plan precondition failed; the message tells the user what to do."""
 
 
 class Blob(NamedTuple):
@@ -114,9 +98,9 @@ def parse_version(text: str) -> tuple[int, int, int] | None:
     return (int(m[1]), int(m[2]), int(m[3])) if m else None
 
 
-def installed(claude_dir: Path = CLAUDE_DIR) -> tuple[int, int, int] | None:
+def project_version(project: Path) -> tuple[int, int, int] | None:
     try:
-        text = (claude_dir / "ORCHESTRATOR_VERSION").read_text(encoding="utf-8")
+        text = (project / ".claude/ORCHESTRATOR_VERSION").read_text(encoding="utf-8")
     except OSError:
         return None
     return parse_version(text)
@@ -124,43 +108,6 @@ def installed(claude_dir: Path = CLAUDE_DIR) -> tuple[int, int, int] | None:
 
 def fmt(version: tuple[int, int, int]) -> str:
     return ".".join(str(p) for p in version)
-
-
-def latest_release(upstream: str) -> tuple[int, int, int]:
-    """Highest vX.Y.Z tag, compared numerically. Raises RuntimeError on failure."""
-    try:
-        out = subprocess.run(
-            ["git", "ls-remote", "--tags", "--refs", upstream],
-            capture_output=True,
-            text=True,
-            timeout=TIMEOUT_S,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise RuntimeError(f"cannot reach {upstream}: {exc}") from exc
-    if out.returncode != 0:
-        raise RuntimeError(f"cannot reach {upstream}: {out.stderr.strip()[:200]}")
-    versions = [
-        (int(m[1]), int(m[2]), int(m[3]))
-        for line in out.stdout.splitlines()
-        if (m := TAG.search(line.split("\t")[-1]))
-    ]
-    if not versions:
-        raise RuntimeError(f"no vX.Y.Z release tags at {upstream}")
-    return max(versions)
-
-
-def newer_entries(changelog_url: str, since: tuple[int, int, int] | None) -> str:
-    """Changelog sections newer than `since` (all of them when unknown)."""
-    with urllib.request.urlopen(changelog_url, timeout=TIMEOUT_S) as response:
-        text = response.read().decode("utf-8", errors="replace")
-    starts = list(ENTRY.finditer(text))
-    kept = []
-    for i, m in enumerate(starts):
-        version = (int(m[1]), int(m[2]), int(m[3]))
-        end = starts[i + 1].start() if i + 1 < len(starts) else len(text)
-        if since is None or version > since:
-            kept.append(text[m.start() : end].rstrip())
-    return "\n\n".join(kept)
 
 
 def git(root: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
@@ -172,7 +119,7 @@ def release_tags(root: Path) -> list[tuple[int, int, int]]:
     if out.returncode != 0:
         raise PlanError(
             f"{root} is not a git repository — run this script from a clone of "
-            "the template, not from a copy of .claude/"
+            "the template"
         )
     versions = []
     for line in out.stdout.decode("utf-8", errors="replace").splitlines():
@@ -190,7 +137,7 @@ def resolve_versions(
     fetch = f"`git -C {TEMPLATE_ROOT} fetch --tags`"
     if not tags:
         raise PlanError(f"{TEMPLATE_ROOT} has no vX.Y.Z tags — run {fetch}")
-    in_file = installed(project / ".claude")
+    in_file = project_version(project)
     if from_arg is not None:
         old = parse_version(from_arg)
         if old is None:
@@ -460,58 +407,16 @@ def print_project_only(paths: list[str], tags: list[tuple[int, int, int]]) -> No
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="check")
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--check-latest", action="store_true")
-    mode.add_argument("--plan", metavar="PROJECT", type=Path)
+    parser = argparse.ArgumentParser(prog="upgrade-plan")
+    parser.add_argument("project", type=Path, metavar="PROJECT")
     parser.add_argument("--from", dest="from_version", metavar="X.Y.Z")
     parser.add_argument("--to", dest="to_version", metavar="X.Y.Z")
     args = parser.parse_args()
-
-    if args.plan is not None:
-        try:
-            return plan(args.plan.resolve(), args.from_version, args.to_version)
-        except PlanError as exc:
-            print(f"plan: {exc}", file=sys.stderr)
-            return 2
-    if args.from_version or args.to_version:
-        parser.error("--from and --to go with --plan")
-
-    have = installed()
-    if have is None:
-        print(
-            "installed: unknown — this copy has no .claude/ORCHESTRATOR_VERSION, so it "
-            "predates versioning (before v0.1.0) or the file was removed"
-        )
-    else:
-        print(f"installed: {fmt(have)}")
-
-    if not args.check_latest:
-        print("latest: not checked — run with --check-latest (needs network to GitHub)")
-        return 0
-
-    upstream = os.environ.get("ORCHESTRATOR_UPSTREAM", DEFAULT_UPSTREAM)
     try:
-        newest = latest_release(upstream)
-    except RuntimeError as exc:
-        print(f"latest: unavailable ({exc})")
-        return 0
-    print(f"latest: {fmt(newest)}")
-    if have is not None and have >= newest:
-        print("status: up to date")
-        return 0
-    print(
-        "status: a newer release exists — upgrade by the README procedure, not by copying over"
-    )
-    changelog = os.environ.get("ORCHESTRATOR_CHANGELOG_URL", DEFAULT_CHANGELOG)
-    try:
-        entries = newer_entries(changelog, have)
-    except (OSError, urllib.error.URLError, ValueError) as exc:
-        print(f"changes: unavailable ({exc})")
-        return 0
-    print("\nchanges since the installed version:\n")
-    print(entries or "(no changelog entries found)")
-    return 0
+        return plan(args.project.resolve(), args.from_version, args.to_version)
+    except PlanError as exc:
+        print(f"plan: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

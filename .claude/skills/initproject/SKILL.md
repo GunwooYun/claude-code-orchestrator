@@ -187,7 +187,7 @@ Keep exactly one H1; the template's own sections below them stay as they are.
 In `## Project Setup`, record which template release this project adopted:
 `Orchestrator: v<contents of .claude/ORCHESTRATOR_VERSION>, adopted <today>`. If
 that file is missing the copy predates versioning — write `unknown (pre-0.1.0
-copy)`. A later upgrade starts from this line (`/orchestrator-version`).
+copy)`. A later upgrade starts from this version (README 「업그레이드 절차」).
 
 Replace the body of `## 기술 스택(Tech Stack)` with the detected stack: language
 and framework versions, package manager, quality tools with versions, how the
