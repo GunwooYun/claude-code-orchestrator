@@ -527,19 +527,149 @@ git worktree add --detach ../<project>-review <작업 브랜치>
 **템플릿을 그대로 다시 복사하면 안 된다.** `/initproject` 로 맞춘 내용과 진행 중인 작업 기록이 원본으로
 덮어써진다. 파일마다 "프로젝트가 고쳤는가"를 확인하고 골라서 가져온다. 아래 순서를 매번 같게 따른다.
 
-| # | 단계 | 누가 | 하는 일 |
-|---|---|---|---|
-| 1 | 시점 잡기 | 사람 | 하던 작업 단위를 끝내고 커밋한다. 업그레이드는 **작업 단위 사이에**, **별도 브랜치·별도 커밋**으로 한다(`git switch -c upgrade-<버전>`) |
-| 2 | 기준선 저장 | Claude | `.claude/bin/usage-report > usage-before.md` — 업그레이드 전의 위임·검증·훅 오류 숫자 |
-| 3 | 백업 | Claude | `.claude`·`.agents`·`CLAUDE.md` 가 커밋돼 있지 않으면 `tar czf backup.tgz .claude .agents CLAUDE.md` |
-| 4 | 분류표 | Claude (읽기만) | 템플릿 클론에서 `tools/upgrade-plan` 실행(아래). 파일별 분류와 읽어야 할 CHANGELOG 항목이 나온다 |
-| 5 | 승인 | 사람 | 분류표를 보고 진행·제외할 것을 정한다. **승인 전에는 아무 파일도 바꾸지 않는다** |
-| 6 | 적용 | Claude | 교체·병합·삭제·추가, 훅 등록 정리, CHANGELOG 가 손으로 하라고 한 일. 해당 버전의 "○.○.○ 으로 올릴 때" 절이 있으면 그대로 따른다 |
-| 7 | 확인 | Claude | 게이트(`.claude/scripts/verify-task`), `.claude/bin/agy-probe`(`STALE` 이면 `/agy-models`), `settings.json` 의 훅 경로가 모두 실제 파일인지, `ORCHESTRATOR_VERSION` 이 새 버전인지. 그다음 커밋 |
-| 8 | 비교 | Claude → 사람 | 작업 3~5건 뒤 `usage-report --since <업그레이드한 날>` 을 2번과 비교한다. 나빠졌으면 업그레이드 커밋을 되돌리거나(`git revert`) 원인 파일만 이전 버전으로 돌린다 |
+아래 명령은 Linux / macOS 기준이다. 🖥️ 는 **터미널**에 입력하는 것, 💬 는 **Claude 세션**(`claude` 를
+실행한 화면)에 입력하는 것이다. `<...>` 부분만 바꿔서 그대로 붙여 넣는다. 템플릿 클론 위치는
+`~/claude-code-orchestrator` 로 가정한다. Windows 는 Git Bash 에서 같은 명령을 쓰거나, 🖥️ 단계를 Claude
+세션에 "이 명령을 실행해 줘"로 맡긴다(미검증).
 
-Claude 에게는 이렇게 시킨다: **"README 9장 표준 절차대로 v<내 버전> → v<새 버전> 업그레이드를 해 줘. 템플릿
-클론은 `<경로>` 야. 4단계 분류표를 보여 주고 승인받은 뒤 진행해."**
+#### 0단계 — 템플릿 클론 준비 (처음 한 번)
+
+🖥️ 업그레이드 도구는 이 저장소에만 있고 프로젝트에는 복사되지 않는다. 한 번 클론해 둔다.
+
+```bash
+git clone https://github.com/GunwooYun/claude-code-orchestrator.git ~/claude-code-orchestrator
+```
+
+🖥️ 업그레이드할 때마다 최신 릴리스로 맞춘다.
+
+```bash
+git -C ~/claude-code-orchestrator switch main
+git -C ~/claude-code-orchestrator pull
+git -C ~/claude-code-orchestrator fetch --tags
+```
+
+#### 1단계 — 하던 작업을 정리하고 업그레이드 브랜치 만들기
+
+진행 중인 작업 단위가 있으면 먼저 끝내고 커밋한다. 업그레이드는 **작업 단위 사이에, 별도 브랜치에서** 한다 —
+문제가 생기면 업그레이드 커밋만 되돌릴 수 있다.
+
+🖥️ 프로젝트 루트에서:
+
+```bash
+cd <프로젝트 루트>
+git status                                  # 깨끗한지 확인 (커밋하지 않은 변경이 없어야 한다)
+cat .claude/ORCHESTRATOR_VERSION            # 지금 버전
+git switch -c upgrade-orchestrator
+```
+
+#### 2단계 — 기준선 저장 (업그레이드 전 숫자)
+
+🖥️ 지금 템플릿이 어떻게 쓰이고 있는지 개수를 저장한다. 템플릿 클론의 스크립트를 쓰므로 프로젝트가 옛 버전이어도
+된다. 저장 위치는 저장소 밖(`~/usage-reports/`)이다.
+
+```bash
+mkdir -p ~/usage-reports
+python3 ~/claude-code-orchestrator/.claude/bin/usage-report > ~/usage-reports/$(basename "$PWD")-$(date +%F)-before.md
+```
+
+#### 3단계 — 백업
+
+🖥️ 템플릿 파일이 커밋돼 있지 않은(로컬 전용) 프로젝트라면 꼭 한다. 커밋돼 있어도 해 두면 편하다.
+
+```bash
+tar czf ~/backup-$(basename "$PWD")-$(date +%F).tgz .claude .agents CLAUDE.md
+```
+
+#### 4단계 — Claude 에게 분류표 만들게 하기
+
+🖥️ 프로젝트 루트에서 Claude 를 연다.
+
+```bash
+claude
+```
+
+💬 아래를 붙여 넣는다. Claude 는 분류표만 만들고 **아무 파일도 바꾸지 않는다.**
+
+```text
+README 9장 「업그레이드 절차」대로 이 프로젝트의 템플릿을 업그레이드하려고 해.
+템플릿 클론은 ~/claude-code-orchestrator 야.
+지금은 4단계까지만 해 줘: python3 ~/claude-code-orchestrator/tools/upgrade-plan . 을 실행해서
+분류표를 보여 주고, 클론의 CHANGELOG 에서 내 버전 이후 항목 중 손으로 해야 하는 일(업그레이드 단계)을 정리해 줘.
+아무 파일도 바꾸지 마.
+```
+
+#### 5단계 — 분류표 확인하고 승인
+
+분류표에서 볼 것:
+
+- **MERGE** — 내가(또는 `/initproject` 가) 고친 파일. 새 파일에 내 수정을 다시 적용한다. 어떤 수정을 지키는지 확인한다.
+- **DELETE** 와 **HOOKS** — 지워질 파일, 그리고 같이 지워야 할 `settings.json` 의 훅 등록.
+- **PROJECT-ONLY "last shipped in X"** — 예전 업그레이드에서 지웠어야 할 파일. 지울지 정한다.
+- **`[project-owned]`** — 덮어쓰지 않는 파일. CHANGELOG 가 바꾸라고 한 부분만 손으로 고친다.
+
+💬 괜찮으면:
+
+```text
+좋아, 이대로 적용해 줘. MERGE 파일은 내 수정을 유지하고, 버전별 "○.○.○ 으로 올릴 때" 절이 있으면 그대로 따라 줘.
+끝나면 7단계 확인까지 하고 결과를 보여 줘. 커밋은 내가 확인한 뒤에 할게.
+```
+
+빼고 싶은 것이 있으면 그 파일을 말하면 된다(예: "`rules/coding-principles.md` 는 그대로 둬").
+
+#### 6단계 — 적용 (Claude 가 한다)
+
+교체·병합·삭제·추가, 훅 등록 정리, CHANGELOG 가 손으로 하라고 한 일을 Claude 가 한다. 끝나면 7단계를
+스스로 돌리고 보고한다.
+
+#### 7단계 — 확인하고 커밋
+
+🖥️ Claude 의 보고와 별개로 직접 한 번 확인한다.
+
+```bash
+cat .claude/ORCHESTRATOR_VERSION              # 새 버전이어야 한다
+.claude/scripts/verify-task; echo "exit=$?"   # exit=0 이어야 한다 (스크립트가 있으면)
+.claude/bin/agy-probe                         # READY 가 아니면 첫 단어가 상태. STALE 이면 💬 /agy-models
+git status                                    # 바뀐 파일 목록
+```
+
+🖥️ 이상 없으면 커밋한다(템플릿 파일을 커밋하는 프로젝트일 때).
+
+```bash
+git add .claude .agents CLAUDE.md
+git commit -m "chore: upgrade claude-code-orchestrator template to v$(cat .claude/ORCHESTRATOR_VERSION)"
+```
+
+그다음은 평소처럼 이 브랜치를 PR 로 올리거나 기본 브랜치에 머지한다.
+
+#### 8단계 — 며칠 써 보고 비교
+
+작업 3~5건을 평소처럼 한 뒤:
+
+🖥️
+
+```bash
+python3 ~/claude-code-orchestrator/.claude/bin/usage-report --since <업그레이드한 날 YYYY-MM-DD> > ~/usage-reports/$(basename "$PWD")-$(date +%F)-after.md
+```
+
+💬
+
+```text
+~/usage-reports/ 의 이 프로젝트 before 와 after 리포트를 비교해 줘.
+위임(deep-reasoning·general-purpose), /feature 진행 단계, 게이트 실행, 훅 오류를 중심으로, 나빠진 게 있는지.
+```
+
+**나빠졌으면 되돌린다.** 🖥️ 업그레이드 커밋 전체를 되돌리려면:
+
+```bash
+git revert <업그레이드 커밋 해시>
+```
+
+커밋하지 않은(로컬 전용) 프로젝트는 3단계 백업으로 되돌린다:
+
+```bash
+rm -rf .claude .agents CLAUDE.md
+tar xzf ~/backup-<프로젝트>-<날짜>.tgz
+```
 
 **진행 중인 작업은 이어진다.** 업그레이드가 바꾸는 것은 템플릿 소유 파일뿐이다. 작업 상태는 프로젝트 소유
 파일에 있다 — `CLAUDE.md` 의 `## Current Project`(진행 중인 계획·검증 계획)와 `## Project Setup`(완료 지점,

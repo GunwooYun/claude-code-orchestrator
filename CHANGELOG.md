@@ -13,7 +13,8 @@ project changed, back up a gitignored `.claude/` first).
 ## [Unreleased]
 
 ### Changed
-- README 「업그레이드 절차」 is one standard procedure in eight steps (when,
+- README 「업그레이드 절차」 is one standard procedure, step by step with the shell
+  commands and the lines to type into Claude as copyable code blocks (when,
   baseline, backup, plan, approval, apply, check, compare), with who does each
   and the sentence to give Claude. It says why work in progress survives (it
   lives in project-owned files) and that agent behaviour after an upgrade is
