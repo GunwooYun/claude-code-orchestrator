@@ -483,5 +483,70 @@ class PlanExtrasTests(PlanFixture):
         )
 
 
+class PlanAppliedTests(PlanFixture):
+    """V11: after the plan is applied, a rerun lists only what needs a hand."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.release(
+            "1.0.0",
+            {
+                ".claude/replace.md": "r1",
+                ".claude/delete.md": "d",
+                ".claude/merge.md": "m1",
+                ".claude/untouched.md": "u",
+            },
+        )
+        self.release(
+            "2.0.0",
+            {
+                ".claude/replace.md": "r2",
+                ".claude/delete.md": None,
+                ".claude/merge.md": "m2",
+                ".claude/add.md": "new",
+            },
+        )
+        for rel in ("replace.md", "delete.md", "merge.md", "untouched.md"):
+            self.put(f".claude/{rel}", self.shipped("1.0.0", f".claude/{rel}"))
+        self.put(".claude/ORCHESTRATOR_VERSION", "1.0.0\n")
+        self.put(".claude/merge.md", "m1\nproject line\n")
+
+    def shipped(self, version: str, rel: str) -> str:
+        return self.git("-C", str(self.tpl), "show", f"v{version}:{rel}")
+
+    def apply(self, skip: tuple[str, ...] = ()) -> None:
+        """Apply the plan the way the procedure does (README §9)."""
+        plan = parse_plan(self.plan().stdout)
+        for rel in (*plan["REPLACE"], *plan["ADD"]):
+            if rel not in skip:
+                self.put(rel, self.shipped("2.0.0", rel))
+        for rel in plan["DELETE"]:
+            (self.project / rel).unlink()
+        for rel in plan["MERGE"]:
+            self.put(rel, self.shipped("2.0.0", rel) + "project line\n")
+
+    def test_a_correct_apply_leaves_only_the_merge_file(self) -> None:
+        self.apply()
+        self.assertEqual(
+            "2.0.0", (self.project / ".claude/ORCHESTRATOR_VERSION").read_text().strip()
+        )
+        result = self.plan("--from", "1.0.0")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            {"MERGE": {".claude/merge.md": ""}},
+            parse_plan(result.stdout),
+            result.stdout,
+        )
+        for name in ("HOOKS", "EXEC BIT", "ABSENT"):
+            self.assertNotIn(f"\n{name}", result.stdout)
+
+    def test_a_skipped_replace_is_still_listed_as_replace(self) -> None:
+        self.apply(skip=(".claude/replace.md",))
+        parsed = parse_plan(self.plan("--from", "1.0.0").stdout)
+        self.assertEqual({".claude/replace.md": ""}, parsed["REPLACE"])
+        self.assertEqual({".claude/merge.md": ""}, parsed["MERGE"])
+        self.assertEqual({"REPLACE", "MERGE"}, set(parsed))
+
+
 if __name__ == "__main__":
     unittest.main()
