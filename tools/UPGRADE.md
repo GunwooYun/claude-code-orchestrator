@@ -39,7 +39,8 @@ None found → tell the user Python 3.10+ is needed and stop.
 ## 1. Preflight
 
 - `git -C "$PROJECT" status --porcelain` is not empty → **Ask:** stop so they can commit
-  or stash / continue anyway (the upgrade will be mixed with their changes) / stop.
+  or stash first (recommended) / continue anyway (the upgrade will be mixed with their
+  changes).
 - `CLAUDE.md` or `CLAUDE.local.md` has a `## Current Project` whose `- Status:` is not
   `완료` → **Ask:** finish that unit first (recommended) / continue. The upgrade does not
   touch that block, but an upgrade between units can be reverted on its own.
