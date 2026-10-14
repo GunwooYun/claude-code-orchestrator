@@ -5,7 +5,8 @@
 
 ![Claude Code Orchestrator](./summary.png)
 
-> 현재 버전: **4.3.1** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md).
+> 현재 버전: **5.0.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md). 4.x 에서 올린다면
+> [5.0.0 으로 올릴 때](#500-으로-올릴-때)를 먼저 본다.
 
 ## 목차
 
@@ -42,6 +43,18 @@ Claude Code 에게 큰 일을 맡기면 금방 **컨텍스트(작업 기억)** �
 
 > **이 템플릿의 판단 기준은 하나다.** 무언가를 더하거나 고칠 때 "위임·컨텍스트 절약·결과 품질 중
 > 하나를 낫게 하는가?" 아니면 넣지 않는다. (`CLAUDE.md` 맨 앞에도 같은 문장이 있다.)
+
+### 먼저 알아 둘 용어
+
+| 용어 | 뜻 |
+|---|---|
+| **컨텍스트** | Claude 가 한 세션에서 기억하는 내용 전체. 읽은 파일·출력·대화가 모두 쌓이고, 가득 차면 앞부분이 요약되며 흐려진다 |
+| **서브에이전트** | 메인 Claude 가 일을 맡기는 별도의 Claude. 자기 컨텍스트에서 일하고 요약만 돌려준다 |
+| **스킬 (슬래시 커맨드)** | `/feature` 처럼 입력하면 정해진 절차가 시작되는 명령. `.claude/skills/` 에 있다 |
+| **훅** | Claude 가 파일을 고치거나 명령을 실행할 때 자동으로 도는 작은 스크립트. `.claude/hooks/` 에 있다 |
+| **검증 스크립트** | `.claude/scripts/verify-*`. 프로젝트가 건강한지 확인하는 명령을 담고, 종료 코드 0 이면 통과다 |
+| **agy** | Google 의 Antigravity CLI(Gemini). 많은 양을 싸게 읽는 일에 쓴다 |
+| **`CLAUDE.md`** | 매 세션 자동으로 읽히는 규칙 파일. 프로젝트 설정(`## Project Setup`)도 여기에 기록된다 |
 
 ---
 
@@ -90,7 +103,7 @@ your-project/
 ├── .agents/
 │   └── rules/AGENTS.md            # agy 가 읽는 프로젝트 설명
 └── .claude/
-    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 4.3.1)
+    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 5.0.0)
     ├── settings.json              # 훅 등록 + 권한(allow / ask / deny)
     ├── agents/                    # 서브에이전트 정의 (deep-reasoning, general-purpose)
     ├── skills/                    # 슬래시 커맨드 (아래 표)
@@ -118,6 +131,17 @@ Jira·Confluence 를 쓰지 않는 프로젝트는 `.claude/skills/jira-setup/`,
 `.claude/skills/doc-write/` 를 지워도 된다. 지우면 매 세션 약 1KB 의 컨텍스트(`/ticket`·`/doc-write` 의
 설명)가 줄고, "문서로 정리해줘" 같은 말에 `/doc-write` 가 불리지 않는다. `.claude/rules/writing-style.md`
 는 남긴다 — 정직성 규칙은 계획서·보고서 전부에 적용되고 `/feature` 도 가리킨다.
+
+**Jira·Confluence 에 쓸 때 어디를 보나**
+
+| 하고 싶은 것 | 명령 | 규칙이 있는 곳 |
+|---|---|---|
+| 처음 연결 (프로젝트당 한 번) | `/jira-setup` | 사이트·프로젝트 키·전이 이름·**쓰기 정책**(코멘트·전이 전에 확인할지)을 `CLAUDE.md` 에 기록한다 |
+| 티켓으로 작업 시작 | `/ticket ABC-123` | 티켓을 읽고 `/feature` 로 넘긴다. 끝나면 기록된 쓰기 정책대로 코멘트·전이한다. 작업 중에는 티켓에 쓰지 않는다 |
+| Confluence 페이지·티켓 본문 작성 | "문서로 정리해줘" 또는 `/doc-write` | `.claude/docs/writing-style.md`(제목·위치·패널·발행 정책). 처음 한 번 스페이스와 부모 페이지를 묻고 기록한다 |
+
+`.claude/docs/writing-style.md` 는 팀의 문서 작성 규칙이다. 템플릿의 것은 출발점이니 팀 방식에 맞게 고쳐
+쓴다(업그레이드가 덮어쓰지 않는다).
 
 ### 훅 (자동으로 도는 검사)
 
@@ -289,7 +313,8 @@ agy 할당량이 넉넉하면 전부 high 로 두어도 된다. 나중에 `STALE
 `/agy-models` 만 다시 실행한다.
 
 **Step 4 — `CLAUDE.md` 갱신.** 맨 위 제목을 프로젝트 이름으로 바꾸고, `## 기술 스택` 에 실제 명령을 적고,
-`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v4.3.1`)을 기록한다.
+`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v5.0.0`)을 기록한다. 나중에 `/jira-setup`·
+`/doc-write` 가 같은 섹션에 `### Jira`·`### Confluence` 를 덧붙인다 — 각자 자기 부분만 고친다.
 
 **Step 5 — 검증 스크립트 작성.** Step 2 의 답으로 `.claude/scripts/verify-save`, `verify-task` 등을 만든다.
 이것이 이후 모든 검증의 기준이 된다 ([8장](#8-검증-계약--verify--스크립트)). **포매터(black 등)는 프로젝트가
@@ -544,8 +569,25 @@ flowchart TD
   빠진 섹션)은 손으로 반영한다.
 - **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남아 있으면
   훅 파일이 없어서 모든 편집이 실패한다. (3.0.0 은 1.x 대비 훅 6개를 지웠다.)
-- 이 과정을 Claude 에게 시켜도 된다: "CHANGELOG 를 보고 v1.1.0 → v3.0.0 업그레이드를 위 절차대로 해 줘.
+- 이 과정을 Claude 에게 시켜도 된다: "CHANGELOG 를 보고 v4.3.1 → v5.0.0 업그레이드를 위 절차대로 해 줘.
   먼저 파일별 분류표를 보여 주고 승인받은 뒤 진행해."
+
+### 5.0.0 으로 올릴 때
+
+5.0.0 은 쓰이지 않던 것을 걷어낸 릴리스라 **지우는 파일이 있다.** 훅 하나를 지우므로 **1·2번은 한 번에**
+해야 한다. 파일만 지우고 등록을 남기면 Bash 명령마다 훅 오류가 난다. 자세한 것은 `CHANGELOG.md` 의
+`[5.0.0]` 항목이다.
+
+1. 파일을 지운다: `.claude/hooks/` 의 `log-cli-tools.py` 훅, `/isolated-review` 의 `field-report` 스크립트와
+   그 템플릿, `/feature` 의 `references` 폴더. 정확한 경로는 CHANGELOG 1단계에 있다.
+2. `.claude/settings.json` 에서 `log-cli-tools.py` 를 부르는 PostToolUse `Bash` 항목을 지운다.
+3. `CLAUDE.md` 의 문서구조 표와 `.agents/rules/AGENTS.md` 에서 agy 호출 로그(`cli-tools.jsonl`)를 언급하는
+   줄을 지운다(CHANGELOG 3단계).
+4. 나머지 템플릿 파일은 위 업그레이드 절차대로 교체한다(`check --plan` 의 분류표).
+5. `.claude/docs/writing-style.md` 는 이제 프로젝트 소유다. 고치지 않았으면 새 파일로 바꾸고, 고쳤으면 그대로 둔다.
+6. `/jira-setup` 을 쓴 적이 있는데 `CLAUDE.md` 에 `### Jira` 가 없으면 `/jira-setup` 을 다시 실행한다.
+7. 하루 정도 쓴 뒤 `.claude/bin/usage-report --since <업그레이드한 날>` 을 돌려 "Hooks" 표의 `errors` 가
+   모두 0 인지 본다([사용 근거 남기기](#사용-근거-남기기)).
 
 ---
 
@@ -579,8 +621,9 @@ flowchart TD
 |---|---|
 | `/initproject` | 실제 프로젝트 두 곳(Node/TS 모노레포, Python+TS 포크)에서 대화형으로 완주 |
 | `/feature` | 실제 프로젝트에서 여러 작업 단위를 끝까지 진행 |
-| `/isolated-review` | 실작업 3회 + 지난 작업 6건 재검증. 사람이 연 리뷰가 놓친 진짜 문제를 찾았고 오탐은 없었다. 실행이 필요한 결함은 놓친다 |
-| deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중 (2026-10-07 측정: deep-reasoning 30회, agy 79회). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
+| `/isolated-review` | 실작업 3회 + 지난 작업 6건 재검증, 업무 프로젝트에서 4회 실행. 사람이 연 리뷰가 놓친 진짜 문제를 찾았고 오탐은 없었다. 실행이 필요한 결함은 놓친다 |
+| deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중. 업무 프로젝트(2026-08~10, `usage-report`): deep-reasoning 71회, general-purpose 20회, agy 23회(실패 1). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
+| `usage-report` | 도입 프로젝트 두 곳에서 실행(업무 서버는 ssh 로). 리뷰에서 집계 오류 4건(서브에이전트 토큰, 게이트 횟수, 프로브 상태, 날짜 경계)을 찾아 고친 뒤 다시 셌다. Claude Code 의 기록 형식은 문서화돼 있지 않아 버전이 바뀌면 틀릴 수 있다 |
 | `/orchestrator-version` | 업그레이드에 사용. `--plan` 은 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치) |
 | 훅 2개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `/agy-models` | 템플릿 저장소에서 실제 agy 1.3.3 으로 1회 완주(2026-10-13): Gemini 3개 제시 → 등급별 선택 → 표 기록 → 프로브 `READY`. 선택지가 4개를 넘는 경우와 `/initproject` Step 3c 경유 실행은 아직 돌려 보지 않았다 |
@@ -589,15 +632,53 @@ flowchart TD
 
 ### 사용 근거 남기기
 
-이 표는 실제로 쓰면서 나온 근거로만 고친다. 근거는 두 가지다.
+이 표와 템플릿은 실제로 쓰면서 나온 근거로만 고친다. 근거는 두 가지다.
 
-- **사용 횟수** — `.claude/bin/usage-report --since <날짜>`. Claude Code 가 이미 남기는 세션 기록에서 스킬·
-  서브에이전트·훅(오류 포함)·검증 티어·거부된 호출 등을 **개수만** 센다. 세션 기록은 기본 30일 뒤 지워지므로
-  주기적으로 돌려 리포트만 남긴다. 다른 머신의 프로젝트는 아무것도 복사하지 않고 돌릴 수 있다:
-  `ssh <호스트> 'cd <프로젝트> && python3 - --since <날짜>' < .claude/bin/usage-report`
+- **사용 횟수** — `.claude/bin/usage-report` (아래).
 - **불편·버그 메모** — 생기는 즉시 세 줄: **무엇을 하려 했나 / 무슨 일이 있었나 / 어떻게 우회했나**.
 
-밖으로 보내기 전에 전체를 한 번 읽는다.
+#### `usage-report` 쓰는 법
+
+Claude Code 는 세션마다 기록(transcript)을 `~/.claude/projects/` 아래에 남긴다. `usage-report` 는 그 기록에서
+**개수만** 센다. 메시지 내용·코드·경로·프로젝트 이름은 출력하지 않는다. 새로 기록을 남기는 훅도 없다.
+
+**1) 실행한다** — 프로젝트 루트에서. Python 3.10 이상이면 되고 설치할 것은 없다.
+
+```bash
+.claude/bin/usage-report                       # 남아 있는 기록 전체
+.claude/bin/usage-report --since 2026-10-14    # 그 날짜(내 PC 의 날짜) 이후만
+.claude/bin/usage-report --json > report.json  # 기계가 읽을 형식으로 저장
+```
+
+템플릿이 없거나 옛 버전인 다른 머신의 프로젝트도 **아무것도 복사하지 않고** 셀 수 있다. 이 저장소의
+루트에서 스크립트를 ssh 로 흘려 보낸다(원격에는 아무것도 쓰지 않는다):
+
+```bash
+ssh -p <포트> <사용자>@<호스트> 'cd <그 머신에서 claude 를 연 폴더> && python3 - --since <날짜>' < .claude/bin/usage-report
+```
+
+**2) 읽는다** — 맨 위 줄의 기간과 세션 수가 예상과 맞는지 먼저 본다.
+
+| 표 | 볼 것 | 이상 신호 |
+|---|---|---|
+| Skills | 스킬별 직접 입력(typed)·모델 호출(by model) | 오랫동안 0 이면 지울 후보 |
+| Subagents | deep-reasoning·general-purpose 호출 수 | 거의 0 이면 위임이 안 되는 것 |
+| Hooks | 훅별 `errors` | **0 이 아니면 바로 확인한다.** 화면에 안 보이는 실패다(옛 버전 훅은 `(other)` 줄) |
+| Denied tool calls | 거부된 도구 | 같은 도구가 반복되면 권한 규칙을 조정 |
+| Gate | 티어별 실행·실패 | 작업을 했는데 0 이면 검증을 건너뛴 것 |
+| /feature sessions | 설계 리뷰·검증·격리 리뷰까지 간 세션 수 | 어느 단계를 건너뛰는지 |
+| Tokens | 메인 대 서브에이전트 | 메인만 크게 늘면 위임이 적은 것 |
+| agy, Atlassian MCP calls | agy 실패·프로브 상태, Jira 스킬 세션 안팎의 Jira·Confluence 호출 | `DEGRADED`·`STALE` 반복, 스킬 밖 쓰기 호출이 많음 |
+
+**3) 보관한다** — 기록은 기본 30일 뒤 지워진다. 작업 3~5건마다(늦어도 한 달에 한 번) 지난번 날짜를
+`--since` 로 주고 돌려 **리포트 파일만** 남긴다. 밖으로 보내기 전에 한 번 읽는다.
+
+**4) 숫자가 이상하면**
+
+- **전부 0:** Claude Code 가 업데이트되어 기록 형식이 바뀌었을 수 있다(오류 없이 0 이 나온다).
+- **"no transcripts" 로 종료 코드 2:** 그 폴더에서 `claude` 를 연 적이 없거나, 다른 계정으로 열었다. 하위
+  폴더에서 연 세션은 다른 곳에 기록되니 `--transcripts <폴더>` 로 지정한다.
+- 훅 실행 수는 하한이다. 모든 실행이 기록되지는 않는다.
 
 ---
 
@@ -615,7 +696,8 @@ flowchart TD
   올린다. **같은 PR 에서 README 를 그 릴리스 내용에 맞게 고친다** — 버전 표기만이 아니라 새 스킬·상태·절차와
   11장 검증 현황까지(4.3.0 은 이걸 빠뜨렸다) → `develop` 을 `main` 으로 PR, **merge commit 으로 머지**
   (squash 하면 다음 릴리스 PR 이 충돌한다 — 4.3.0 의 #59) → `main` 의 머지 커밋에 태그를 달고 push.
-- 다음 변경은 실사용 리포트를 근거로 정한다. 방향과 운영 원칙: [`docs/direction-review-2026-10-03.md`](docs/direction-review-2026-10-03.md)
+- 다음 변경은 실사용 근거(`usage-report`, 불편 메모)로 정한다. 최근 점검과 다음 점검의 기준선:
+  [`docs/direction-review-2026-10-13.md`](docs/direction-review-2026-10-13.md)
 
 ### 명령
 

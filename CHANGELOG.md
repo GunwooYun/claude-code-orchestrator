@@ -8,14 +8,19 @@ projects, and changes are driven by evidence from that use (`usage-report`
 counts, or "what I tried, what happened, how I worked around it").
 
 Upgrading an adopted copy: do not copy the template over it — follow README
-「자주 밟는 함정」 (compare each file with the template's history, merge what the
+「업그레이드 절차」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-10-14
+
 The second direction review (`docs/direction-review-2026-10-13.md`), judged on
-counts from a real work project for the first time. Breaking: the next release
-is 5.0.0.
+counts from a real work project for the first time: what real use did not need
+is removed (breaking), `usage-report` makes that evidence re-runnable, and the
+Jira/Confluence skills are fixed where real use broke them. README is rewritten
+for a first-time reader (terms, Jira/Confluence map, a 5.0.0 upgrade list,
+`usage-report` step by step).
 
 **Upgrade — do this in one step**, or every Bash call reports a missing hook:
 1. Delete `.claude/hooks/log-cli-tools.py`,
