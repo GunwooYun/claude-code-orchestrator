@@ -42,13 +42,14 @@
 | `/initproject` | 2 | 2 |
 | `/feature` | 0 (옛 이름 `/startproject` 2) | 입력 5 + 모델 1. 두 세션이 설계 리뷰·검증까지, 1개는 격리 리뷰까지 |
 | `/isolated-review` | 0 | 실행 로그 4, 리포트 7 |
-| `/ticket` `/jira-setup` `/doc-write` | 0 | 각 1 + Atlassian MCP 약 150회 (20일) |
+| `/ticket` `/jira-setup` `/doc-write` | 0 | 각 1. 설치(09-29) 뒤 Atlassian MCP 17회는 모두 스킬 세션 안 |
 | deep-reasoning / general-purpose | 24 / 15 | 71 / 20 |
 | agy 호출 | 35 (로그 28건 중 실패·빈 응답 10) | 23 (실패 1) |
 | field-report | 0 | 0 |
 
-meta-keylink-edge 의 MCP 약 150회는 Jira 생성 6·수정 33·댓글 27·전이 7, Confluence 생성 12·수정 10
-이다. 프로브 14회(READY 13, DEGRADED 1), 검증 스크립트 실행은 `verify-task` 37·`save` 6·`unit` 2
+meta-keylink-edge 의 Atlassian MCP 153회(Jira 생성 6·수정 33·댓글 27·전이 7, Confluence 생성 12·수정
+10 등) 중 136회는 스킬 설치 전, 옛 템플릿 시절의 호출이다(2026-10-14 `usage-report` 의 Atlassian 칸으로
+다시 셈). 프로브 14회(READY 13, DEGRADED 1), 검증 스크립트 실행은 `verify-task` 37·`save` 6·`unit` 2
 모두 실패 0이다(2026-10-14 수정한 집계로 다시 셈. 아래 「바로잡은 것」).
 상한 3,000줄 REFUSED 는 1회(4,311줄), `cap_exclude` 는 미사용이다. 집계는 ssh 표준입력으로
 `usage-report` 를 실행했고 원격에 아무것도 쓰지 않았다 [확인함].
@@ -77,10 +78,12 @@ Python 은 3.10 이다. 로컬 3.10 으로 배포 스크립트 전부를 불러 
 | README: "/doc-write, /jira-setup, /ticket 아직 돌려 본 적 없다" | 업무 프로젝트 집계 전의 기록이다. 정정했다 |
 | 이 문서 첫판: 서브에이전트 출력 토큰 약 12만 | 약 194만. `usage-report` 가 한 응답의 **첫** 레코드만 셌는데, 서브에이전트 transcript 는 스트리밍 중 레코드마다 `output_tokens` 가 늘어난다 |
 | 이 문서 첫판: `verify-task` 60·`save` 16·`unit` 4, 프로브 READY 10 | 37·6·2, READY 13. 검증 스크립트는 `cat` 처럼 이름만 나와도 실행으로 셌고(고친 직후 32 로 셌다가, `time -p …` 로 돌린 실행 5회를 놓친 것을 재리뷰가 찾았다), 프로브 상태는 출력의 첫 단어만 읽어 이어 붙인 호출을 놓쳤다 |
+| 이 문서 첫판: "각 1 + Atlassian MCP 약 150회", "스킬보다 직접 MCP 호출이 대부분" | 153회 중 136회는 스킬 설치(09-29) 전 기록이다. 설치 뒤 17회는 모두 스킬 세션 안이다. 기간을 나누지 않고 합친 숫자를 비교했다 |
 
-여섯 건 중 세 건은 업무 프로젝트를 보기 전에 다른 프로젝트의 숫자로 일반화한 것이고, 세 건은 집계
-스크립트의 오류다. 뒤의 두 줄은 리뷰(deep-reasoning, 사람이 연 세션)가 실제 transcript 로 찾았고,
-`usage-report` 를 고친 뒤 다시 셌다.
+처음 여섯 건 중 세 건은 업무 프로젝트를 보기 전에 다른 프로젝트의 숫자로 일반화한 것이고, 세 건은 집계
+스크립트의 오류다. 다섯·여섯 번째 줄은 리뷰(deep-reasoning, 사람이 연 세션)가 실제 transcript 로 찾았고,
+`usage-report` 를 고친 뒤 다시 셌다. 일곱 번째 줄은 2026-10-14 세 스킬 분석에서 찾았다. 기간을 나누지
+않은 합계였고, `usage-report` 에 Atlassian 칸을 더해 다시 셌다.
 
 ### fork 이후 규모
 
@@ -130,7 +133,8 @@ deep-reasoning 138.
 발생 근거가 없거나 다음 점검으로 미룬다.
 
 - `/orchestrator-version` 재판단 (5.0.0 뒤)
-- Jira 계열은 스킬보다 직접 MCP 호출이 대부분이다. 스킬이 도움이 되는지는 다음 집계에서 본다 [추론].
+- ~~Jira 계열은 스킬보다 직접 MCP 호출이 대부분이다~~ 틀림(「바로잡은 것」). 스킬 설치 뒤에는 스킬 밖
+  호출이 0회다. `/ticket` 의 마무리(댓글·전이)는 설치 뒤 아직 일어나지 않았다.
 - `--plan` 이 남은 옛 훅의 등록을 짚지 않는다.
 - `dev-environment.md` 의 "ty 는 없는 경로에서 exit 0" 은 ty 0.0.86 에서 사실이 아니다(exit 2).
   정정은 다음 변경에 묶는다.
