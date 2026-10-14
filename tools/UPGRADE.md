@@ -102,8 +102,8 @@ Work from `CLONE` (it is on `vNEW`). Paths are relative to the project root.
   (`git -C "$CLONE" diff vOLD vNEW -- <path>`) for information; only the CHANGELOG hand
   steps below change it.
 - REPLACE, ADD, DELETE — the project never edited it (an untouched skeleton such as
-  `docs/DESIGN.md`): **Ask** once for the list — take the new version (as the table below
-  does) / keep the project's. A CHANGELOG hand step that names one of them wins.
+  `docs/DESIGN.md`): **Ask** once for the list — take upstream (the new version, or the
+  deletion, as the table below does) / keep the project's. A CHANGELOG hand step that names one of them wins.
 
 The table is for every path not kept by these rules.
 
@@ -167,14 +167,17 @@ Then `cat .claude/ORCHESTRATOR_VERSION` (must say `NEW`) and `git status`.
 
 **Ask:** commit now? If yes:
 
-Stage only what steps 5 changed — not whole directories, which may hold untracked
+Stage only what step 5 changed — not whole directories, which may hold untracked
 runtime files (`.claude/logs/`, `__pycache__/`):
 
 ```bash
 git add -- <each path written or added in step 5>
 git add -u -- .claude CLAUDE.md $( [ -d .agents ] && echo .agents )   # deletions and edits
 git commit -m "chore: upgrade claude-code-orchestrator template to vNEW"
+git ls-files --error-unmatch -- <each ADD path taken in step 5>        # must exit 0
 ```
+
+The last line fails on an added file that was left out of the commit: stage it and amend.
 
 Local-only template files (step 1) skip this; the backup is their way back.
 
