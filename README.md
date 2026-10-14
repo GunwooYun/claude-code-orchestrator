@@ -527,20 +527,32 @@ git worktree add --detach ../<project>-review <작업 브랜치>
 **템플릿을 그대로 다시 복사하면 안 된다.** `/initproject` 로 맞춘 내용과 진행 중인 작업 기록이 원본으로
 덮어써진다. 파일마다 "프로젝트가 고쳤는가"를 확인하고 골라서 가져온다. 아래 순서를 매번 같게 따른다.
 
-아래 명령은 Linux / macOS 기준이다. 🖥️ 는 **터미널**에 입력하는 것, 💬 는 **Claude 세션**(`claude` 를
-실행한 화면)에 입력하는 것이다. `<...>` 부분만 바꿔서 그대로 붙여 넣는다. 템플릿 클론 위치는
-`~/claude-code-orchestrator` 로 가정한다. Windows 는 Git Bash 에서 같은 명령을 쓰거나, 🖥️ 단계를 Claude
-세션에 "이 명령을 실행해 줘"로 맡긴다(미검증).
+🖥️ 는 **터미널**에 입력하는 것, 💬 는 **Claude 세션**(`claude` 를 실행한 화면)에 입력하는 것이다. 터미널 명령은
+**Linux / macOS** 와 **Windows (PowerShell)** 를 나눠 적었다. `<...>` 부분만 바꿔서 그대로 붙여 넣는다. 템플릿 클론
+위치는 홈 폴더의 `claude-code-orchestrator` 로 가정한다.
+
+> Windows 명령은 아직 실제로 돌려 보지 않았다([11장](#11-지금-무엇이-검증됐나)). 막히면 그 🖥️ 단계를 Claude
+> 세션에 "이 명령을 실행해 줘"로 맡긴다.
 
 #### 0단계 — 템플릿 클론 준비 (처음 한 번)
 
-🖥️ 업그레이드 도구는 이 저장소에만 있고 프로젝트에는 복사되지 않는다. 한 번 클론해 둔다.
+업그레이드 도구는 이 저장소에만 있고 프로젝트에는 복사되지 않는다. 한 번 클론해 둔다.
+
+🖥️ Linux / macOS
 
 ```bash
 git clone https://github.com/GunwooYun/claude-code-orchestrator.git ~/claude-code-orchestrator
 ```
 
-🖥️ 업그레이드할 때마다 최신 릴리스로 맞춘다.
+🖥️ Windows (PowerShell)
+
+```powershell
+git clone https://github.com/GunwooYun/claude-code-orchestrator.git "$HOME\claude-code-orchestrator"
+```
+
+업그레이드할 때마다 최신 릴리스로 맞춘다.
+
+🖥️ Linux / macOS
 
 ```bash
 git -C ~/claude-code-orchestrator switch main
@@ -548,12 +560,20 @@ git -C ~/claude-code-orchestrator pull
 git -C ~/claude-code-orchestrator fetch --tags
 ```
 
+🖥️ Windows (PowerShell)
+
+```powershell
+git -C "$HOME\claude-code-orchestrator" switch main
+git -C "$HOME\claude-code-orchestrator" pull
+git -C "$HOME\claude-code-orchestrator" fetch --tags
+```
+
 #### 1단계 — 하던 작업을 정리하고 업그레이드 브랜치 만들기
 
 진행 중인 작업 단위가 있으면 먼저 끝내고 커밋한다. 업그레이드는 **작업 단위 사이에, 별도 브랜치에서** 한다 —
-문제가 생기면 업그레이드 커밋만 되돌릴 수 있다.
+문제가 생기면 업그레이드 커밋만 되돌릴 수 있다. 프로젝트 루트에서 실행한다.
 
-🖥️ 프로젝트 루트에서:
+🖥️ Linux / macOS
 
 ```bash
 cd <프로젝트 루트>
@@ -562,38 +582,67 @@ cat .claude/ORCHESTRATOR_VERSION            # 지금 버전
 git switch -c upgrade-orchestrator
 ```
 
+🖥️ Windows (PowerShell)
+
+```powershell
+cd <프로젝트 루트>
+git status                                  # 깨끗한지 확인 (커밋하지 않은 변경이 없어야 한다)
+Get-Content .claude\ORCHESTRATOR_VERSION    # 지금 버전
+git switch -c upgrade-orchestrator
+```
+
 #### 2단계 — 기준선 저장 (업그레이드 전 숫자)
 
-🖥️ 지금 템플릿이 어떻게 쓰이고 있는지 개수를 저장한다. 템플릿 클론의 스크립트를 쓰므로 프로젝트가 옛 버전이어도
-된다. 저장 위치는 저장소 밖(`~/usage-reports/`)이다.
+지금 템플릿이 어떻게 쓰이고 있는지 개수를 저장한다. 템플릿 클론의 스크립트를 쓰므로 프로젝트가 옛 버전이어도
+된다. 저장 위치는 저장소 밖(홈 폴더의 `usage-reports`)이다.
+
+🖥️ Linux / macOS
 
 ```bash
 mkdir -p ~/usage-reports
 python3 ~/claude-code-orchestrator/.claude/bin/usage-report > ~/usage-reports/$(basename "$PWD")-$(date +%F)-before.md
 ```
 
+🖥️ Windows (PowerShell) — `>` 대신 `Out-File -Encoding utf8` 을 쓴다(Windows PowerShell 의 `>` 는 UTF-16 으로 저장한다).
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\usage-reports" | Out-Null
+$name = Split-Path -Leaf (Get-Location); $day = Get-Date -Format yyyy-MM-dd
+python3 "$HOME\claude-code-orchestrator\.claude\bin\usage-report" | Out-File -Encoding utf8 "$HOME\usage-reports\$name-$day-before.md"
+```
+
 #### 3단계 — 백업
 
-🖥️ 템플릿 파일이 커밋돼 있지 않은(로컬 전용) 프로젝트라면 꼭 한다. 커밋돼 있어도 해 두면 편하다.
+템플릿 파일이 커밋돼 있지 않은(로컬 전용) 프로젝트라면 꼭 한다. 커밋돼 있어도 해 두면 편하다.
+
+🖥️ Linux / macOS
 
 ```bash
 tar czf ~/backup-$(basename "$PWD")-$(date +%F).tgz .claude .agents CLAUDE.md
 ```
 
+🖥️ Windows (PowerShell) — Windows 10 이상에는 `tar` 가 들어 있다.
+
+```powershell
+$name = Split-Path -Leaf (Get-Location); $day = Get-Date -Format yyyy-MM-dd
+tar -czf "$HOME\backup-$name-$day.tgz" .claude .agents CLAUDE.md
+```
+
 #### 4단계 — Claude 에게 분류표 만들게 하기
 
-🖥️ 프로젝트 루트에서 Claude 를 연다.
+🖥️ 프로젝트 루트에서 Claude 를 연다(모든 OS 같음).
 
 ```bash
 claude
 ```
 
-💬 아래를 붙여 넣는다. Claude 는 분류표만 만들고 **아무 파일도 바꾸지 않는다.**
+💬 아래를 붙여 넣는다. Claude 는 분류표만 만들고 **아무 파일도 바꾸지 않는다.** Windows 라면 클론 경로를
+`C:\Users\<사용자>\claude-code-orchestrator` 처럼 실제 경로로 바꾼다.
 
 ```text
 README 9장 「업그레이드 절차」대로 이 프로젝트의 템플릿을 업그레이드하려고 해.
 템플릿 클론은 ~/claude-code-orchestrator 야.
-지금은 4단계까지만 해 줘: python3 ~/claude-code-orchestrator/tools/upgrade-plan . 을 실행해서
+지금은 4단계까지만 해 줘: 클론의 tools/upgrade-plan 을 이 프로젝트 루트에 대해 실행해서
 분류표를 보여 주고, 클론의 CHANGELOG 에서 내 버전 이후 항목 중 손으로 해야 하는 일(업그레이드 단계)을 정리해 줘.
 아무 파일도 바꾸지 마.
 ```
@@ -623,7 +672,9 @@ README 9장 「업그레이드 절차」대로 이 프로젝트의 템플릿을 
 
 #### 7단계 — 확인하고 커밋
 
-🖥️ Claude 의 보고와 별개로 직접 한 번 확인한다.
+Claude 의 보고와 별개로 직접 한 번 확인한다.
+
+🖥️ Linux / macOS
 
 ```bash
 cat .claude/ORCHESTRATOR_VERSION              # 새 버전이어야 한다
@@ -632,43 +683,81 @@ cat .claude/ORCHESTRATOR_VERSION              # 새 버전이어야 한다
 git status                                    # 바뀐 파일 목록
 ```
 
-🖥️ 이상 없으면 커밋한다(템플릿 파일을 커밋하는 프로젝트일 때).
+🖥️ Windows (PowerShell) — `verify-*` 와 `agy-probe` 는 sh 스크립트라 PowerShell 에서 바로 실행되지 않는다.
+
+```powershell
+Get-Content .claude\ORCHESTRATOR_VERSION      # 새 버전이어야 한다
+git status                                    # 바뀐 파일 목록
+```
+
+💬 Windows 는 나머지를 Claude 에게 맡긴다:
+
+```text
+.claude/scripts/verify-task 와 .claude/bin/agy-probe 를 실행해서 종료 코드와 출력을 그대로 보여 줘.
+```
+
+이상 없으면 커밋한다(템플릿 파일을 커밋하는 프로젝트일 때).
+
+🖥️ Linux / macOS
 
 ```bash
 git add .claude .agents CLAUDE.md
 git commit -m "chore: upgrade claude-code-orchestrator template to v$(cat .claude/ORCHESTRATOR_VERSION)"
 ```
 
+🖥️ Windows (PowerShell)
+
+```powershell
+git add .claude .agents CLAUDE.md
+git commit -m "chore: upgrade claude-code-orchestrator template to v$(Get-Content .claude\ORCHESTRATOR_VERSION)"
+```
+
 그다음은 평소처럼 이 브랜치를 PR 로 올리거나 기본 브랜치에 머지한다.
 
 #### 8단계 — 며칠 써 보고 비교
 
-작업 3~5건을 평소처럼 한 뒤:
+작업 3~5건을 평소처럼 한 뒤 다시 센다. `<업그레이드한 날>` 은 `YYYY-MM-DD` 형식이다.
 
-🖥️
+🖥️ Linux / macOS
 
 ```bash
-python3 ~/claude-code-orchestrator/.claude/bin/usage-report --since <업그레이드한 날 YYYY-MM-DD> > ~/usage-reports/$(basename "$PWD")-$(date +%F)-after.md
+python3 ~/claude-code-orchestrator/.claude/bin/usage-report --since <업그레이드한 날> > ~/usage-reports/$(basename "$PWD")-$(date +%F)-after.md
+```
+
+🖥️ Windows (PowerShell)
+
+```powershell
+$name = Split-Path -Leaf (Get-Location); $day = Get-Date -Format yyyy-MM-dd
+python3 "$HOME\claude-code-orchestrator\.claude\bin\usage-report" --since <업그레이드한 날> | Out-File -Encoding utf8 "$HOME\usage-reports\$name-$day-after.md"
 ```
 
 💬
 
 ```text
-~/usage-reports/ 의 이 프로젝트 before 와 after 리포트를 비교해 줘.
+홈 폴더 usage-reports 의 이 프로젝트 before 와 after 리포트를 비교해 줘.
 위임(deep-reasoning·general-purpose), /feature 진행 단계, 게이트 실행, 훅 오류를 중심으로, 나빠진 게 있는지.
 ```
 
-**나빠졌으면 되돌린다.** 🖥️ 업그레이드 커밋 전체를 되돌리려면:
+**나빠졌으면 되돌린다.** 업그레이드 커밋 전체를 되돌리려면(모든 OS 같음):
 
 ```bash
 git revert <업그레이드 커밋 해시>
 ```
 
-커밋하지 않은(로컬 전용) 프로젝트는 3단계 백업으로 되돌린다:
+커밋하지 않은(로컬 전용) 프로젝트는 3단계 백업으로 되돌린다.
+
+🖥️ Linux / macOS
 
 ```bash
 rm -rf .claude .agents CLAUDE.md
 tar xzf ~/backup-<프로젝트>-<날짜>.tgz
+```
+
+🖥️ Windows (PowerShell)
+
+```powershell
+Remove-Item -Recurse -Force .claude, .agents, CLAUDE.md
+tar -xzf "$HOME\backup-<프로젝트>-<날짜>.tgz"
 ```
 
 **진행 중인 작업은 이어진다.** 업그레이드가 바꾸는 것은 템플릿 소유 파일뿐이다. 작업 상태는 프로젝트 소유
