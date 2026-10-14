@@ -28,34 +28,15 @@ slug 를 agy 가 더는 제공하지 않음 — slug 를 직접 고르지 말고
 남긴다.
 
 이 표는 `.claude/rules/antigravity-delegation.md` 의 "When agy is unavailable" 와 **의도적으로
-중복**이다 — 서브에이전트가 `.claude/rules/` 를 받는다는 보장이 없고(Claude Code 문서는
-`CLAUDE.md` 만 명시한다), 스킬도 서브에이전트에서 자동 발동하지 않는다. 실행에 필요한
-것은 실행자 파일에 있어야 한다. 규칙 쪽을 고치면 여기도 같은 커밋에서 고친다.
+중복**이다(서브에이전트가 rules 를 받는다는 보장이 없다). 규칙 쪽을 고치면 여기도 같은 커밋에서 고친다.
 
 ## Why Subagents Matter: Context Management
 
-**CRITICAL**: The main Claude Code orchestrator has limited context. Heavy operations (agy research, large file analysis) should run in subagents to preserve main context.
-
-```
-┌────────────────────────────────────────────────────────────┐
-│  Main Claude Code (Orchestrator)                           │
-│  → Minimal context usage                                   │
-│  → Delegates heavy work to subagents                       │
-│                                                            │
-│  ┌──────────────────────────────────────────────────────┐ │
-│  │  Subagent (You)                                       │ │
-│  │  → Consumes own context (isolated)                    │ │
-│  │  → Directly calls agy                                 │ │
-│  │  → Returns concise summary to main                    │ │
-│  └──────────────────────────────────────────────────────┘ │
-└────────────────────────────────────────────────────────────┘
-```
+**CRITICAL**: The main orchestrator has limited context. You run isolated, call agy directly, and return a concise summary to main.
 
 ## Language Rules
 
-- **Thinking/Reasoning**: English
-- **Code**: English (variable names, function names, comments, docstrings)
-- **Output to user**: Korean
+Think and write code in English; output to the user in Korean.
 
 ## Role
 
@@ -102,10 +83,9 @@ agy -p "{question}" --model {slug} --output-format json --print-timeout 9m
 **Run every agy call with the Bash tool's `timeout` set to `600000`** (10 min,
 the foreground maximum), and keep `--print-timeout` at `9m` or less (agy's
 default is 5m). The Bash tool's default limit is 2 min. A command still running
-then is moved to the background, not stopped: it finishes, but the log hook
-already recorded it, with empty stdout, as `[FAILED]`, and it does not fire
-again. This was measured on 2026-10-07. With agy's own limit under the Bash
-tool's limit, agy finishes or fails in the foreground and the log can judge it.
+then is moved to the background, not stopped: it finishes, but its answer no
+longer reaches you. With agy's own limit under the Bash tool's limit, agy
+finishes or fails in the foreground.
 
 Do not redirect stderr to /dev/null — it carries soft-deny notices when a
 tool was skipped for lack of permission (the run still exits 0). File reads
@@ -116,21 +96,12 @@ templates above) — you, not agy, persist results to `.claude/docs/research/`.
 If a call still returns an empty response with a permission notice on
 stderr, report that to the orchestrator.
 
-Let agy's stdout reach your output. The log hook reads the command's stdout as
-agy's answer, so do not redirect it to a file (`> out.log`), capture it with
-`$(...)`, or put other printing commands in the same call (`|| echo ...`,
-`; echo EXIT_CODE=$?`) — the stdout is then your echo, not agy's answer (seen
-in a real project: 10 of 28 calls logged as a success with `EXIT_CODE=0` as
-the response). Need a copy on disk? `agy ... | tee <file>`. Need the outcome?
-`--output-format json` and read `.status`. The log judges only one shape —
-`agy …` alone on ONE line in the foreground (copy the templates above as they
-are), optionally after `VAR=x` or `env`/`command`/`exec`/`time`/`!`/`sudo`/
-`nohup`, with at most `<file` and a final `| tee <file>`; no `#` comment, no
-backslash (escaped quote or line continuation), no backtick, `$'`, `$"`, `$(`
-or `${` (put a prompt from a file in the prompt text, not `"$(cat f)"`), and
-stderr left alone. Anything else (including `2>file`, `2>&1`, `cd x && agy`,
-`timeout`, `run_in_background`) is logged as `[UNKNOWN]` with a blank response
-(`stdout_target` says why), never as a success.
+Let agy's stdout reach your output: do not redirect it to a file (`> out.log`)
+or put other printing commands in the same call (`|| echo ...`,
+`; echo EXIT_CODE=$?`) — the output is then your echo, not agy's answer. Need a
+copy on disk? `agy ... | tee <file>`. Need the outcome? `--output-format json`
+and read `.status`. Run one agy call per command, in the foreground (copy the
+templates above as they are).
 
 **When to call agy:**
 - Library research: "Best practices for X in 2025"
@@ -166,7 +137,6 @@ stderr left alone. Anything else (including `2>file`, `2>&1`, `cd x && agy`,
 ### Context Awareness
 - Check `.claude/docs/` for existing documentation
 - Follow patterns established in the codebase
-- Respect library constraints in `.claude/docs/libraries/`
 
 ## Output Format
 
@@ -209,7 +179,7 @@ Include: common patterns and anti-patterns, library recommendations with a
 comparison, performance and security considerations, code examples.
 ```
 
-agy prompt for one library (web; save to `.claude/docs/libraries/{library}.md`,
+agy prompt for one library (web; save to `.claude/docs/research/{library}.md`,
 and compare with that file if it already exists):
 
 ```

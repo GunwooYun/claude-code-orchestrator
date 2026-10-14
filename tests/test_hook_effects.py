@@ -25,9 +25,7 @@ everything; a silence case alone is satisfied by a hook that never fires.
 `.claude/hooks/` with no entry here fails, instead of being silently untested.
 
 Side effects are redirected rather than mocked, so the real file is exercised:
-hooks honouring `CLAUDE_PROJECT_DIR` get a temporary project, and
-`log-cli-tools.py`, whose log path is relative to its own `__file__`, is copied
-into a temporary tree.
+hooks honouring `CLAUDE_PROJECT_DIR` get a temporary project.
 
 Measured, 2026-09-26 (reproduce by editing a hook and running both modules):
 
@@ -54,7 +52,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import stat
 import subprocess
 import sys
@@ -104,7 +101,6 @@ def context(result: subprocess.CompletedProcess[str]) -> str:
 # Hooks whose effect is asserted below. Keyed by filename so the structural test
 # can compare it against what is on disk.
 COVERED = {
-    "log-cli-tools.py",
     "lint-on-save.py",
     "bash-write-check.py",
 }
@@ -122,72 +118,6 @@ class CoverageTests(unittest.TestCase):
         )
         stale = COVERED - on_disk
         self.assertEqual(set(), stale, f"{sorted(stale)} is listed but not on disk")
-
-
-class LogCliToolsTests(unittest.TestCase):
-    """
-    Run a COPY of the hook so its log path, which is relative to its own
-    `__file__`, lands in a temporary tree instead of this repository's log.
-    """
-
-    def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name)
-        (self.root / "hooks").mkdir()
-        self.hook = self.root / "hooks" / "log-cli-tools.py"
-        shutil.copy2(HOOKS / "log-cli-tools.py", self.hook)
-        self.log = self.root / "logs" / "cli-tools.jsonl"
-
-    def bash(self, command: str) -> subprocess.CompletedProcess[str]:
-        return run(
-            self.hook,
-            {
-                "hook_event_name": "PostToolUse",
-                "tool_name": "Bash",
-                "tool_input": {"command": command},
-                "tool_response": {"stdout": "answer\n", "stderr": ""},
-            },
-            cwd=self.root,
-        )
-
-    def test_an_agy_call_is_written_to_the_log(self) -> None:
-        result = self.bash('agy -p "one fact" --model gemini-3.7-flash-low')
-        self.assertTrue(self.log.is_file(), "nothing was logged")
-        entry = json.loads(self.log.read_text(encoding="utf-8").splitlines()[-1])
-        self.assertEqual("antigravity", entry["tool"])
-        self.assertEqual("gemini-3.7-flash-low", entry["model"])
-        self.assertIn("cli-tools.jsonl", context(result))
-
-    def test_a_redirected_call_is_logged_as_unknown(self) -> None:
-        """
-        V20: the unknown outcome must survive the JSONL round trip — `null`, not
-        a dropped key or `false` — because whoever reads the log back relies on it.
-        """
-        self.bash('agy -p "q" > out.log; echo EXIT_CODE=$?')
-        entry = json.loads(self.log.read_text(encoding="utf-8").splitlines()[-1])
-        self.assertIn("success", entry)
-        self.assertIsNone(entry["success"])
-        self.assertEqual("file:out.log", entry["stdout_target"])
-        self.assertEqual("", entry["response"])
-
-    def test_another_binary_with_a_p_flag_is_not_logged(self) -> None:
-        """
-        `-p` means "prompt" only for agy. Found by mutation: with the quoted
-        mention as the only silence case, treating every command as an agy call
-        still passed, because that command had no bare `-p` token either. This
-        one does, so it exercises the check on the binary itself.
-        """
-        result = self.bash("mkdir -p .claude/docs/research")
-        self.assertFalse(self.log.exists(), "mkdir was logged as an agy call")
-        self.assertEqual("", context(result))
-
-    def test_a_command_that_only_mentions_agy_is_not_logged(self) -> None:
-        result = self.bash("grep -rn 'agy -p' .claude/rules")
-        self.assertFalse(
-            self.log.exists(), "a quoted mention was logged as a real call"
-        )
-        self.assertEqual("", context(result))
 
 
 class LintOnSaveTests(unittest.TestCase):
@@ -360,7 +290,7 @@ class BashWriteCheckTests(unittest.TestCase):
         self.call("PreToolUse", "npm run build > build/log.txt")
         self.touch("build/out.py")
         self.touch("node_modules/pkg/index.py")
-        self.touch(".claude/logs/cli-tools.jsonl")
+        self.touch(".claude/logs/example.jsonl")
         self.assertEqual("", self.call("PostToolUse", "npm run build > build/log.txt"))
 
     def test_package_stores_and_framework_caches_are_not_scanned(self) -> None:

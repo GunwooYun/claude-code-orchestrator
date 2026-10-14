@@ -24,9 +24,16 @@ package = false
 # ============================================================
 # ruff
 # ============================================================
+# The template develops on 3.11+ (`uv run`), but its hooks and scripts run on
+# an adopter's system `python3` — 3.10 on a real one (2026-10-13), where a
+# `datetime.UTC` import failed every call for two weeks. So the gate checks
+# against 3.10: ruff stops suggesting 3.11-only names, ty rejects them.
 [tool.ruff]
-target-version = "py311"
+target-version = "py310"
 line-length = 88
+
+[tool.ty.environment]
+python-version = "3.10"
 
 [tool.ruff.lint]
 select = [
@@ -63,9 +70,9 @@ addopts = "-v --tb=short"
 # Read-only checks: these are the gate, so they must be able to fail.
 # Extensionless Python scripts are named explicitly: a directory scan skips
 # them (tests/test_isolated_review.py checks this list stays complete).
-lint = "ruff check . .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check"
-format-check = "ruff format --check . .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check"
-typecheck = "ty check .claude/hooks .claude/skills/isolated-review/run-review .claude/skills/isolated-review/field-report .claude/skills/orchestrator-version/check tests"
+lint = "ruff check . .claude/skills/isolated-review/run-review tools/upgrade-plan .claude/bin/usage-report"
+format-check = "ruff format --check . .claude/skills/isolated-review/run-review tools/upgrade-plan .claude/bin/usage-report"
+typecheck = "ty check .claude/hooks .claude/skills/isolated-review/run-review tools/upgrade-plan .claude/bin/usage-report tests"
 # Parallel: most of the suite waits on subprocesses (90 s serial, ~25 s here).
 # Scoped `verify-task <path>` and bare `uv run pytest` stay serial.
 test = "pytest -n auto"

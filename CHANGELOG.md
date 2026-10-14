@@ -1,15 +1,116 @@
 # Changelog
 
 `.claude/ORCHESTRATOR_VERSION` in an adopting project says which entry below it
-came from. Check it with `/orchestrator-version` (add `--check-latest` to compare
-with the newest release). Releases are tags `vX.Y.Z` on `main`; `develop` holds
+came from (`cat .claude/ORCHESTRATOR_VERSION`). Releases are tags `vX.Y.Z` on `main`; `develop` holds
 work that has not been released. From 1.0.0 the template is used across real
-projects, and changes are driven by reports from that use (field reports, or
-"what I tried, what happened, how I worked around it").
+projects, and changes are driven by evidence from that use (`usage-report`
+counts, or "what I tried, what happened, how I worked around it").
 
 Upgrading an adopted copy: do not copy the template over it — follow README
-「자주 밟는 함정」 (compare each file with the template's history, merge what the
+「업그레이드 절차」 (compare each file with the template's history, merge what the
 project changed, back up a gitignored `.claude/` first).
+
+## [Unreleased]
+
+## [5.0.0] - 2026-10-14
+
+The second direction review (`docs/direction-review-2026-10-13.md`), judged on
+counts from a real work project for the first time: what real use did not need
+is removed (breaking), `usage-report` makes that evidence re-runnable, and the
+Jira/Confluence skills are fixed where real use broke them. README is rewritten
+for a first-time reader (terms, Jira/Confluence map, a 5.0.0 upgrade list,
+`usage-report` step by step).
+
+**Upgrade — do this in one step**, or every Bash call reports a missing hook:
+1. Delete `.claude/hooks/log-cli-tools.py`,
+   `.claude/skills/isolated-review/field-report`,
+   `.claude/docs/templates/field-report.md`,
+   `.claude/skills/feature/references/` and
+   `.claude/skills/orchestrator-version/` (all still in tag `v4.3.1`).
+   `python3 <template clone>/tools/upgrade-plan <project>` lists them as DELETE.
+2. In your `.claude/settings.json`, remove the PostToolUse `Bash` entry
+   `python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/log-cli-tools.py"`.
+3. Project-owned files, by hand: drop the `.claude/logs/cli-tools.jsonl` row
+   from `CLAUDE.md`'s 문서구조 table and the "Your past calls are logged…"
+   sentence from `.agents/rules/AGENTS.md`.
+4. Optional: delete `.claude/logs/cli-tools.jsonl` and
+   `.claude/logs/isolated-review/refusals.jsonl`; nothing reads them.
+5. A copy upgraded in place from before 2.0.0 may still carry hooks removed
+   then. `tools/upgrade-plan` lists such files under PROJECT-ONLY
+   "last shipped in X" but does not flag their `settings.json` entries: check
+   those by hand, and delete file and registration together (a registered
+   leftover keeps running). Then run `.claude/bin/usage-report --since <today>`
+   after a day of work: every hook's `errors` column should be 0.
+6. `.claude/docs/writing-style.md` is now project-owned. If your copy is the
+   template's, take the new file (it no longer carries another team's
+   Confluence links and examples); if you edited it, keep yours.
+7. If `/jira-setup` ran before and `CLAUDE.md` no longer has `### Jira` (a
+   second `/initproject` could erase it), run `/jira-setup` again.
+
+### Removed (breaking)
+- Skill `/orchestrator-version`. Its upgrade classifier (`--plan`) moves to
+  the repository-only `tools/upgrade-plan`: it was always run from a template
+  clone, never from the project's copy, so it no longer ships. Showing the
+  installed version and `--check-latest` are gone (`cat
+  .claude/ORCHESTRATOR_VERSION`; the plan lists the CHANGELOG entries in
+  between). 0 uses in both real adopters; its description cost every session.
+- Hook `log-cli-tools`. On a real adopter whose system `python3` is 3.10 it
+  failed on every Bash call for two weeks (1,933 non-blocking errors,
+  `ImportError: datetime.UTC`) and nothing showed it; nothing read its log.
+  Gone with it: the call-shape rules it imposed on the general-purpose
+  executor. agy calls are now counted from transcripts by `usage-report`.
+- `/isolated-review`'s `field-report` and its template: never run in a real
+  adopter; its one report was closed unsent. `run-review` no longer writes
+  `refusals.jsonl`; a REFUSED reason is still redacted before it is printed.
+- `/feature`'s `references/` (task patterns, review procedures, research
+  fallback): opened 0 times in two real projects' transcripts. What still
+  matters is in `SKILL.md` and `CLAUDE.md`.
+- Unreferenced `summary.jpg`; pointers to `.claude/docs/libraries/` (removed
+  in 4.2.0).
+
+### Added
+- `.claude/bin/usage-report`: counts how a project used the template, from
+  what is already recorded — Claude Code's session transcripts. Per template
+  skill (0 included), subagent type, hook file (runs, output, **errors**);
+  denied tool calls; verify-tier runs and failures; how far `/feature`
+  sessions get; main vs subagent tokens; agy calls and probe states. Counts
+  only: no text, paths, or names that are not the template's. No new hook.
+  Transcripts are deleted after `cleanupPeriodDays` (default 30), so run it
+  periodically with `--since` and keep the reports. On another machine,
+  without copying anything there:
+  `ssh <host> 'cd <project> && python3 - --since <date>' < .claude/bin/usage-report`.
+  It also splits Atlassian MCP calls (read / write) between sessions that ran
+  `/ticket`, `/jira-setup` or `/doc-write` and the rest.
+
+### Changed
+- The gate type-checks shipped Python at 3.10 (`ty` python-version, ruff
+  target `py310`): hooks run on the adopter's system `python3`, and ruff's
+  py311 target is what suggested the `datetime.UTC` import.
+- `/isolated-review`: the 3,000-line-cap refusal names `cap_exclude`. The cap
+  was hit in two real projects (4,104 and 4,311 lines); the option was used
+  in neither.
+- README: `/doc-write`, `/jira-setup`, `/ticket` are in real use (the "never
+  run" row predated counting that project); "leaving usage evidence" replaces
+  the field-report section (sections renumbered).
+- Shorter shipped prose where it did not instruct: the general-purpose
+  diagram, AGENTS.md's position tree, isolated-review SKILL.md's lock details
+  (the do-not-loosen rule, Fable pin and A2 fallback stay), known-pitfalls'
+  hook-writing facts. `docs/` design history trimmed (git keeps it).
+- The template's own tests: prose checks with no incident behind them removed;
+  the Python-floor test now runs at 3.10 instead of being skipped.
+
+### Fixed
+- `## Project Setup` kept by every writer: on the work project `### Jira`
+  (from `/jira-setup`) was gone after a second `/initproject` recreated the
+  section, so `/ticket` had no write policy. `/initproject`, `/jira-setup` and
+  `/doc-write` now edit only their own part and create the section if absent.
+- `.claude/docs/writing-style.md` shipped one team's Confluence links, its
+  reference report and sentences from its own domain. Removed; the patterns
+  stay as general rules. It is project-owned from now on (`tools/upgrade-plan` marks it).
+- `/ticket`, `/jira-setup`, `/doc-write` shortened where they restated the
+  style guide, each other or their own steps.
+- "1 skill call vs ~150 MCP calls" (README, design docs) mixed two periods:
+  136 of 153 calls predate the skills; after installation all 17 ran in sessions that ran them.
 
 ## [4.3.1] - 2026-10-13
 

@@ -3,12 +3,10 @@ Versioning: which orchestrator a project adopted must be visible in the project.
 
 Adopting projects copy `.claude/` (README Quick Start), so the version has to
 live inside it: `.claude/ORCHESTRATOR_VERSION`. `CHANGELOG.md` stays at the
-repository root and is read over the network only when asked
-(`/orchestrator-version --check-latest`) — company networks may block GitHub.
+repository root.
 
-Most checks here are behavioural (the check script against a local stand-in for
-the upstream repository). The README and /initproject checks are each a
-drift tripwire over prose, not behavioural coverage.
+The plan checks are behavioural (tools/upgrade-plan against a local stand-in
+for the template clone).
 """
 
 from __future__ import annotations
@@ -28,21 +26,8 @@ from pathlib import Path
 REPO = Path(__file__).parent.parent
 VERSION_FILE = REPO / ".claude" / "ORCHESTRATOR_VERSION"
 CHANGELOG = REPO / "CHANGELOG.md"
-CHECK = REPO / ".claude" / "skills" / "orchestrator-version" / "check"
+CHECK = REPO / "tools" / "upgrade-plan"
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
-
-FIXTURE_CHANGELOG = """# Changelog
-
-## [0.2.0] - 2026-10-10
-
-### Added
-- NEW-IN-0.2.0 isolated review.
-
-## [0.1.0] - 2026-09-30
-
-### Added
-- OLD-IN-0.1.0 first release.
-"""
 
 
 def changelog_versions(text: str) -> list[str]:
@@ -69,177 +54,13 @@ class VersionRecordTests(unittest.TestCase):
 
     def test_unreleased_is_at_most_one_section_above_every_release(self) -> None:
         # A release renames it; one left below a version entry would be read as
-        # part of that release by /orchestrator-version.
+        # part of that release by the upgrade tooling.
         text = CHANGELOG.read_text(encoding="utf-8")
         unreleased = [m.start() for m in re.finditer(r"^## \[Unreleased\]", text, re.M)]
         self.assertLessEqual(len(unreleased), 1)
         first_release = re.search(r"^## \[\d+\.\d+\.\d+\]", text, re.M)
         if unreleased and first_release:
             self.assertLess(unreleased[0], first_release.start())
-
-    def test_quick_start_clones_the_release_branch(self) -> None:
-        # Drift tripwire over prose. The default branch is `develop` (work in
-        # progress); a bare `git clone` would hand adopters unreleased changes.
-        readme = (REPO / "README.md").read_text(encoding="utf-8")
-        clones = [
-            line
-            for line in readme.splitlines()
-            if "git clone" in line and "claude-code-orchestrator" in line
-        ]
-        self.assertTrue(clones, "the scan no longer finds the Quick Start clone")
-        for line in clones:
-            with self.subTest(line=line.strip()[:60]):
-                self.assertIn("--branch main", line)
-
-    def test_initproject_records_the_adopted_version(self) -> None:
-        # Drift tripwire over prose.
-        skill = (REPO / ".claude/skills/initproject/SKILL.md").read_text(
-            encoding="utf-8"
-        )
-        step4 = skill.split("## Step 4", 1)[1].split("\n## ", 1)[0]
-        self.assertIn("ORCHESTRATOR_VERSION", step4)
-
-
-class CheckScriptTests(unittest.TestCase):
-    """The check script against a local stand-in for the upstream repository."""
-
-    def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.tmp = Path(tmp.name)
-        # An adopting project's copy: only .claude/ travels.
-        self.project = self.tmp / "project"
-        (self.project / ".claude/skills").mkdir(parents=True)
-        shutil.copytree(
-            CHECK.parent, self.project / ".claude/skills/orchestrator-version"
-        )
-        (self.project / ".claude/ORCHESTRATOR_VERSION").write_text(
-            "0.1.0\n", encoding="utf-8"
-        )
-        # Upstream: a bare repo with release tags, and its changelog.
-        self.upstream = self.tmp / "upstream.git"
-        work = self.tmp / "work"
-        for args in (
-            ["init", "-q", "--bare", str(self.upstream)],
-            ["init", "-q", str(work)],
-        ):
-            subprocess.run(["git", *args], check=True, capture_output=True)
-        subprocess.run(
-            [
-                "git",
-                "-C",
-                str(work),
-                "commit",
-                "-q",
-                "--allow-empty",
-                "-m",
-                "x",
-                "-c",
-                "user.email=t@e",
-                "-c",
-                "user.name=t",
-            ],
-            capture_output=True,
-        )
-        self.git_work = work
-        self.changelog = self.tmp / "CHANGELOG.md"
-        self.changelog.write_text(FIXTURE_CHANGELOG, encoding="utf-8")
-
-    def tag_upstream(self, *tags: str) -> None:
-        env = {
-            **os.environ,
-            "GIT_AUTHOR_NAME": "t",
-            "GIT_AUTHOR_EMAIL": "t@e",
-            "GIT_COMMITTER_NAME": "t",
-            "GIT_COMMITTER_EMAIL": "t@e",
-        }
-        subprocess.run(
-            [
-                "git",
-                "-C",
-                str(self.git_work),
-                "commit",
-                "-q",
-                "--allow-empty",
-                "-m",
-                "release",
-            ],
-            check=True,
-            env=env,
-        )
-        for tag in tags:
-            subprocess.run(["git", "-C", str(self.git_work), "tag", tag], check=True)
-        subprocess.run(
-            [
-                "git",
-                "-C",
-                str(self.git_work),
-                "push",
-                "-q",
-                str(self.upstream),
-                "--tags",
-            ],
-            check=True,
-            capture_output=True,
-        )
-
-    def check(
-        self, *args: str, upstream: str | None = None
-    ) -> subprocess.CompletedProcess[str]:
-        env = dict(os.environ)
-        env["ORCHESTRATOR_UPSTREAM"] = upstream or str(self.upstream)
-        env["ORCHESTRATOR_CHANGELOG_URL"] = self.changelog.as_uri()
-        return subprocess.run(
-            [
-                sys.executable,
-                str(self.project / ".claude/skills/orchestrator-version/check"),
-                *args,
-            ],
-            cwd=self.project,
-            capture_output=True,
-            text=True,
-            timeout=60,
-            env=env,
-        )
-
-    def test_offline_shows_the_installed_version_and_touches_no_network(self) -> None:
-        result = self.check(upstream="/nonexistent/should-not-be-contacted")
-        self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("installed: 0.1.0", result.stdout)
-        self.assertIn("--check-latest", result.stdout)
-        self.assertNotIn("unavailable", result.stdout)
-
-    def test_a_copy_without_the_file_is_called_pre_versioning(self) -> None:
-        (self.project / ".claude/ORCHESTRATOR_VERSION").unlink()
-        result = self.check()
-        self.assertEqual(0, result.returncode)
-        self.assertIn("installed: unknown", result.stdout)
-        self.assertIn("before v0.1.0", result.stdout)
-
-    def test_newer_release_is_reported_with_only_the_newer_changes(self) -> None:
-        self.tag_upstream("v0.1.0", "v0.2.0", "not-a-version")
-        result = self.check("--check-latest")
-        self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("latest: 0.2.0", result.stdout)
-        self.assertIn("NEW-IN-0.2.0", result.stdout)
-        self.assertNotIn("OLD-IN-0.1.0", result.stdout)
-
-    def test_up_to_date_is_said_plainly(self) -> None:
-        self.tag_upstream("v0.1.0")
-        result = self.check("--check-latest")
-        self.assertIn("latest: 0.1.0", result.stdout)
-        self.assertIn("up to date", result.stdout)
-
-    def test_an_unreachable_upstream_is_reported_not_raised(self) -> None:
-        result = self.check("--check-latest", upstream="/nonexistent/upstream.git")
-        self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("latest: unavailable", result.stdout)
-        self.assertNotIn("Traceback", result.stderr)
-
-    def test_versions_compare_numerically_not_as_text(self) -> None:
-        self.tag_upstream("v0.9.0", "v0.10.0")
-        result = self.check("--check-latest")
-        self.assertIn("latest: 0.10.0", result.stdout)
 
 
 GIT_ENV = {
@@ -255,8 +76,8 @@ class PlanFixture(unittest.TestCase):
     """
     A stand-in template clone with release tags, and a project copy beside it.
 
-    The check script is copied INTO the template and that copy runs: --plan
-    takes the template to be the repository holding the script, so running the
+    The script is copied INTO the template (tools/upgrade-plan) and that copy
+    runs: the template is the repository holding the script, so running the
     real script would read this repository's real tags.
     """
 
@@ -267,11 +88,9 @@ class PlanFixture(unittest.TestCase):
         self.tpl = self.tmp / "tpl"
         self.project = self.tmp / "project"
         self.git("init", "-q", str(self.tpl))
-        skill = ".claude/skills/orchestrator-version"
-        no_cache = shutil.ignore_patterns("__pycache__")
-        shutil.copytree(CHECK.parent, self.tpl / skill, ignore=no_cache)
-        # The project carries the same skill copy, as a real one would.
-        shutil.copytree(CHECK.parent, self.project / skill, ignore=no_cache)
+        (self.tpl / "tools").mkdir()
+        shutil.copy2(CHECK, self.tpl / "tools/upgrade-plan")
+        (self.project / ".claude").mkdir(parents=True)
 
     def git(self, *args: str) -> str:
         return subprocess.run(
@@ -305,9 +124,9 @@ class PlanFixture(unittest.TestCase):
     def plan(
         self, *args: str, script: Path | None = None
     ) -> subprocess.CompletedProcess[str]:
-        script = script or self.tpl / ".claude/skills/orchestrator-version/check"
+        script = script or self.tpl / "tools/upgrade-plan"
         return subprocess.run(
-            [sys.executable, str(script), "--plan", str(self.project), *args],
+            [sys.executable, str(script), str(self.project), *args],
             capture_output=True,
             text=True,
             timeout=60,
@@ -363,27 +182,24 @@ class PlanPreconditionTests(PlanFixture):
         # A project copy inside a product repo with its own release tags.
         other = self.tmp / "product"
         self.git("init", "-q", str(other))
-        shutil.copytree(CHECK.parent, other / ".claude/skills/orchestrator-version")
+        (other / "tools").mkdir()
+        shutil.copy2(CHECK, other / "tools/upgrade-plan")
         self.git("-C", str(other), "add", "-A")
         self.git("-C", str(other), "commit", "-q", "-m", "x")
         self.git("-C", str(other), "tag", "v2.0.0")
-        script = other / ".claude/skills/orchestrator-version/check"
+        script = other / "tools/upgrade-plan"
         result = self.plan("--from", "2.0.0", script=script)
         self.assertEqual(2, result.returncode)
         self.assertIn("not a claude-code-orchestrator clone", result.stderr)
 
     def test_a_script_outside_any_repo_is_refused(self) -> None:
-        copy = self.tmp / "loose/.claude/skills/orchestrator-version"
-        shutil.copytree(CHECK.parent, copy)
-        result = self.plan("--from", "1.0.0", script=copy / "check")
+        copy = self.tmp / "loose/tools"
+        copy.mkdir(parents=True)
+        shutil.copy2(CHECK, copy / "upgrade-plan")
+        result = self.plan("--from", "1.0.0", script=copy / "upgrade-plan")
         self.assertEqual(2, result.returncode)
         self.assertIn("not a git repository", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
-
-    def test_plan_and_check_latest_do_not_combine(self) -> None:
-        result = self.plan("--check-latest")
-        self.assertEqual(2, result.returncode)
-        self.assertIn("not allowed with", result.stderr)
 
 
 CLASS_HEADER = re.compile(r"^([A-Z-]+) \((\d+)\) — ")
@@ -492,8 +308,8 @@ class PlanClassificationTests(PlanFixture):
             },
             got,
         )
-        # noop.md and the two skill files match 2.0.0.
-        self.assertIn("NOOP: 3 files already match 2.0.0", result.stdout)
+        # Only noop.md matches 2.0.0.
+        self.assertIn("NOOP: 1 files already match 2.0.0", result.stdout)
 
     def test_project_only_names_the_newest_release_that_shipped_it(self) -> None:
         only = parse_plan(self.plan().stdout)["PROJECT-ONLY"]
@@ -506,6 +322,17 @@ class PlanClassificationTests(PlanFixture):
         self.assertIn("  CLAUDE.md  [project-owned]", stdout)
         self.assertIn("  .claude/keep.md\n", stdout)
         self.assertIn("[project-owned] = do not overwrite", stdout)
+
+    def test_the_style_guide_is_project_owned(self) -> None:
+        # It is a team's house style (it shipped one team's Confluence links
+        # until 5.0.0): an upgrade must not overwrite a project's version.
+        loader = importlib.machinery.SourceFileLoader("upgrade_plan", str(CHECK))
+        spec = importlib.util.spec_from_loader("upgrade_plan", loader)
+        assert spec is not None
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+        self.assertTrue(module.project_owned(".claude/docs/writing-style.md"))
+        self.assertFalse(module.project_owned(".claude/rules/writing-style.md"))
 
     def test_runtime_state_is_not_part_of_the_plan(self) -> None:
         runtime = (
@@ -536,7 +363,7 @@ class PlanClassificationTests(PlanFixture):
         (self.project / ".claude/raw.bin").write_bytes(raw)
         stdout = self.plan().stdout
         self.assertNotIn("raw.bin", stdout)
-        self.assertIn("NOOP: 4 files", stdout)
+        self.assertIn("NOOP: 2 files", stdout)
 
     def test_the_plan_writes_nothing(self) -> None:
         project_before = tree_state(self.project)
@@ -654,34 +481,6 @@ class PlanExtrasTests(PlanFixture):
         self.assertIn(
             "CHANGELOG — read the entries 2.0.0, 1.5.0 for hand steps", stdout
         )
-
-
-class ProjectOwnedListTests(unittest.TestCase):
-    """VO: the script's project-owned list is README §9's, word for word."""
-
-    def test_every_project_owned_entry_is_in_the_readme_upgrade_section(self) -> None:
-        loader = importlib.machinery.SourceFileLoader("check_script", str(CHECK))
-        spec = importlib.util.spec_from_loader("check_script", loader)
-        assert spec is not None
-        module = importlib.util.module_from_spec(spec)
-        loader.exec_module(module)
-        readme = (REPO / "README.md").read_text(encoding="utf-8")
-        section = readme.split("### 업그레이드 절차", 1)[1].split("\n---", 1)[0]
-        owned_line = next(
-            line for line in section.splitlines() if "덮어쓰면 안 되는 것" in line
-        )
-        owned_text = owned_line + section.split(owned_line, 1)[1].split("\n- ", 1)[0]
-        for entry in module.PROJECT_OWNED:
-            self.assertIn(f"`{entry}`", owned_text)
-
-    def test_the_upgrade_procedure_and_the_skill_point_at_plan(self) -> None:
-        # Prose tripwire: the README procedure and the skill must name the tool,
-        # or upgrades go back to hand-written hash loops.
-        readme = (REPO / "README.md").read_text(encoding="utf-8")
-        section = readme.split("### 업그레이드 절차", 1)[1].split("\n---", 1)[0]
-        skill = (CHECK.parent / "SKILL.md").read_text(encoding="utf-8")
-        for text in (section, skill):
-            self.assertIn("orchestrator-version/check --plan", text)
 
 
 if __name__ == "__main__":

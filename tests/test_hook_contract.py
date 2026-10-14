@@ -90,7 +90,6 @@ PAYLOADS: dict[str, dict] = {
 # Which payloads each hook must tolerate. Every hook must survive every payload
 # it can plausibly receive, plus the degenerate inputs below.
 HOOK_PAYLOADS: dict[str, tuple[str, ...]] = {
-    "log-cli-tools.py": ("PostToolUse-Bash",),
     "lint-on-save.py": ("PostToolUse-Edit",),
     "bash-write-check.py": ("PreToolUse-Bash", "PostToolUse-Bash"),
 }

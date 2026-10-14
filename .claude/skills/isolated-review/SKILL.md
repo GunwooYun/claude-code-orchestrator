@@ -15,12 +15,9 @@ exists because a weaker one was measured to fail.
 
 ## What it is and is not
 
-| | `/isolated-review` (A1) | Person-opened session (A2) |
-|---|---|---|
-| Shares context with the implementer | No | No |
-| Request text | Fixed `prompt.md`; nobody adds to it | Whatever the person writes |
-| Can be questioned or argued with | **No** — one report | Yes |
-| Can write or run anything | **No** — Read/Grep/Glob only | Whatever the person allows |
+A1 (this skill): fixed `prompt.md` nobody adds to, one report that cannot be
+questioned, Read/Grep/Glob only. A2 (person-opened session): the person writes
+the request, can discuss, and decides what is allowed.
 
 It does not replace A2. When a finding needs discussion, or the change touches a
 security boundary or a public interface, also ask the user for an A2 review.
@@ -102,8 +99,7 @@ denied both, so a second round cannot anchor on the first.
 
 **The transcript holds the full text of every file the reviewer read** (each
 `tool_result`). Secrets are redacted by pattern only, so treat that directory
-like the source itself: do not share or attach it. `field-report` never copies
-it.
+like the source itself: do not share or attach it.
 
 If the run-review process is signalled (SIGTERM, SIGHUP, Ctrl-C) it stops the
 reviewer, redacts the transcript and still writes a FAILED report. SIGKILL
@@ -113,36 +109,13 @@ ceiling, and nothing is redacted.
 ## Locks (do not loosen without re-measuring)
 
 - `--restricted --tools Read,Grep,Glob --strict-mcp-config --disable-slash-commands`
-  — an allow list does NOT restrict; a reviewer wrote a file under
-  `--allowedTools Read` because the project allowed `Write(*)`.
-- The run's own `system/init` event must show exactly Read/Grep/Glob and no
-  slash commands; otherwise FAILED.
-- A Haiku probe with the same settings runs first and must be refused two reads
-  (one inside the repo, one outside); otherwise the review never starts.
-- Deny rules: secrets, the project's own Read denies, and — for neutrality —
-  every `CLAUDE.md` and `CLAUDE.local.md` (nested ones too), `.agents/` (agy's
-  context file, written by the implementing side), logs and
-  earlier reports. A change to one of those files is therefore reviewed from
-  the diff only. The verification plan
-  reaches the reviewer only as "implementer-authored claims".
-- Model pinned to Fable; ceilings $20 / 45 min; no `--bare` (it drops OAuth
-  login and CLAUDE.md). The neutrality measurements were made on Fable, so the
-  pin is not a setting: **a project without Fable access cannot use this skill**
-  (every run ends FAILED, "pinned model 'fable' did not run") and uses a
-  person-opened A2 review instead. `/initproject` says so.
-- The scripts run with the project's `python3`, 3.8 or newer; they use only the
-  standard library.
-
-## Field reports
-
-This skill is being validated on real work in repositories its developers cannot
-see. After a few runs, the user sends a field report:
-`.claude/skills/isolated-review/field-report` drafts it (facts only — verdicts,
-costs, tool set, finding counts; never review text, code or secrets; paths
-hidden unless `--include-paths`), and the person adds a real / false / unsure
-verdict per finding and anything the review missed. How to fill it in:
-`.claude/docs/templates/field-report.md`. REFUSED runs write no report, so
-`run-review` records them in `.claude/logs/isolated-review/refusals.jsonl`.
+  and the Read denies (secrets, every `CLAUDE.md`/`CLAUDE.local.md`, `.agents/`,
+  logs, earlier reports) must not be loosened: an allow list does NOT restrict,
+  and no `--bare`. Why, and the init check and probe: `docs/isolated-review.md`
+  and `run-review`.
+- Model pinned to Fable; ceilings $20 / 45 min. **A project without Fable access
+  cannot use this skill** (every run ends FAILED, "pinned model 'fable' did not
+  run") and uses a person-opened A2 review instead. `/initproject` says so.
 
 ## Limits
 
@@ -150,7 +123,7 @@ verdict per finding and anything the review missed. How to fill it in:
 - It reads; it does not run anything. Defects that only show when code runs —
   a mutation that leaves the tests green, a library that behaves differently
   from its types — are what it missed when replayed against person-opened
-  reviews (2026-10-01). Its "this test would fail if…" claims are by reading,
+  reviews. Its "this test would fail if…" claims are by reading,
   and its severities run high: weigh its facts, not its labels.
 - Bias is reduced, not zero: this session still picks the base branch and when
   to run.

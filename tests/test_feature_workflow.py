@@ -228,20 +228,6 @@ class TierVocabularyTests(unittest.TestCase):
                 "implementation loop has no command to run",
             )
 
-    def test_the_tier_table_is_owned_by_the_testing_rule(self) -> None:
-        """
-        The budgets and who-runs-what belong in one place. The skill may name the
-        tiers and point; restating the table is how the two drifted before.
-        """
-        rule = (REPO / ".claude" / "rules" / "testing.md").read_text(encoding="utf-8")
-        for tier in self.TIERS:
-            self.assertIn(f"`{tier}`", rule, f"the rule does not define {tier}")
-        self.assertIn(
-            "testing.md",
-            text(),
-            "the skill must point at the rule that owns the tier definitions",
-        )
-
 
 class TodoToolTests(unittest.TestCase):
     """

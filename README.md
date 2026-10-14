@@ -5,7 +5,8 @@
 
 ![Claude Code Orchestrator](./summary.png)
 
-> 현재 버전: **4.3.1** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md).
+> 현재 버전: **5.0.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md). 4.x 에서 올린다면
+> [5.0.0 으로 올릴 때](#500-으로-올릴-때)를 먼저 본다.
 
 ## 목차
 
@@ -18,10 +19,9 @@
 7. [리뷰 받기 — `/isolated-review`](#7-리뷰-받기--isolated-review)
 8. [검증 계약 — `verify-*` 스크립트](#8-검증-계약--verify--스크립트)
 9. [버전 확인과 업그레이드](#9-버전-확인과-업그레이드)
-10. [실사용 리포트 보내기](#10-실사용-리포트-보내기)
-11. [자주 밟는 함정](#11-자주-밟는-함정)
-12. [지금 무엇이 검증됐나](#12-지금-무엇이-검증됐나)
-13. [이 저장소를 개발하는 사람에게](#13-이-저장소를-개발하는-사람에게)
+10. [자주 밟는 함정](#10-자주-밟는-함정)
+11. [지금 무엇이 검증됐나](#11-지금-무엇이-검증됐나)
+12. [이 저장소를 개발하는 사람에게](#12-이-저장소를-개발하는-사람에게)
 
 ---
 
@@ -43,6 +43,18 @@ Claude Code 에게 큰 일을 맡기면 금방 **컨텍스트(작업 기억)** �
 
 > **이 템플릿의 판단 기준은 하나다.** 무언가를 더하거나 고칠 때 "위임·컨텍스트 절약·결과 품질 중
 > 하나를 낫게 하는가?" 아니면 넣지 않는다. (`CLAUDE.md` 맨 앞에도 같은 문장이 있다.)
+
+### 먼저 알아 둘 용어
+
+| 용어 | 뜻 |
+|---|---|
+| **컨텍스트** | Claude 가 한 세션에서 기억하는 내용 전체. 읽은 파일·출력·대화가 모두 쌓이고, 가득 차면 앞부분이 요약되며 흐려진다 |
+| **서브에이전트** | 메인 Claude 가 일을 맡기는 별도의 Claude. 자기 컨텍스트에서 일하고 요약만 돌려준다 |
+| **스킬 (슬래시 커맨드)** | `/feature` 처럼 입력하면 정해진 절차가 시작되는 명령. `.claude/skills/` 에 있다 |
+| **훅** | Claude 가 파일을 고치거나 명령을 실행할 때 자동으로 도는 작은 스크립트. `.claude/hooks/` 에 있다 |
+| **검증 스크립트** | `.claude/scripts/verify-*`. 프로젝트가 건강한지 확인하는 명령을 담고, 종료 코드 0 이면 통과다 |
+| **agy** | Google 의 Antigravity CLI(Gemini). 많은 양을 싸게 읽는 일에 쓴다 |
+| **`CLAUDE.md`** | 매 세션 자동으로 읽히는 규칙 파일. 프로젝트 설정(`## Project Setup`)도 여기에 기록된다 |
 
 ---
 
@@ -91,7 +103,7 @@ your-project/
 ├── .agents/
 │   └── rules/AGENTS.md            # agy 가 읽는 프로젝트 설명
 └── .claude/
-    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 4.3.1)
+    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 5.0.0)
     ├── settings.json              # 훅 등록 + 권한(allow / ask / deny)
     ├── agents/                    # 서브에이전트 정의 (deep-reasoning, general-purpose)
     ├── skills/                    # 슬래시 커맨드 (아래 표)
@@ -99,6 +111,7 @@ your-project/
     ├── rules/                     # 세부 규칙 — 대부분 매 세션, paths: 가 있으면 맞는 파일을 열 때만
     ├── scripts/                   # 검증 계약: verify-save, verify-task (+README)
     ├── bin/                       # agy-probe — agy 를 지금 쓸 수 있는지 확인
+    │                              # usage-report — 이 프로젝트에서 템플릿을 어떻게 썼는지 개수만 집계
     └── docs/                      # 설계 기록·조사 결과·작성 가이드
 ```
 
@@ -109,10 +122,25 @@ your-project/
 | **`/initproject`** | 복사 직후 **프로젝트당 한 번** | 스택을 감지하고 템플릿을 이 프로젝트에 맞게 고친다 |
 | **`/feature <기능명>`** | **작업 하나마다** | 조사 → 요구사항 → 검증 계획 → 설계 리뷰 → 할 일 목록 → 승인 → 구현 → 리뷰 |
 | **`/isolated-review`** | 구현을 커밋한 뒤 | 이 세션과 무관한 격리된 리뷰어가 읽기 전용으로 리뷰한다 |
-| `/orchestrator-version` | 버전이 궁금할 때 | 설치된 버전과 최신 릴리스를 비교 |
 | `/agy-models` | agy 프로브가 `STALE` 일 때, 등급별 모델을 바꾸고 싶을 때 | agy 등급 T1~T4 의 모델을 사용자가 고른다 (`/initproject` 도 이 절차를 쓴다) |
 | `/jira-setup`, `/ticket` | Jira 를 쓰는 팀 | Jira 연결 설정, 티켓에서 작업 시작 |
 | `/doc-write` | Confluence·문서 작성 | 작성 규칙에 맞춰 문서를 쓰고 발행 |
+
+Jira·Confluence 를 쓰지 않는 프로젝트는 `.claude/skills/jira-setup/`, `.claude/skills/ticket/`,
+`.claude/skills/doc-write/` 를 지워도 된다. 지우면 매 세션 약 1KB 의 컨텍스트(`/ticket`·`/doc-write` 의
+설명)가 줄고, "문서로 정리해줘" 같은 말에 `/doc-write` 가 불리지 않는다. `.claude/rules/writing-style.md`
+는 남긴다 — 정직성 규칙은 계획서·보고서 전부에 적용되고 `/feature` 도 가리킨다.
+
+**Jira·Confluence 에 쓸 때 어디를 보나**
+
+| 하고 싶은 것 | 명령 | 규칙이 있는 곳 |
+|---|---|---|
+| 처음 연결 (프로젝트당 한 번) | `/jira-setup` | 사이트·프로젝트 키·전이 이름·**쓰기 정책**(코멘트·전이 전에 확인할지)을 `CLAUDE.md` 에 기록한다 |
+| 티켓으로 작업 시작 | `/ticket ABC-123` | 티켓을 읽고 `/feature` 로 넘긴다. 끝나면 기록된 쓰기 정책대로 코멘트·전이한다. 작업 중에는 티켓에 쓰지 않는다 |
+| Confluence 페이지·티켓 본문 작성 | "문서로 정리해줘" 또는 `/doc-write` | `.claude/docs/writing-style.md`(제목·위치·패널·발행 정책). 처음 한 번 스페이스와 부모 페이지를 묻고 기록한다 |
+
+`.claude/docs/writing-style.md` 는 팀의 문서 작성 규칙이다. 템플릿의 것은 출발점이니 팀 방식에 맞게 고쳐
+쓴다(업그레이드가 덮어쓰지 않는다).
 
 ### 훅 (자동으로 도는 검사)
 
@@ -120,7 +148,6 @@ your-project/
 |---|---|---|
 | `lint-on-save.py` | Claude 가 Edit/Write 로 파일을 고칠 때 | 그 파일 하나에 `.claude/scripts/verify-save <파일>` 을 돌려 결과를 Claude 에게 알린다 |
 | `bash-write-check.py` | Bash 명령 전후 | `sed -i`·리다이렉션처럼 Bash 로 쓴 파일(최대 5개)에도 같은 검사를 돌린다 — 안전망 |
-| `log-cli-tools.py` | Bash 로 agy 를 부른 뒤 | agy 입출력을 `.claude/logs/cli-tools.jsonl` 에 기록. **한 줄에 단독으로 부른 호출만** 성공·실패를 판정하고, 나머지(리다이렉트·`\|\| echo`·여러 줄 등)는 `success: null`(UNKNOWN)과 그 이유(`stdout_target`)로 남긴다 |
 | `_savecheck.py` | (공용 모듈) | 위 두 검사 훅이 함께 쓰는 코드 |
 
 훅은 **아무것도 막지 않는다** — 알리기만 한다.
@@ -199,7 +226,7 @@ Remove-Item -Recurse -Force .starter
 - **`--branch main` 을 꼭 붙인다.** `main` 에는 릴리스된 버전만 있다. 기본 브랜치 `develop` 에는 아직
   검증 중인 변경이 들어 있다.
 - 받은 버전은 `.claude/ORCHESTRATOR_VERSION` 에 기록된다.
-- **Windows 는 아직 실제로 검증하지 않았다**([12장](#12-지금-무엇이-검증됐나)). 훅은 `python3` 명령으로
+- **Windows 는 아직 실제로 검증하지 않았다**([11장](#11-지금-무엇이-검증됐나)). 훅은 `python3` 명령으로
   등록돼 있으므로, PowerShell 에서 `python3 --version` 이 Python 3.10 이상을 출력하는지 먼저 확인한다
   (Microsoft Store 설치 안내 창이 뜨면 `python3` 이 실제 Python 을 가리키지 않는 것이다).
   `verify-*` 는 sh 셸 스크립트라 PowerShell·cmd 에서 직접 실행되지 않는다 — `/initproject` 에 Windows 라고
@@ -285,7 +312,8 @@ agy 할당량이 넉넉하면 전부 high 로 두어도 된다. 나중에 `STALE
 `/agy-models` 만 다시 실행한다.
 
 **Step 4 — `CLAUDE.md` 갱신.** 맨 위 제목을 프로젝트 이름으로 바꾸고, `## 기술 스택` 에 실제 명령을 적고,
-`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v4.3.1`)을 기록한다.
+`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v5.0.0`)을 기록한다. 나중에 `/jira-setup`·
+`/doc-write` 가 같은 섹션에 `### Jira`·`### Confluence` 를 덧붙인다 — 각자 자기 부분만 고친다.
 
 **Step 5 — 검증 스크립트 작성.** Step 2 의 답으로 `.claude/scripts/verify-save`, `verify-task` 등을 만든다.
 이것이 이후 모든 검증의 기준이 된다 ([8장](#8-검증-계약--verify--스크립트)). **포매터(black 등)는 프로젝트가
@@ -490,11 +518,9 @@ git worktree add --detach ../<project>-review <작업 브랜치>
 
 ## 9. 버전 확인과 업그레이드
 
-```bash
-claude
-> /orchestrator-version                 # 설치된 버전
-> /orchestrator-version --check-latest  # 최신 릴리스와 비교, 바뀐 내역 요약
-```
+**내 프로젝트의 버전:** `cat .claude/ORCHESTRATOR_VERSION` (Windows: `Get-Content .claude\ORCHESTRATOR_VERSION`).
+**최신 버전:** 이 저장소의 [Releases](https://github.com/GunwooYun/claude-code-orchestrator/releases) 또는
+`CHANGELOG.md` 맨 위 항목. 그 사이에 무엇이 바뀌었는지는 아래 분류 도구가 CHANGELOG 항목까지 함께 보여 준다.
 
 ### 업그레이드 절차
 
@@ -509,16 +535,18 @@ flowchart TD
     C -- "고침" --> E["새 버전을 받고<br/>프로젝트 수정을 다시 적용"]
     C -- "새 버전에서 삭제됨" --> F["삭제<br/>(훅이면 settings.json 등록도 함께!)"]
     C -- "새 버전에 새로 생김" --> H["추가<br/>(실행 파일이면 settings.json 허용도 함께)"]
-    D --> G["4. 검사: 훅 등록 경로가 모두 실제 파일인지,<br/>/orchestrator-version 이 새 버전인지"]
+    D --> G["4. 검사: 훅 등록 경로가 모두 실제 파일인지,<br/>ORCHESTRATOR_VERSION 이 새 버전인지"]
     E --> G
     F --> G
     H --> G
 ```
 
-- **3번 분류표는 도구가 만든다** (읽기 전용, 아무것도 바꾸지 않는다). 템플릿 클론의 스크립트로 실행한다 —
-  프로젝트에 있는 사본은 옛 버전이라 이 옵션이 없을 수 있다:
+- **3번 분류표는 도구가 만든다** (읽기 전용, 아무것도 바꾸지 않는다). 이 저장소를 클론해 두고 거기서
+  실행한다. 도구는 프로젝트에 복사되지 않는다:
   `git -C <템플릿 클론> fetch --tags` 후
-  `python3 <템플릿 클론>/.claude/skills/orchestrator-version/check --plan <프로젝트 루트>`.
+  `python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>`.
+  옛 버전 = 프로젝트의 `.claude/ORCHESTRATOR_VERSION`(없으면 `--from X.Y.Z`), 새 버전 = 클론의 최신 태그
+  (`--to X.Y.Z` 로 중간 버전까지만).
   파일마다 REPLACE·MERGE·KEEP·DELETE·ADD·PROJECT-ONLY 등으로 나누고, 예전 업그레이드에서 지웠어야 할
   파일은 PROJECT-ONLY 아래 "last shipped in X" 로 모아 보여 준다. 실행 권한을 잃은 스크립트, 지워질 훅을
   가리키는 `settings.json` 등록, 읽어야 할 CHANGELOG 항목도 함께 나온다.
@@ -528,46 +556,43 @@ flowchart TD
   (`diff` 나 `git diff --no-index` 는 내용이 같아도 실행 권한 차이만으로 "다르다"고 나온다.)
 - 대개 그대로 교체해도 되는 것(템플릿 소유): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`,
   `.claude/bin/`, `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
-  `rules/security.md`, `rules/language.md`, `rules/writing-style.md`, `docs/writing-style.md`,
-  `docs/templates/field-report.md`, `scripts/README.md`, `ORCHESTRATOR_VERSION`(새 버전 값이 된다)
+  `rules/security.md`, `rules/language.md`, `rules/writing-style.md`,
+  `scripts/README.md`, `ORCHESTRATOR_VERSION`(새 버전 값이 된다)
   — 단, 프로젝트가 고친 흔적이 있으면 병합한다. `/agy-models` 로 agy 모델을 바꿨다면
   `rules/antigravity-delegation.md` 는 MERGE 로 나온다: 모델 표 4줄은 내 값을 유지한다.
 - 업그레이드 뒤 `.claude/bin/agy-probe` 를 한 번 돌린다. `STALE` 이면 `/agy-models` 로 모델을 다시 고른다.
 - 덮어쓰면 안 되는 것(프로젝트 소유): `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`,
-  `rules/test-writing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
+  `rules/test-writing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`,
+  `docs/writing-style.md`(팀의 문서 작성 규칙 — 5.0.0 부터. 5.0.0 으로 올릴 때 고치지 않은 템플릿 사본이면 새 파일로 바꾼다).
 - 덮어쓰지 않는 파일이라도 CHANGELOG 가 바꿨다고 적은 부분(예: `settings.json` 의 허용 경로, `CLAUDE.md` 에서
   빠진 섹션)은 손으로 반영한다.
 - **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남아 있으면
   훅 파일이 없어서 모든 편집이 실패한다. (3.0.0 은 1.x 대비 훅 6개를 지웠다.)
-- 이 과정을 Claude 에게 시켜도 된다: "CHANGELOG 를 보고 v1.1.0 → v3.0.0 업그레이드를 위 절차대로 해 줘.
+- 이 과정을 Claude 에게 시켜도 된다: "CHANGELOG 를 보고 v4.3.1 → v5.0.0 업그레이드를 위 절차대로 해 줘.
   먼저 파일별 분류표를 보여 주고 승인받은 뒤 진행해."
 
----
+### 5.0.0 으로 올릴 때
 
-## 10. 실사용 리포트 보내기
+5.0.0 은 쓰이지 않던 것을 걷어낸 릴리스라 **지우는 파일이 있다.** 훅 하나를 지우므로 **1·2번은 한 번에**
+해야 한다. 파일만 지우고 등록을 남기면 Bash 명령마다 훅 오류가 난다. 자세한 것은 `CHANGELOG.md` 의
+`[5.0.0]` 항목이다.
 
-이 템플릿은 **실제로 쓰면서 나온 리포트로만** 고친다. 쓰다가 불편하거나 이상했던 점을 남겨 주면 다음
-버전의 근거가 된다.
-
-| 종류 | 언제 | 무엇을 |
-|---|---|---|
-| 불편·버그 메모 | 생기는 즉시 | 세 줄: **무엇을 하려 했나 / 무슨 일이 있었나 / 어떻게 우회했나** |
-| 작업 기록 | 기능 하나가 끝날 때 | 걸린 시간 / 비용 / 막히거나 헷갈린 단계 |
-| 격리 리뷰 리포트 | 작업 3~5건마다 | 발견마다 real / false / unsure, 나중에 드러난 놓친 문제 |
-
-코드를 밖으로 가져갈 수 없는 저장소라면 초안 생성 스크립트를 쓴다. 코드·리뷰 본문·비밀값은 넣지 않고
-숫자와 판정만 뽑는다(파일 경로도 기본으로 가린다).
-
-```bash
-.claude/skills/isolated-review/field-report > /tmp/field-report.md
-```
-
-작성법: [`.claude/docs/templates/field-report.md`](.claude/docs/templates/field-report.md).
-**보내기 전에 전체를 한 번 읽는다** — 외부로 보내는 것이다.
+1. 파일을 지운다: `.claude/hooks/` 의 `log-cli-tools.py` 훅, `/isolated-review` 의 `field-report` 스크립트와
+   그 템플릿, `/feature` 의 `references` 폴더, `/orchestrator-version` 스킬 폴더(업그레이드 분류는 이제
+   템플릿 클론의 `tools/upgrade-plan` 이 한다). 정확한 경로는 CHANGELOG 1단계에 있다.
+2. `.claude/settings.json` 에서 `log-cli-tools.py` 를 부르는 PostToolUse `Bash` 항목을 지운다.
+3. `CLAUDE.md` 의 문서구조 표와 `.agents/rules/AGENTS.md` 에서 agy 호출 로그(`cli-tools.jsonl`)를 언급하는
+   줄을 지운다(CHANGELOG 3단계).
+4. 나머지 템플릿 파일은 위 업그레이드 절차대로 교체한다(`tools/upgrade-plan` 의 분류표). 1번의 파일들도
+   이 분류표에 DELETE 로 나온다.
+5. `.claude/docs/writing-style.md` 는 이제 프로젝트 소유다. 고치지 않았으면 새 파일로 바꾸고, 고쳤으면 그대로 둔다.
+6. `/jira-setup` 을 쓴 적이 있는데 `CLAUDE.md` 에 `### Jira` 가 없으면 `/jira-setup` 을 다시 실행한다.
+7. 하루 정도 쓴 뒤 `.claude/bin/usage-report --since <업그레이드한 날>` 을 돌려 "Hooks" 표의 `errors` 가
+   모두 0 인지 본다([사용 근거 남기기](#사용-근거-남기기)).
 
 ---
 
-## 11. 자주 밟는 함정
+## 10. 자주 밟는 함정
 
 - **템플릿을 다시 통째로 복사하지 않는다.** 맞춤화가 사라진다 → [9장 업그레이드 절차](#업그레이드-절차).
 - **훅 파일명을 바꾸거나 지우면 `settings.json` 등록도 같은 커밋에서 바꾼다.** 어긋나면 모든 편집이 막힌다.
@@ -575,8 +600,7 @@ flowchart TD
 - **서브에이전트는 서브에이전트를 못 띄운다.** 조사 중에 설계 판단이 필요하면 메인으로 돌아와 deep-reasoning 을 부른다.
 - **agy 헤드리스 호출이 빈 답을 주면 실패다**(exit 0 이어도). 조용히 넘어가지 않는다.
 - **agy 는 한 줄에 단독으로, Bash 도구 `timeout: 600000` 으로 부른다.** Bash 기본 제한(2분)을 넘으면
-  명령이 백그라운드로 옮겨지고, 정상 완료돼도 로그에는 `[FAILED]` 로 남는다(측정됨). 리다이렉트·`|| echo`·
-  인라인 주석을 붙이면 로그는 결과를 판정하지 못하고 `[UNKNOWN]` 으로 남긴다.
+  명령이 백그라운드로 옮겨져 답이 돌아오지 않는다. 리다이렉트·`|| echo` 를 붙이면 출력이 agy 의 답이 아니게 된다.
 - **파일 편집은 Edit/Write 로 한다.** Bash(`sed -i`·heredoc)로 고치면 저장 검사가 바로 돌지 않는다.
   예외: 컨테이너·원격·권한 필요 파일, 바이너리, 도구 실행 결과, 대량 치환.
 - **`verify-save` 가 조용하다고 동작하는 것은 아니다.** 다루지 않는 파일에는 침묵하는 게 계약이다.
@@ -587,12 +611,10 @@ flowchart TD
 - **`CLAUDE.md` 는 매 세션, 모든 서브에이전트 호출에 통째로 로드된다.** 매 세션 필요한 것만 둔다.
   코드 규칙은 `paths:` 조건이 붙은 `.claude/rules/` 파일로, 운영 절차는 "언제 읽을지"를 적은 별도 문서로 뺀다.
 - **맨몸 `poe`·`pytest` 를 문서에 적지 않는다.** 프로젝트 환경 밖에서는 exit 127 이나 "0개 실행, OK" 가 난다.
-- **2026-09-28 이전에 복사한 사본의 `.claude/docs/DESIGN.md` 에는 이 템플릿 자신의 설계 기록이 섞여 있다.**
-  (`/initproject`, `/feature`, `/lens-review` 를 다루는 항목) 지우고 프로젝트 내용만 남긴다.
 
 ---
 
-## 12. 지금 무엇이 검증됐나
+## 11. 지금 무엇이 검증됐나
 
 무엇이 실제로 확인됐고 무엇이 아닌지 알고 쓰는 편이 낫다.
 
@@ -600,18 +622,68 @@ flowchart TD
 |---|---|
 | `/initproject` | 실제 프로젝트 두 곳(Node/TS 모노레포, Python+TS 포크)에서 대화형으로 완주 |
 | `/feature` | 실제 프로젝트에서 여러 작업 단위를 끝까지 진행 |
-| `/isolated-review` | 실작업 3회 + 지난 작업 6건 재검증. 사람이 연 리뷰가 놓친 진짜 문제를 찾았고 오탐은 없었다. 실행이 필요한 결함은 놓친다 |
-| deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중 (2026-10-07 측정: deep-reasoning 30회, agy 79회). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
-| `/orchestrator-version` | 업그레이드에 사용. `--plan` 은 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치) |
-| 훅 4개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
-| `log-cli-tools` 의 판정 | 판정하는 모든 모양을 실제 bash 로 돌려 대조하는 테스트(무작위 600개 + 리뷰 지적 입력)로 확인. Bash 시간 제한·백그라운드 동작은 가짜 agy 로 실측 |
+| `/isolated-review` | 실작업 3회 + 지난 작업 6건 재검증, 업무 프로젝트에서 4회 실행. 사람이 연 리뷰가 놓친 진짜 문제를 찾았고 오탐은 없었다. 실행이 필요한 결함은 놓친다 |
+| deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중. 업무 프로젝트(2026-08~10, `usage-report`): deep-reasoning 71회, general-purpose 20회, agy 23회(실패 1). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
+| `usage-report` | 도입 프로젝트 두 곳에서 실행(업무 서버는 ssh 로). 리뷰에서 집계 오류 4건(서브에이전트 토큰, 게이트 횟수, 프로브 상태, 날짜 경계)을 찾아 고친 뒤 다시 셌다. Claude Code 의 기록 형식은 문서화돼 있지 않아 버전이 바뀌면 틀릴 수 있다 |
+| `tools/upgrade-plan` (4.x 의 `/orchestrator-version --plan`) | 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치). 5.0.0 업그레이드 안내는 v3.0.1·v4.3.1 사본으로 확인했다 |
+| 훅 2개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `/agy-models` | 템플릿 저장소에서 실제 agy 1.3.3 으로 1회 완주(2026-10-13): Gemini 3개 제시 → 등급별 선택 → 표 기록 → 프로브 `READY`. 선택지가 4개를 넘는 경우와 `/initproject` Step 3c 경유 실행은 아직 돌려 보지 않았다 |
-| `/doc-write`, `/jira-setup`, `/ticket` | **아직 실제로 돌려 본 적 없다** |
+| `/doc-write`, `/jira-setup`, `/ticket` | 실제 업무 프로젝트에서 사용(2026-09~10, 각 1회 호출. 설치 뒤 Jira·Confluence 호출 17회는 모두 스킬을 실행한 세션 안). 이전 판의 "돌려 본 적 없다"는 그 프로젝트를 집계하기 전의 기록이었다 |
 | Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다 |
+
+### 사용 근거 남기기
+
+이 표와 템플릿은 실제로 쓰면서 나온 근거로만 고친다. 근거는 두 가지다.
+
+- **사용 횟수** — `.claude/bin/usage-report` (아래).
+- **불편·버그 메모** — 생기는 즉시 세 줄: **무엇을 하려 했나 / 무슨 일이 있었나 / 어떻게 우회했나**.
+
+#### `usage-report` 쓰는 법
+
+Claude Code 는 세션마다 기록(transcript)을 `~/.claude/projects/` 아래에 남긴다. `usage-report` 는 그 기록에서
+**개수만** 센다. 메시지 내용·코드·경로·프로젝트 이름은 출력하지 않는다. 새로 기록을 남기는 훅도 없다.
+
+**1) 실행한다** — 프로젝트 루트에서. Python 3.10 이상이면 되고 설치할 것은 없다.
+
+```bash
+.claude/bin/usage-report                       # 남아 있는 기록 전체
+.claude/bin/usage-report --since 2026-10-14    # 그 날짜(내 PC 의 날짜) 이후만
+.claude/bin/usage-report --json > report.json  # 기계가 읽을 형식으로 저장
+```
+
+템플릿이 없거나 옛 버전인 다른 머신의 프로젝트도 **아무것도 복사하지 않고** 셀 수 있다. 이 저장소의
+루트에서 스크립트를 ssh 로 흘려 보낸다(원격에는 아무것도 쓰지 않는다):
+
+```bash
+ssh -p <포트> <사용자>@<호스트> 'cd <그 머신에서 claude 를 연 폴더> && python3 - --since <날짜>' < .claude/bin/usage-report
+```
+
+**2) 읽는다** — 맨 위 줄의 기간과 세션 수가 예상과 맞는지 먼저 본다.
+
+| 표 | 볼 것 | 이상 신호 |
+|---|---|---|
+| Skills | 스킬별 직접 입력(typed)·모델 호출(by model) | 오랫동안 0 이면 지울 후보 |
+| Subagents | deep-reasoning·general-purpose 호출 수 | 거의 0 이면 위임이 안 되는 것 |
+| Hooks | 훅별 `errors` | **0 이 아니면 바로 확인한다.** 화면에 안 보이는 실패다(옛 버전 훅은 `(other)` 줄) |
+| Denied tool calls | 거부된 도구 | 같은 도구가 반복되면 권한 규칙을 조정 |
+| Gate | 티어별 실행·실패 | 작업을 했는데 0 이면 검증을 건너뛴 것 |
+| /feature sessions | 설계 리뷰·검증·격리 리뷰까지 간 세션 수 | 어느 단계를 건너뛰는지 |
+| Tokens | 메인 대 서브에이전트 | 메인만 크게 늘면 위임이 적은 것 |
+| agy, Atlassian MCP calls | agy 실패·프로브 상태, Jira 스킬 세션 안팎의 Jira·Confluence 호출 | `DEGRADED`·`STALE` 반복, 스킬 밖 쓰기 호출이 많음 |
+
+**3) 보관한다** — 기록은 기본 30일 뒤 지워진다. 작업 3~5건마다(늦어도 한 달에 한 번) 지난번 날짜를
+`--since` 로 주고 돌려 **리포트 파일만** 남긴다. 밖으로 보내기 전에 한 번 읽는다.
+
+**4) 숫자가 이상하면**
+
+- **전부 0:** Claude Code 가 업데이트되어 기록 형식이 바뀌었을 수 있다(오류 없이 0 이 나온다).
+- **"no transcripts" 로 종료 코드 2:** 그 폴더에서 `claude` 를 연 적이 없거나, 다른 계정으로 열었다. 하위
+  폴더에서 연 세션은 다른 곳에 기록되니 `--transcripts <폴더>` 로 지정한다.
+- 훅 실행 수는 하한이다. 모든 실행이 기록되지는 않는다.
 
 ---
 
-## 13. 이 저장소를 개발하는 사람에게
+## 12. 이 저장소를 개발하는 사람에게
 
 ### 브랜치와 릴리스
 
@@ -623,9 +695,10 @@ flowchart TD
 - 기능 PR 은 변경을 `CHANGELOG.md` 의 `## [Unreleased]` 에 적는다.
 - 릴리스: `## [Unreleased]` 를 `## [X.Y.Z] - 날짜` 로 바꾸고 `.claude/ORCHESTRATOR_VERSION` 을 같은 버전으로
   올린다. **같은 PR 에서 README 를 그 릴리스 내용에 맞게 고친다** — 버전 표기만이 아니라 새 스킬·상태·절차와
-  12장 검증 현황까지(4.3.0 은 이걸 빠뜨렸다) → `develop` 을 `main` 으로 PR, **merge commit 으로 머지**
+  11장 검증 현황까지(4.3.0 은 이걸 빠뜨렸다) → `develop` 을 `main` 으로 PR, **merge commit 으로 머지**
   (squash 하면 다음 릴리스 PR 이 충돌한다 — 4.3.0 의 #59) → `main` 의 머지 커밋에 태그를 달고 push.
-- 다음 변경은 실사용 리포트를 근거로 정한다. 방향과 운영 원칙: [`docs/direction-review-2026-10-03.md`](docs/direction-review-2026-10-03.md)
+- 다음 변경은 실사용 근거(`usage-report`, 불편 메모)로 정한다. 최근 점검과 다음 점검의 기준선:
+  [`docs/direction-review-2026-10-13.md`](docs/direction-review-2026-10-13.md)
 
 ### 명령
 
@@ -636,6 +709,7 @@ uv run poe fix              # 자동 수정은 사람이 의도해서
 uv run pytest -q            # 테스트만
 ```
 
+`tools/upgrade-plan` 은 도입 프로젝트의 업그레이드 분류표를 만드는 저장소 전용 도구다([9장](#9-버전-확인과-업그레이드)).
 `tests/` 는 대부분 이 저장소 자신을 검사하므로 프로젝트에 복사하지 않는다. 검증 계약을 스택과 무관하게
 확인하는 `tests/test_verify_scripts.py` 만 필요하면 따로 가져간다.
 

@@ -14,7 +14,10 @@ in order; skip a step when it does not apply and say so in the final report.
 
 - `CLAUDE.md`: touch only the H1 title line, `## 기술 스택(Tech Stack)` and `## Project Setup`
   (create it if missing, place it after `## 언어 프로토콜` and
-  before `## Current Project`). Never edit the
+  before `## Current Project`). In `## Project Setup` edit only your own lines and
+  keep every subsection other skills wrote (`### Jira`, `### Confluence`) — never
+  rewrite `## Project Setup` as a whole: a second run that recreated it erased a
+  project's `### Jira`, and `/ticket` lost its write policy. Never edit the
   other sections. Replace the H1 in place (Step 4); never add a second one. The section lifetimes are defined in
   `CLAUDE.md` → 「`CLAUDE.md` 섹션의 수명」: `## Project Setup` holds what lasts as
   long as the project, `## Current Project` is replaced per work unit by
@@ -184,13 +187,14 @@ Keep exactly one H1; the template's own sections below them stay as they are.
 In `## Project Setup`, record which template release this project adopted:
 `Orchestrator: v<contents of .claude/ORCHESTRATOR_VERSION>, adopted <today>`. If
 that file is missing the copy predates versioning — write `unknown (pre-0.1.0
-copy)`. A later upgrade starts from this line (`/orchestrator-version`).
+copy)`. A later upgrade starts from this version (README 「업그레이드 절차」).
 
 Replace the body of `## 기술 스택(Tech Stack)` with the detected stack: language
 and framework versions, package manager, quality tools with versions, how the
 project runs (container vs local), a `공통 명령어` block with the **real**
 commands, the commit convention and default branch, then
-`→ 참고: .claude/rules/dev-environment.md`. Add/refresh `## Project Setup`
+`→ 참고: .claude/rules/dev-environment.md`. Add to `## Project Setup` (or update
+your own lines in it; see Ground rules)
 with the overview, the `완료 지점` list and the conventions from Step 2 — that section outlives every
 single work unit, and `/feature` replaces `## Current Project`, not this one.
 Leave `## Current Project` for `/feature` to write.
