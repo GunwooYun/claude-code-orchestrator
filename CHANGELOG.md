@@ -22,10 +22,12 @@ project changed, back up a gitignored `.claude/` first).
   before this release paste one prompt instead (README 「업그레이드 절차」).
 - `tools/UPGRADE.md` — the one upgrade procedure (repository-only, never
   copied). After applying, it re-runs `upgrade-plan --from <old>`: only MERGE
-  and KEEP may remain (no REPLACE / ADD / DELETE). `[project-owned]` files are
-  never copied or merged, whatever their class; only CHANGELOG hand steps
-  change them. Local-only template files (`.git/info/exclude`) roll back from
-  the backup.
+  and KEEP may remain (no REPLACE / ADD / DELETE, except project-owned files
+  the user kept). A `[project-owned]` file the project edited is never copied
+  or merged, even as MERGE (`CLAUDE.md`); only CHANGELOG hand steps change it.
+  One it never edited (REPLACE) is offered. The commit stages only the files
+  the upgrade changed. Local-only template files (`.git/info/exclude`) roll
+  back from the backup.
 - `tools/hook-check <project>` — runs every hook registered in the project's
   `settings.json` with a payload it reacts to and fails naming the hook that
   crashed, swallowed its own error (`hook error (ignored)`), or whose file is

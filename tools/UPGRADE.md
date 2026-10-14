@@ -94,10 +94,17 @@ MERGE set; step 6 checks against them.
 
 Work from `CLONE` (it is on `vNEW`). Paths are relative to the project root.
 
-**A path marked `[project-owned]` is never copied or rewritten, whatever its class** — it
-can show as MERGE (`CLAUDE.md` usually does). Show the user the upstream change
-(`git -C "$CLONE" diff vOLD vNEW -- <path>`) for information; only the CHANGELOG hand
-steps below change it. The table is for every other path.
+**`[project-owned]` paths** (the plan marks them in every class):
+
+- MERGE, KEEP, DELETE-MODIFIED — the project edited it: never copy or rewrite it. It can
+  show as MERGE (`CLAUDE.md` usually does). Show the upstream change
+  (`git -C "$CLONE" diff vOLD vNEW -- <path>`) for information; only the CHANGELOG hand
+  steps below change it.
+- REPLACE, ADD, DELETE — the project never edited it (an untouched skeleton such as
+  `docs/DESIGN.md`): **Ask** once for the list — take the new version (as the table below
+  does) / keep the project's. A CHANGELOG hand step that names one of them wins.
+
+The table is for every path not kept by these rules.
 
 | Class | Action |
 |---|---|
@@ -131,7 +138,8 @@ All four, then report the results together.
 
    Expected: applied files are only counted (`NOOP: N files already match NEW`), the
    approved MERGE files and the `[project-owned]` ones stay listed as MERGE (they differ
-   from both versions), KEEP lists
+   from both versions), `[project-owned]` files the user chose to keep stay in their class,
+   KEEP lists
    the project's own edits (including the hand steps just applied), and the files the user
    excluded or chose to keep stay as they were. Any other REPLACE / ADD / DELETE /
    DELETE-MODIFIED / ABSENT line, or a HOOKS or EXEC BIT section, is a step that was
@@ -158,8 +166,12 @@ Then `cat .claude/ORCHESTRATOR_VERSION` (must say `NEW`) and `git status`.
 
 **Ask:** commit now? If yes:
 
+Stage only what steps 5 changed — not whole directories, which may hold untracked
+runtime files (`.claude/logs/`, `__pycache__/`):
+
 ```bash
-git add .claude CLAUDE.md $( [ -d .agents ] && echo .agents )
+git add -- <each path written or added in step 5>
+git add -u -- .claude CLAUDE.md $( [ -d .agents ] && echo .agents )   # deletions and edits
 git commit -m "chore: upgrade claude-code-orchestrator template to vNEW"
 ```
 

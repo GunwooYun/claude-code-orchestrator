@@ -579,7 +579,8 @@ https://github.com/GunwooYun/claude-code-orchestrator.git 의 최신 vX.Y.Z 태�
 - **MERGE** — 내가(또는 `/initproject` 가) 고친 파일. 새 파일에 내 수정을 다시 적용한다. 어떤 수정을 지키는지 확인한다.
 - **DELETE** 와 **HOOKS** — 지워질 파일, 그리고 같이 지워야 할 `settings.json` 의 훅 등록.
 - **PROJECT-ONLY "last shipped in X"** — 예전 업그레이드에서 지웠어야 할 파일. 지울지 정한다.
-- **`[project-owned]`** — 덮어쓰지 않는 파일. CHANGELOG 가 바꾸라고 한 부분만 손으로 고친다.
+- **`[project-owned]`** — 프로젝트 소유 파일. 내가 고친 것이면(MERGE·KEEP — 보통 `CLAUDE.md`) MERGE 여도 덮어쓰지
+  않고, CHANGELOG 가 바꾸라고 한 부분만 손으로 고친다. 한 번도 고치지 않은 것(REPLACE)은 새 버전을 받을지 묻는다.
 
 #### 직후 확인 — 몇 분, 여기서 업그레이드가 끝난다
 

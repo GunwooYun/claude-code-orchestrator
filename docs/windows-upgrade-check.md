@@ -37,8 +37,9 @@ PY=python        # 예: W1 이 PY=python 을 출력했으면
 
 아래는 홈 폴더의 `upg-rehearsal` 안에만 파일을 만든다. 끝나면 그 폴더를 지우면 된다.
 
-1. 템플릿을 클론하고, 연습용 릴리스 `v5.0.1` 을 **로컬에만** 만든다. 이 릴리스는 두 가지를 바꾼다.
-   프로젝트도 고친 파일 하나(MERGE 가 나오게)와, 손으로 할 단계 하나(CHANGELOG)다.
+1. 템플릿을 클론하고, 연습용 릴리스 `v5.0.1` 을 **로컬에만** 만든다. 이 릴리스는 세 가지를 바꾼다.
+   프로젝트도 고친 파일 하나(MERGE 가 나오게), 프로젝트 소유인 `CLAUDE.md`(MERGE 로 나오지만 덮어쓰면 안 된다),
+   손으로 할 단계 하나(CHANGELOG)다.
 
 ```bash
 R=~/upg-rehearsal
@@ -48,6 +49,7 @@ cd template
 git switch claude/orchestrator-upgrade     # 머지된 뒤에는: git switch develop
 echo 5.0.1 > .claude/ORCHESTRATOR_VERSION
 printf '\n- Rehearsal: an upstream line.\n' >> .claude/rules/security.md
+printf '\n<!-- rehearsal upstream CLAUDE.md line -->\n' >> CLAUDE.md
 $PY - <<'EOF'
 from pathlib import Path
 p = Path("CHANGELOG.md")
@@ -72,6 +74,7 @@ make_project() {  # make_project <폴더 이름> <버전> [skill]
   git -C "$R/template" archive "v$2" .claude .agents CLAUDE.md | tar x -C "$P"
   printf '#!/bin/sh\necho "rehearsal gate ok"\n' > "$P/.claude/scripts/verify-task"
   printf '\n- Project edit: keep this line.\n' >> "$P/.claude/rules/security.md"
+  printf '\n## Project Setup\n\n- Rehearsal project section: keep it.\n' >> "$P/CLAUDE.md"
   if [ "$3" = skill ]; then
     mkdir -p "$P/.claude/skills/orchestrator-upgrade"
     cp "$R/template/.claude/skills/orchestrator-upgrade/SKILL.md" "$P/.claude/skills/orchestrator-upgrade/"
@@ -135,8 +138,11 @@ GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.http://127.0.0.1:9/.insteadOf GIT_CONFIG
 | 분류표 적용 | 예 |
 | MERGE `security.md` 결과 확인 | 두 줄(`Project edit`, `Rehearsal: an upstream line`)이 모두 있으면 예 |
 | `CLAUDE.md` 에 손 단계 한 줄 추가 | 예 |
+| 커밋되지 않은 파일(`__pycache__`, `logs`)이 있다고 하면 | 그대로 진행 — 훅이 만든 실행 산출물이다 |
 | 커밋 | 예 |
 | 클론 삭제 | 묻지 않아야 한다(내 클론이다) |
+
+`.claude/` 아래 파일을 고칠 때 Claude Code 가 편집 권한을 물으면 승인한다.
 
 끝나면 Claude 를 닫고 확인한다.
 
@@ -144,6 +150,8 @@ GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.http://127.0.0.1:9/.insteadOf GIT_CONFIG
 cat .claude/ORCHESTRATOR_VERSION                         # 5.0.1
 grep -c "Project edit\|Rehearsal: an upstream line" .claude/rules/security.md   # 2
 tail -1 CLAUDE.md                                        # <!-- rehearsal hand step -->
+grep -c "Rehearsal project section" CLAUDE.md            # 1 (내 섹션이 남았다)
+grep -c "rehearsal upstream CLAUDE.md line" CLAUDE.md    # 0 (템플릿 쪽 줄은 들어오지 않는다)
 git log --oneline -1                                     # chore: upgrade ... v5.0.1
 ls -d "$R/template"                                      # 아직 있어야 한다
 $PY "$R/template/tools/upgrade-plan" . --from 5.0.0      # MERGE 는 security.md 하나뿐
