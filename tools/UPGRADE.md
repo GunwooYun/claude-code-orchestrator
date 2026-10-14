@@ -119,8 +119,9 @@ All four, then report the results together.
    ```
 
    Expected: applied files are only counted (`NOOP: N files already match NEW`), the
-   approved MERGE files stay listed as MERGE (they differ from both versions), and so do
-   the files the user excluded or chose to keep. Any other REPLACE / ADD / DELETE /
+   approved MERGE files stay listed as MERGE (they differ from both versions), KEEP lists
+   the project's own edits (including the hand steps just applied), and the files the user
+   excluded or chose to keep stay as they were. Any other REPLACE / ADD / DELETE /
    DELETE-MODIFIED / ABSENT line, or a HOOKS or EXEC BIT section, is a step that was
    missed — go back to step 5 for it. The `--from` override note is expected.
 
