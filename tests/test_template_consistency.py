@@ -137,6 +137,29 @@ class SkillNamingTests(unittest.TestCase):
                 )
 
 
+class ProjectSetupWritersTests(unittest.TestCase):
+    """
+    DRIFT TRIPWIRE with an incident behind it: on a real project `### Jira`
+    (written by /jira-setup on 2026-09-29) was gone after a second /initproject
+    recreated `## Project Setup`, so the next /ticket had no write policy.
+    Every skill that writes the section must say it keeps the others' parts.
+    """
+
+    WRITERS = ("initproject", "jira-setup", "doc-write")
+
+    def test_each_writer_keeps_the_other_subsections(self) -> None:
+        for name in self.WRITERS:
+            raw = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            text = " ".join(raw.split())  # prose wraps anywhere
+            with self.subTest(skill=name):
+                self.assertIn("### Jira", text)
+                self.assertIn("### Confluence", text)
+                self.assertTrue(
+                    "never rewrite `## Project Setup` as a whole" in text
+                    or "`## Project Setup` 전체를 다시 쓰지 않는다" in text
+                )
+
+
 class ReferenceTests(unittest.TestCase):
     def test_instructions_do_not_reference_missing_input_files(self) -> None:
         dangling: list[str] = []

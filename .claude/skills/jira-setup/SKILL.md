@@ -85,8 +85,10 @@ Jira 코멘트와 상태 전이는 **팀이 보는 외부 동작**이다. 기본
 **`## Current Project` 가 아니다.** 그 섹션은 `/feature` 가 작업 단위마다
 교체하므로, 여기 기록한 사이트·전이·쓰기 정책이 다음 `/feature` 에서 사라진다.
 `## Project Setup` 은 프로젝트 영구 상태이고, `## Current Project` **앞**에 둔다
-(수명 정의: `CLAUDE.md` 「`CLAUDE.md` 섹션의 수명」). 이미 `### Jira` 가 있으면
-그 하위 섹션만 갱신하고 `## Project Setup` 블록 전체를 다시 쓰지 않는다.
+(수명 정의: `CLAUDE.md` 「`CLAUDE.md` 섹션의 수명」). `## Project Setup` 이 없으면
+`## Current Project` 앞에 만든다. 있으면 `### Jira` 하위 섹션만 넣거나 고치고, 다른
+하위 섹션(`### Confluence`, `/initproject` 의 줄)은 그대로 둔다 — `## Project Setup`
+전체를 다시 쓰지 않는다.
 
 ```markdown
 ### Jira
