@@ -527,13 +527,14 @@ flowchart TD
   (`diff` 나 `git diff --no-index` 는 내용이 같아도 실행 권한 차이만으로 "다르다"고 나온다.)
 - 대개 그대로 교체해도 되는 것(템플릿 소유): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`,
   `.claude/bin/`, `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
-  `rules/security.md`, `rules/language.md`, `rules/writing-style.md`, `docs/writing-style.md`,
+  `rules/security.md`, `rules/language.md`, `rules/writing-style.md`,
   `scripts/README.md`, `ORCHESTRATOR_VERSION`(새 버전 값이 된다)
   — 단, 프로젝트가 고친 흔적이 있으면 병합한다. `/agy-models` 로 agy 모델을 바꿨다면
   `rules/antigravity-delegation.md` 는 MERGE 로 나온다: 모델 표 4줄은 내 값을 유지한다.
 - 업그레이드 뒤 `.claude/bin/agy-probe` 를 한 번 돌린다. `STALE` 이면 `/agy-models` 로 모델을 다시 고른다.
 - 덮어쓰면 안 되는 것(프로젝트 소유): `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`,
-  `rules/test-writing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`.
+  `rules/test-writing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`,
+  `docs/writing-style.md`(팀의 문서 작성 규칙 — 5.0.0 부터).
 - 덮어쓰지 않는 파일이라도 CHANGELOG 가 바꿨다고 적은 부분(예: `settings.json` 의 허용 경로, `CLAUDE.md` 에서
   빠진 섹션)은 손으로 반영한다.
 - **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남아 있으면

@@ -160,6 +160,24 @@ class ProjectSetupWritersTests(unittest.TestCase):
                 )
 
 
+class NoTeamSpecificsTests(unittest.TestCase):
+    def test_shipped_files_link_no_teams_confluence(self) -> None:
+        # Until 5.0.0 the style guide linked one team's Confluence pages.
+        shipped = [
+            REPO / "CLAUDE.md",
+            *(REPO / ".claude").rglob("*"),
+            *(REPO / ".agents").rglob("*"),
+        ]
+        for path in shipped:
+            if not path.is_file() or path.suffix not in (".md", ".json", ".py", ""):
+                continue
+            if "docs/research" in path.as_posix() or "docs/plans" in path.as_posix():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            with self.subTest(path=path.relative_to(REPO).as_posix()):
+                self.assertNotRegex(text, r"\.atlassian\.net/wiki")
+
+
 class ReferenceTests(unittest.TestCase):
     def test_instructions_do_not_reference_missing_input_files(self) -> None:
         dangling: list[str] = []
