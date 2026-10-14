@@ -122,6 +122,7 @@ your-project/
 | **`/initproject`** | 복사 직후 **프로젝트당 한 번** | 스택을 감지하고 템플릿을 이 프로젝트에 맞게 고친다 |
 | **`/feature <기능명>`** | **작업 하나마다** | 조사 → 요구사항 → 검증 계획 → 설계 리뷰 → 할 일 목록 → 승인 → 구현 → 리뷰 |
 | **`/isolated-review`** | 구현을 커밋한 뒤 | 이 세션과 무관한 격리된 리뷰어가 읽기 전용으로 리뷰한다 |
+| `/orchestrator-upgrade` | 새 릴리스로 올릴 때 | 최신 릴리스를 임시로 클론해 그 안의 절차대로 업그레이드하고, 정할 일만 묻는다 ([9장](#업그레이드-절차)) |
 | `/agy-models` | agy 프로브가 `STALE` 일 때, 등급별 모델을 바꾸고 싶을 때 | agy 등급 T1~T4 의 모델을 사용자가 고른다 (`/initproject` 도 이 절차를 쓴다) |
 | `/jira-setup`, `/ticket` | Jira 를 쓰는 팀 | Jira 연결 설정, 티켓에서 작업 시작 |
 | `/doc-write` | Confluence·문서 작성 | 작성 규칙에 맞춰 문서를 쓰고 발행 |
@@ -525,129 +526,53 @@ git worktree add --detach ../<project>-review <작업 브랜치>
 ### 업그레이드 절차
 
 **템플릿을 그대로 다시 복사하면 안 된다.** `/initproject` 로 맞춘 내용과 진행 중인 작업 기록이 원본으로
-덮어써진다. 파일마다 "프로젝트가 고쳤는가"를 확인하고 골라서 가져온다. 아래 순서를 매번 같게 따른다.
+덮어써진다. 파일마다 "프로젝트가 고쳤는가"를 확인하고 골라서 가져와야 한다 — 그 일을 Claude 가 한다.
 
-🖥️ 는 **터미널**에 입력하는 것, 💬 는 **Claude 세션**(`claude` 를 실행한 화면)에 입력하는 것이다. 터미널 명령은
-**Linux / macOS** 와 **Windows (PowerShell)** 를 나눠 적었다. `<...>` 부분만 바꿔서 그대로 붙여 넣는다. 템플릿 클론
-위치는 홈 폴더의 `claude-code-orchestrator` 로 가정한다.
+절차는 템플릿 저장소의 [`tools/UPGRADE.md`](tools/UPGRADE.md) 한 곳에만 있고 프로젝트에는 복사되지 않는다.
+Claude 는 최신 릴리스를 임시 폴더에 클론해서 **그 클론의 절차**를 따른다. 그래서 옛 버전 프로젝트도 늘 새
+버전의 절차로 올라간다. 확인할 수 있는 것은 직접 확인하고, 사용자가 정할 일만 묻는다.
 
-> Windows 명령은 아직 실제로 돌려 보지 않았다([11장](#11-지금-무엇이-검증됐나)). 막히면 그 🖥️ 단계를 Claude
-> 세션에 "이 명령을 실행해 줘"로 맡긴다.
+💬 는 **Claude 세션**(`claude` 를 실행한 화면)에 입력하는 것, 🖥️ 는 **터미널**에 입력하는 것이다.
 
-#### 0단계 — 템플릿 클론 준비 (처음 한 번)
+#### 언제
 
-업그레이드 도구는 이 저장소에만 있고 프로젝트에는 복사되지 않는다. 한 번 클론해 둔다.
+하던 작업 단위를 끝내고 커밋한 뒤, **작업 단위 사이에** 한다. 업그레이드는 `upgrade-orchestrator` 브랜치에
+커밋 하나로 남아서 문제가 생기면 그것만 되돌릴 수 있다.
 
-🖥️ Linux / macOS
+#### 시작하기
 
-```bash
-git clone https://github.com/GunwooYun/claude-code-orchestrator.git ~/claude-code-orchestrator
-```
-
-🖥️ Windows (PowerShell)
-
-```powershell
-git clone https://github.com/GunwooYun/claude-code-orchestrator.git "$HOME\claude-code-orchestrator"
-```
-
-업그레이드할 때마다 최신 릴리스로 맞춘다.
-
-🖥️ Linux / macOS
-
-```bash
-git -C ~/claude-code-orchestrator switch main
-git -C ~/claude-code-orchestrator pull
-git -C ~/claude-code-orchestrator fetch --tags
-```
-
-🖥️ Windows (PowerShell)
-
-```powershell
-git -C "$HOME\claude-code-orchestrator" switch main
-git -C "$HOME\claude-code-orchestrator" pull
-git -C "$HOME\claude-code-orchestrator" fetch --tags
-```
-
-#### 1단계 — 하던 작업을 정리하고 업그레이드 브랜치 만들기
-
-진행 중인 작업 단위가 있으면 먼저 끝내고 커밋한다. 업그레이드는 **작업 단위 사이에, 별도 브랜치에서** 한다 —
-문제가 생기면 업그레이드 커밋만 되돌릴 수 있다. 프로젝트 루트에서 실행한다.
-
-🖥️ Linux / macOS
-
-```bash
-cd <프로젝트 루트>
-git status                                  # 깨끗한지 확인 (커밋하지 않은 변경이 없어야 한다)
-cat .claude/ORCHESTRATOR_VERSION            # 지금 버전
-git switch -c upgrade-orchestrator
-```
-
-🖥️ Windows (PowerShell)
-
-```powershell
-cd <프로젝트 루트>
-git status                                  # 깨끗한지 확인 (커밋하지 않은 변경이 없어야 한다)
-Get-Content .claude\ORCHESTRATOR_VERSION    # 지금 버전
-git switch -c upgrade-orchestrator
-```
-
-#### 2단계 — 기준선 저장 (업그레이드 전 숫자)
-
-지금 템플릿이 어떻게 쓰이고 있는지 개수를 저장한다. 템플릿 클론의 스크립트를 쓰므로 프로젝트가 옛 버전이어도
-된다. 저장 위치는 저장소 밖(홈 폴더의 `usage-reports`)이다.
-
-🖥️ Linux / macOS
-
-```bash
-mkdir -p ~/usage-reports
-python3 ~/claude-code-orchestrator/.claude/bin/usage-report > ~/usage-reports/$(basename "$PWD")-$(date +%F)-before.md
-```
-
-🖥️ Windows (PowerShell) — `>` 대신 `Out-File -Encoding utf8` 을 쓴다(Windows PowerShell 의 `>` 는 UTF-16 으로 저장한다).
-
-```powershell
-New-Item -ItemType Directory -Force "$HOME\usage-reports" | Out-Null
-$name = Split-Path -Leaf (Get-Location); $day = Get-Date -Format yyyy-MM-dd
-python3 "$HOME\claude-code-orchestrator\.claude\bin\usage-report" | Out-File -Encoding utf8 "$HOME\usage-reports\$name-$day-before.md"
-```
-
-#### 3단계 — 백업
-
-템플릿 파일이 커밋돼 있지 않은(로컬 전용) 프로젝트라면 꼭 한다. 커밋돼 있어도 해 두면 편하다.
-
-🖥️ Linux / macOS
-
-```bash
-tar czf ~/backup-$(basename "$PWD")-$(date +%F).tgz .claude .agents CLAUDE.md
-```
-
-🖥️ Windows (PowerShell) — Windows 10 이상에는 `tar` 가 들어 있다.
-
-```powershell
-$name = Split-Path -Leaf (Get-Location); $day = Get-Date -Format yyyy-MM-dd
-tar -czf "$HOME\backup-$name-$day.tgz" .claude .agents CLAUDE.md
-```
-
-#### 4단계 — Claude 에게 분류표 만들게 하기
-
-🖥️ 프로젝트 루트에서 Claude 를 연다(모든 OS 같음).
-
-```bash
-claude
-```
-
-💬 아래를 붙여 넣는다. Claude 는 분류표만 만들고 **아무 파일도 바꾸지 않는다.** Windows 라면 클론 경로를
-`C:\Users\<사용자>\claude-code-orchestrator` 처럼 실제 경로로 바꾼다.
+프로젝트 루트에서 Claude 를 연다. 💬 프로젝트에 `/orchestrator-upgrade` 가 있으면:
 
 ```text
-README 9장 「업그레이드 절차」대로 이 프로젝트의 템플릿을 업그레이드하려고 해.
-템플릿 클론은 ~/claude-code-orchestrator 야.
-지금은 4단계까지만 해 줘: 클론의 tools/upgrade-plan 을 이 프로젝트 루트에 대해 실행해서
-분류표를 보여 주고, 클론의 CHANGELOG 에서 내 버전 이후 항목 중 손으로 해야 하는 일(업그레이드 단계)을 정리해 줘.
-아무 파일도 바꾸지 마.
+/orchestrator-upgrade
 ```
 
-#### 5단계 — 분류표 확인하고 승인
+💬 없으면(이 스킬이 생기기 전 버전) 아래를 붙여 넣는다. 하는 일은 같다.
+
+```text
+claude-code-orchestrator 템플릿을 최신 릴리스로 업그레이드해 줘.
+https://github.com/GunwooYun/claude-code-orchestrator.git 의 최신 vX.Y.Z 태그를 mktemp -d 로 만든 임시 폴더에
+전체 클론(--depth 없이 --branch <태그>)하고, 그 클론의 tools/UPGRADE.md 를 처음부터 따라 해 줘.
+클론은 이번 실행용 임시 클론이야(CLONE_KIND=temporary).
+```
+
+- **Windows** 는 Git for Windows 가 설치돼 있어야 한다. Claude Code 는 Git Bash 로 명령을 실행하고, 템플릿의
+  훅도 Git Bash 가 있어야 돈다. 확인 방법: [Windows 업그레이드 확인 가이드](docs/windows-upgrade-check.md).
+- **프로젝트가 다른 머신에 있으면**(원격 서버 등) 그 머신의 Claude 세션에서 실행한다. 그 머신에서 GitHub 에
+  접속할 수 없으면 Claude 가 묻는다 — 다른 경로로 옮겨 둔 템플릿 클론의 위치를 알려 주면 그것을 쓴다.
+
+#### Claude 가 묻는 것
+
+| 언제 | 묻는 것 |
+|---|---|
+| GitHub 에 접속하지 못했을 때 | 다시 시도 / 가지고 있는 클론의 경로 / 중단 |
+| 커밋하지 않은 변경이나 끝나지 않은 작업 단위가 있을 때 | 정리하고 다시 / 그대로 진행 / 중단 |
+| 시작 전 | 지금 버전 → 새 버전, 바뀌는 것 요약. 올릴지 |
+| 분류표를 만든 뒤 | 이대로 적용할지. 빼고 싶은 파일을 말하면 뺀다 |
+| MERGE 파일마다 | 내 수정을 새 파일에 다시 넣은 결과가 맞는지 |
+| 프로젝트 소유 파일을 고칠 때 | `settings.json` 훅 등록, CHANGELOG 가 손으로 하라고 한 변경 |
+| 직후 확인이 실패했을 때 | 원인을 고칠지 / 되돌릴지 |
+| 끝 | 커밋할지, 임시 클론을 지울지 |
 
 분류표에서 볼 것:
 
@@ -656,109 +581,40 @@ README 9장 「업그레이드 절차」대로 이 프로젝트의 템플릿을 
 - **PROJECT-ONLY "last shipped in X"** — 예전 업그레이드에서 지웠어야 할 파일. 지울지 정한다.
 - **`[project-owned]`** — 덮어쓰지 않는 파일. CHANGELOG 가 바꾸라고 한 부분만 손으로 고친다.
 
-💬 괜찮으면:
+#### 직후 확인 — 몇 분, 여기서 업그레이드가 끝난다
 
-```text
-좋아, 이대로 적용해 줘. MERGE 파일은 내 수정을 유지하고, 버전별 "○.○.○ 으로 올릴 때" 절이 있으면 그대로 따라 줘.
-끝나면 7단계 확인까지 하고 결과를 보여 줘. 커밋은 내가 확인한 뒤에 할게.
-```
+Claude 가 적용 직후 네 가지를 돌리고 보고한다. 기다릴 것은 없다.
 
-빼고 싶은 것이 있으면 그 파일을 말하면 된다(예: "`rules/coding-principles.md` 는 그대로 둬").
+1. 분류 도구를 다시 돌려 **빠뜨린 교체·삭제가 없는지** — 승인한 MERGE 파일만 남아야 한다.
+2. `tools/hook-check` — `settings.json` 에 등록된 **훅이 모두 실제로 실행되는지**. 지운 훅의 등록이 남았거나
+   훅이 이 머신의 Python 에서 죽으면 여기서 이름과 함께 나온다.
+3. `.claude/scripts/verify-task` — 프로젝트의 게이트(있으면).
+4. `.claude/bin/agy-probe` — `STALE` 이면 💬 `/agy-models`.
 
-#### 6단계 — 적용 (Claude 가 한다)
+🖥️ 직접 한 번 본다: `cat .claude/ORCHESTRATOR_VERSION`(새 버전이어야 한다, Windows PowerShell 은
+`Get-Content .claude\ORCHESTRATOR_VERSION`)과 `git status`. 그다음은 평소처럼 브랜치를 PR 로 올리거나 머지한다.
 
-교체·병합·삭제·추가, 훅 등록 정리, CHANGELOG 가 손으로 하라고 한 일을 Claude 가 한다. 끝나면 7단계를
-스스로 돌리고 보고한다.
+#### 선택 — 며칠 쓴 뒤 비교
 
-#### 7단계 — 확인하고 커밋
-
-Claude 의 보고와 별개로 직접 한 번 확인한다.
-
-🖥️ Linux / macOS
-
-```bash
-cat .claude/ORCHESTRATOR_VERSION              # 새 버전이어야 한다
-.claude/scripts/verify-task; echo "exit=$?"   # exit=0 이어야 한다 (스크립트가 있으면)
-.claude/bin/agy-probe                         # READY 가 아니면 첫 단어가 상태. STALE 이면 💬 /agy-models
-git status                                    # 바뀐 파일 목록
-```
-
-🖥️ Windows (PowerShell) — `verify-*` 와 `agy-probe` 는 sh 스크립트라 PowerShell 에서 바로 실행되지 않는다.
-
-```powershell
-Get-Content .claude\ORCHESTRATOR_VERSION      # 새 버전이어야 한다
-git status                                    # 바뀐 파일 목록
-```
-
-💬 Windows 는 나머지를 Claude 에게 맡긴다:
-
-```text
-.claude/scripts/verify-task 와 .claude/bin/agy-probe 를 실행해서 종료 코드와 출력을 그대로 보여 줘.
-```
-
-이상 없으면 커밋한다(템플릿 파일을 커밋하는 프로젝트일 때).
-
-🖥️ Linux / macOS
-
-```bash
-git add .claude .agents CLAUDE.md
-git commit -m "chore: upgrade claude-code-orchestrator template to v$(cat .claude/ORCHESTRATOR_VERSION)"
-```
-
-🖥️ Windows (PowerShell)
-
-```powershell
-git add .claude .agents CLAUDE.md
-git commit -m "chore: upgrade claude-code-orchestrator template to v$(Get-Content .claude\ORCHESTRATOR_VERSION)"
-```
-
-그다음은 평소처럼 이 브랜치를 PR 로 올리거나 기본 브랜치에 머지한다.
-
-#### 8단계 — 며칠 써 보고 비교
-
-작업 3~5건을 평소처럼 한 뒤 다시 센다. `<업그레이드한 날>` 은 `YYYY-MM-DD` 형식이다.
-
-🖥️ Linux / macOS
-
-```bash
-python3 ~/claude-code-orchestrator/.claude/bin/usage-report --since <업그레이드한 날> > ~/usage-reports/$(basename "$PWD")-$(date +%F)-after.md
-```
-
-🖥️ Windows (PowerShell)
-
-```powershell
-$name = Split-Path -Leaf (Get-Location); $day = Get-Date -Format yyyy-MM-dd
-python3 "$HOME\claude-code-orchestrator\.claude\bin\usage-report" --since <업그레이드한 날> | Out-File -Encoding utf8 "$HOME\usage-reports\$name-$day-after.md"
-```
+업그레이드를 끝내는 조건이 **아니다.** 바뀐 지시문이 에이전트 동작을 나쁘게 바꿨는지 보고 싶을 때, 작업
+3~5건을 평소처럼 한 뒤 한다. 업그레이드 전 숫자(`before` 리포트)는 Claude 가 홈 폴더 `usage-reports` 에 저장해
+둔다.
 
 💬
 
 ```text
-홈 폴더 usage-reports 의 이 프로젝트 before 와 after 리포트를 비교해 줘.
+.claude/bin/usage-report --since <업그레이드한 날> 을 돌리고, 홈 폴더 usage-reports 의 이 프로젝트 before 리포트와 비교해 줘.
 위임(deep-reasoning·general-purpose), /feature 진행 단계, 게이트 실행, 훅 오류를 중심으로, 나빠진 게 있는지.
 ```
 
-**나빠졌으면 되돌린다.** 업그레이드 커밋 전체를 되돌리려면(모든 OS 같음):
+**나빠졌으면 되돌린다.** 커밋했으면 `git revert <업그레이드 커밋 해시>`. 커밋하지 않은(로컬 전용) 프로젝트는
+Claude 가 만들어 둔 백업(홈 폴더의 `backup-<프로젝트>-<날짜>.tgz`)으로 되돌린다 — 💬 "업그레이드 전 백업으로
+되돌려 줘".
 
-```bash
-git revert <업그레이드 커밋 해시>
-```
+#### 손으로 할 때
 
-커밋하지 않은(로컬 전용) 프로젝트는 3단계 백업으로 되돌린다.
-
-🖥️ Linux / macOS
-
-```bash
-rm -rf .claude .agents CLAUDE.md
-tar xzf ~/backup-<프로젝트>-<날짜>.tgz
-```
-
-🖥️ Windows (PowerShell)
-
-```powershell
-Remove-Item -Recurse -Force .claude, .agents, CLAUDE.md
-tar -xzf "$HOME\backup-<프로젝트>-<날짜>.tgz"
-```
+Claude 없이 하거나 중간에 막혔을 때: 템플릿을 클론하고(`git clone <URL>` 뒤 `git -C <클론> switch --detach
+v<최신>`) 클론의 `tools/UPGRADE.md` 를 순서대로 따른다. 명령이 모두 그 안에 있다. Windows 는 Git Bash 에서 한다.
 
 **진행 중인 작업은 이어진다.** 업그레이드가 바꾸는 것은 템플릿 소유 파일뿐이다. 작업 상태는 프로젝트 소유
 파일에 있다 — `CLAUDE.md` 의 `## Current Project`(진행 중인 계획·검증 계획)와 `## Project Setup`(완료 지점,
@@ -767,11 +623,11 @@ Jira·Confluence 설정), `.claude/docs/` 의 설계·조사 기록, `CLAUDE.loc
 
 **에이전트 동작은 "같다고 가정하지 않고" 잰다.** 동작을 정하는 것은 `.claude/agents/`, `.claude/rules/`,
 `.claude/skills/`, `CLAUDE.md` 다. 프로젝트가 고친 파일은 MERGE 로 나와 내 수정이 유지되지만(예: `/agy-models` 로
-고른 모델 표), 템플릿이 바꾼 지시는 바뀐다. 무엇이 바뀌는지는 4단계의 CHANGELOG 항목에 있고, 그래서 2번과
-8번의 숫자 비교가 이 절차의 일부다.
+고른 모델 표), 템플릿이 바꾼 지시는 바뀐다. 무엇이 바뀌는지는 시작 전 요약(CHANGELOG)에 있고, 그래서 업그레이드
+전 숫자를 남기고 며칠 뒤 비교를 권한다.
 
-**분류 도구 (`tools/upgrade-plan`)** — 읽기 전용이고 프로젝트에 복사되지 않는다. 이 저장소를 클론해 두고
-거기서 실행한다:
+**분류 도구 (`tools/upgrade-plan`)** — 업그레이드 중 Claude 가 돌리는 도구. 읽기 전용이고 프로젝트에 복사되지
+않는다. 분류표만 따로 보고 싶으면 템플릿 클론에서 실행한다:
 
 ```bash
 git -C <템플릿 클론> fetch --tags
@@ -783,8 +639,7 @@ python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
 - 분류: REPLACE(안 고침 → 교체), MERGE(양쪽 다 고침 → 새 파일에 내 수정 재적용), KEEP, DELETE(새 버전에서
   삭제), ADD(새로 생김), PROJECT-ONLY(템플릿에 없는 파일 — 예전 업그레이드에서 지웠어야 할 것은 "last shipped in
   X" 로 모아 보여 준다). 실행 권한을 잃은 스크립트, 지워질 훅을 가리키는 `settings.json` 등록도 함께 나온다.
-- **프로젝트가 다른 머신에 있으면**(원격 서버 등) 도구와 프로젝트가 같은 머신에 있어야 한다. 그 머신에 템플릿을
-  클론하거나, 그 머신의 Claude 세션에서 이 절차를 진행한다.
+- 도구와 프로젝트는 같은 머신에 있어야 한다.
 
 **참고 — 분류의 기준**
 
@@ -818,8 +673,8 @@ python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
    이 분류표에 DELETE 로 나온다.
 5. `.claude/docs/writing-style.md` 는 이제 프로젝트 소유다. 고치지 않았으면 새 파일로 바꾸고, 고쳤으면 그대로 둔다.
 6. `/jira-setup` 을 쓴 적이 있는데 `CLAUDE.md` 에 `### Jira` 가 없으면 `/jira-setup` 을 다시 실행한다.
-7. 하루 정도 쓴 뒤 `.claude/bin/usage-report --since <업그레이드한 날>` 을 돌려 "Hooks" 표의 `errors` 가
-   모두 0 인지 본다([사용 근거 남기기](#사용-근거-남기기)).
+7. 훅이 모두 실행되는지는 업그레이드 직후 확인한다(위 「직후 확인」의 `tools/hook-check`). 기다릴 필요가 없다.
+   `usage-report` 의 "Hooks" 표 비교는 며칠 쓴 뒤의 선택 사항이다([사용 근거 남기기](#사용-근거-남기기)).
 
 ---
 
@@ -860,7 +715,7 @@ python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
 | 훅 2개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `/agy-models` | 템플릿 저장소에서 실제 agy 1.3.3 으로 1회 완주(2026-10-13): Gemini 3개 제시 → 등급별 선택 → 표 기록 → 프로브 `READY`. 선택지가 4개를 넘는 경우와 `/initproject` Step 3c 경유 실행은 아직 돌려 보지 않았다 |
 | `/doc-write`, `/jira-setup`, `/ticket` | 실제 업무 프로젝트에서 사용(2026-09~10, 각 1회 호출. 설치 뒤 Jira·Confluence 호출 17회는 모두 스킬을 실행한 세션 안). 이전 판의 "돌려 본 적 없다"는 그 프로젝트를 집계하기 전의 기록이었다 |
-| Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다 |
+| Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다. 업그레이드(`/orchestrator-upgrade`, `tools/hook-check`)는 [Windows 업그레이드 확인 가이드](docs/windows-upgrade-check.md)로 사람이 확인한다 |
 
 ### 사용 근거 남기기
 
