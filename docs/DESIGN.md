@@ -159,6 +159,6 @@ None open. Open items are under Open Questions.
       researched. Real use of `/feature` should come first.
 - [ ] **Correction (2026-10-13):** this item said `/doc-write`, `/jira-setup` and `/ticket` had
       never run. They were used in a real work project (2026-09/10; the 17 Jira/Confluence MCP
-      calls after their installation all ran inside them — an earlier "about 150" counted
+      calls after their installation all ran in sessions that ran them — an earlier "about 150" counted
       136 calls from before they were installed). Still not run in use: `agy-probe`'s READY path. Their tests assert their
       instructions, not their behaviour in use.

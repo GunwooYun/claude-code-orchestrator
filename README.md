@@ -534,7 +534,7 @@ flowchart TD
 - 업그레이드 뒤 `.claude/bin/agy-probe` 를 한 번 돌린다. `STALE` 이면 `/agy-models` 로 모델을 다시 고른다.
 - 덮어쓰면 안 되는 것(프로젝트 소유): `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`,
   `rules/test-writing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`,
-  `docs/writing-style.md`(팀의 문서 작성 규칙 — 5.0.0 부터).
+  `docs/writing-style.md`(팀의 문서 작성 규칙 — 5.0.0 부터. 5.0.0 으로 올릴 때 고치지 않은 템플릿 사본이면 새 파일로 바꾼다).
 - 덮어쓰지 않는 파일이라도 CHANGELOG 가 바꿨다고 적은 부분(예: `settings.json` 의 허용 경로, `CLAUDE.md` 에서
   빠진 섹션)은 손으로 반영한다.
 - **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남아 있으면
@@ -579,7 +579,7 @@ flowchart TD
 | `/orchestrator-version` | 업그레이드에 사용. `--plan` 은 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치) |
 | 훅 2개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `/agy-models` | 템플릿 저장소에서 실제 agy 1.3.3 으로 1회 완주(2026-10-13): Gemini 3개 제시 → 등급별 선택 → 표 기록 → 프로브 `READY`. 선택지가 4개를 넘는 경우와 `/initproject` Step 3c 경유 실행은 아직 돌려 보지 않았다 |
-| `/doc-write`, `/jira-setup`, `/ticket` | 실제 업무 프로젝트에서 사용(2026-09~10, 각 1회 호출. 설치 뒤 Jira·Confluence 호출 17회는 모두 스킬 실행 중). 이전 판의 "돌려 본 적 없다"는 그 프로젝트를 집계하기 전의 기록이었다 |
+| `/doc-write`, `/jira-setup`, `/ticket` | 실제 업무 프로젝트에서 사용(2026-09~10, 각 1회 호출. 설치 뒤 Jira·Confluence 호출 17회는 모두 스킬을 실행한 세션 안). 이전 판의 "돌려 본 적 없다"는 그 프로젝트를 집계하기 전의 기록이었다 |
 | Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다 |
 
 ### 사용 근거 남기기

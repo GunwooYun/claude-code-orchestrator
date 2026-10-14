@@ -98,7 +98,7 @@ is 5.0.0.
 - `/ticket`, `/jira-setup`, `/doc-write` shortened where they restated the
   style guide, each other or their own steps.
 - "1 skill call vs ~150 MCP calls" (README, design docs) mixed two periods:
-  136 of 153 calls predate the skills; after installation all 17 ran in them.
+  136 of 153 calls predate the skills; after installation all 17 ran in sessions that ran them.
 
 ## [4.3.1] - 2026-10-13
 
