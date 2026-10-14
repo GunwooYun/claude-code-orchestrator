@@ -46,6 +46,7 @@ SCRATCH_FILE = "hook-check-sample.py"
 SCRATCH_TEXT = "x = 1\n"
 SESSION_ID = "hook-check"
 TOOL_USE_ID = "toolu_hook_check"
+HOOK_ERROR = "hook error (ignored)"
 COPY_IGNORE = shutil.ignore_patterns("logs", "docs", "__pycache__", "*.pyc")
 # `$CLAUDE_PROJECT_DIR/x`, `"$CLAUDE_PROJECT_DIR"/x`, `${CLAUDE_PROJECT_DIR}/x`
 PROJECT_PATH = re.compile(r"\$\{?CLAUDE_PROJECT_DIR\}?\"?/([^\s\"';|&<>]+)")
@@ -179,6 +180,10 @@ def run_one(hook: Hook, payload: dict, scratch: Path) -> Outcome:
         return Outcome(False, f"timed out after {TIMEOUT_SECONDS}s")
     if "Traceback (most recent call last)" in done.stderr:
         return Outcome(False, f"traceback: {first_traceback_line(done.stderr)}")
+    # The template's hooks catch their own exceptions, print this and exit 0.
+    swallowed = [line for line in done.stderr.splitlines() if HOOK_ERROR in line]
+    if swallowed:
+        return Outcome(False, swallowed[0].strip()[:120])
     blocked = ""
     if done.returncode == 2 and done.stderr.strip():
         blocked = "blocked: " + done.stderr.strip().splitlines()[0][:80]

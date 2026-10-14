@@ -82,6 +82,27 @@ class HookCheckTests(unittest.TestCase):
         self.assertRegex(result.stdout, r"FAIL PostToolUse\[Edit\|Write\] .*crash\.py")
         self.assertIn("boom from planted hook", result.stdout)
 
+    def test_a_hook_that_swallows_its_own_error_still_fails_the_run(self) -> None:
+        # The template's hooks catch every exception, print this line and exit 0.
+        self.write(
+            ".claude/hooks/swallow.py",
+            "import sys\n"
+            "print('[swallow] hook error (ignored): boom', file=sys.stderr)\n",
+        )
+        self.write(
+            ".claude/settings.json",
+            settings_with(
+                (
+                    "PostToolUse",
+                    "Edit|Write",
+                    'python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/swallow.py"',
+                )
+            ),
+        )
+        result = self.run_tool()
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertRegex(result.stdout, r"FAIL .*swallow\.py.*hook error \(ignored\)")
+
     def test_a_registration_to_a_missing_file_is_reported_as_missing(self) -> None:
         self.write(
             ".claude/settings.json",

@@ -44,7 +44,8 @@ CLONE_PARENT=$(mktemp -d)
 git clone --branch "v<latest>" "$TEMPLATE_URL" "$CLONE_PARENT/claude-code-orchestrator"
 ```
 
-Record `CLONE_PARENT`. It is the only path this run may delete.
+Record the literal `CLONE_PARENT` path (shell variables do not survive between Bash
+calls). It is the only path this run may delete.
 
 **User-supplied clone:** never delete it, never change it without asking.
 `git -C <path> rev-parse --is-shallow-repository` prints `true` → ask before

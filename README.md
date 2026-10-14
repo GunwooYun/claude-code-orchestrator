@@ -585,7 +585,8 @@ https://github.com/GunwooYun/claude-code-orchestrator.git 의 최신 vX.Y.Z 태�
 
 Claude 가 적용 직후 네 가지를 돌리고 보고한다. 기다릴 것은 없다.
 
-1. 분류 도구를 다시 돌려 **빠뜨린 교체·삭제가 없는지** — 승인한 MERGE 파일만 남아야 한다.
+1. 분류 도구를 다시 돌려 **빠뜨린 교체·삭제가 없는지** — MERGE(내 수정을 다시 넣은 파일)와 KEEP(프로젝트가
+   고친 파일)만 남아야 한다. REPLACE·ADD·DELETE 가 남아 있으면 빠뜨린 것이다.
 2. `tools/hook-check` — `settings.json` 에 등록된 **훅이 모두 실제로 실행되는지**. 지운 훅의 등록이 남았거나
    훅이 이 머신의 Python 에서 죽으면 여기서 이름과 함께 나온다.
 3. `.claude/scripts/verify-task` — 프로젝트의 게이트(있으면).

@@ -22,6 +22,9 @@ hand — always reads the version that matches the release being installed.
   Do not improvise a fix to a template file.
 - On Windows run everything in Git Bash (Claude Code's Bash tool). PowerShell cannot run
   the template's hooks or `sh` scripts.
+- `CLONE`, `PROJECT`, `CLONE_PARENT`, `PY`, `OLD`, `NEW` are placeholders. Shell variables do
+  not survive between Claude Code's Bash calls: keep the literal values and write them into
+  every command.
 
 ## 0. Python
 
@@ -41,6 +44,9 @@ None found → tell the user Python 3.10+ is needed and stop.
   `완료` → **Ask:** finish that unit first (recommended) / continue. The upgrade does not
   touch that block, but an upgrade between units can be reverted on its own.
 - `PROJECT` is not a git repository → say the backup in step 3 is the only way back.
+- `git -C "$PROJECT" ls-files --error-unmatch .claude/ORCHESTRATOR_VERSION` fails → the
+  template files are local-only (ignored, e.g. via `.git/info/exclude`): git cannot commit
+  or undo them, so step 7 is skipped and the backup in step 3 is the way back. Say so.
 
 ## 2. Versions and what changes
 
@@ -88,6 +94,11 @@ MERGE set; step 6 checks against them.
 
 Work from `CLONE` (it is on `vNEW`). Paths are relative to the project root.
 
+**A path marked `[project-owned]` is never copied or rewritten, whatever its class** — it
+can show as MERGE (`CLAUDE.md` usually does). Show the user the upstream change
+(`git -C "$CLONE" diff vOLD vNEW -- <path>`) for information; only the CHANGELOG hand
+steps below change it. The table is for every other path.
+
 | Class | Action |
 |---|---|
 | REPLACE, ADD | `cp "$CLONE/<path>" "<path>"` (create the directory first) |
@@ -119,7 +130,8 @@ All four, then report the results together.
    ```
 
    Expected: applied files are only counted (`NOOP: N files already match NEW`), the
-   approved MERGE files stay listed as MERGE (they differ from both versions), KEEP lists
+   approved MERGE files and the `[project-owned]` ones stay listed as MERGE (they differ
+   from both versions), KEEP lists
    the project's own edits (including the hand steps just applied), and the files the user
    excluded or chose to keep stay as they were. Any other REPLACE / ADD / DELETE /
    DELETE-MODIFIED / ABSENT line, or a HOOKS or EXEC BIT section, is a step that was
@@ -151,7 +163,7 @@ git add .claude CLAUDE.md $( [ -d .agents ] && echo .agents )
 git commit -m "chore: upgrade claude-code-orchestrator template to vNEW"
 ```
 
-Projects that do not commit template files skip this; the backup is their way back.
+Local-only template files (step 1) skip this; the backup is their way back.
 
 ## 8. Clean up and hand over
 
@@ -173,6 +185,7 @@ Projects that do not commit template files skip this; the backup is their way ba
 Only on the user's word.
 
 - Committed: `git revert <upgrade commit>`.
-- Not committed, git project: `git switch -` back to the previous branch after
-  `git stash -u` (the stash keeps the attempt for inspection), or discard the branch.
-- No git: `rm -rf .claude .agents CLAUDE.md` then `tar xzf ~/backup-<project>-<date>.tgz`.
+- Not committed, template files tracked by git: `git switch -` back to the previous branch
+  after `git stash -u` (the stash keeps the attempt for inspection), or discard the branch.
+- Local-only template files, or no git: `rm -rf .claude .agents CLAUDE.md` then
+  `tar xzf ~/backup-<project>-<date>.tgz`.
