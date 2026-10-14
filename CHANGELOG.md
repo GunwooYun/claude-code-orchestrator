@@ -12,6 +12,15 @@ project changed, back up a gitignored `.claude/` first).
 
 ## [Unreleased]
 
+### Changed
+- README 「업그레이드 절차」 is one standard procedure in eight steps (when,
+  baseline, backup, plan, approval, apply, check, compare), with who does each
+  and the sentence to give Claude. It says why work in progress survives (it
+  lives in project-owned files) and that agent behaviour after an upgrade is
+  measured, not assumed: `usage-report` before and after.
+- README §12: feature PRs into `develop` are squash-merged, `develop` → `main`
+  is a merge commit, and how to recover when a release PR was squashed.
+
 ## [5.0.0] - 2026-10-14
 
 The second direction review (`docs/direction-review-2026-10-13.md`), judged on

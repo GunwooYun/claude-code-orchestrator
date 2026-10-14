@@ -524,52 +524,64 @@ git worktree add --detach ../<project>-review <작업 브랜치>
 
 ### 업그레이드 절차
 
-**템플릿을 그대로 다시 복사하면 안 된다.** `/initproject` 로 맞춘 내용이 모두 원본으로 덮어써진다.
-파일마다 "프로젝트가 고쳤는가"를 확인하고 골라서 가져온다.
+**템플릿을 그대로 다시 복사하면 안 된다.** `/initproject` 로 맞춘 내용과 진행 중인 작업 기록이 원본으로
+덮어써진다. 파일마다 "프로젝트가 고쳤는가"를 확인하고 골라서 가져온다. 아래 순서를 매번 같게 따른다.
 
-```mermaid
-flowchart TD
-    A["1. 백업<br/>tar czf backup.tgz .claude .agents CLAUDE.md"] --> B["2. CHANGELOG 에서<br/>내 버전 이후 바뀐 것 확인"]
-    B --> C{"3. 파일마다:<br/>프로젝트가 고쳤나?"}
-    C -- "안 고침<br/>(내 버전 원본과 같음)" --> D["새 버전으로 교체"]
-    C -- "고침" --> E["새 버전을 받고<br/>프로젝트 수정을 다시 적용"]
-    C -- "새 버전에서 삭제됨" --> F["삭제<br/>(훅이면 settings.json 등록도 함께!)"]
-    C -- "새 버전에 새로 생김" --> H["추가<br/>(실행 파일이면 settings.json 허용도 함께)"]
-    D --> G["4. 검사: 훅 등록 경로가 모두 실제 파일인지,<br/>ORCHESTRATOR_VERSION 이 새 버전인지"]
-    E --> G
-    F --> G
-    H --> G
+| # | 단계 | 누가 | 하는 일 |
+|---|---|---|---|
+| 1 | 시점 잡기 | 사람 | 하던 작업 단위를 끝내고 커밋한다. 업그레이드는 **작업 단위 사이에**, **별도 브랜치·별도 커밋**으로 한다(`git switch -c upgrade-<버전>`) |
+| 2 | 기준선 저장 | Claude | `.claude/bin/usage-report > usage-before.md` — 업그레이드 전의 위임·검증·훅 오류 숫자 |
+| 3 | 백업 | Claude | `.claude`·`.agents`·`CLAUDE.md` 가 커밋돼 있지 않으면 `tar czf backup.tgz .claude .agents CLAUDE.md` |
+| 4 | 분류표 | Claude (읽기만) | 템플릿 클론에서 `tools/upgrade-plan` 실행(아래). 파일별 분류와 읽어야 할 CHANGELOG 항목이 나온다 |
+| 5 | 승인 | 사람 | 분류표를 보고 진행·제외할 것을 정한다. **승인 전에는 아무 파일도 바꾸지 않는다** |
+| 6 | 적용 | Claude | 교체·병합·삭제·추가, 훅 등록 정리, CHANGELOG 가 손으로 하라고 한 일. 해당 버전의 "○.○.○ 으로 올릴 때" 절이 있으면 그대로 따른다 |
+| 7 | 확인 | Claude | 게이트(`.claude/scripts/verify-task`), `.claude/bin/agy-probe`(`STALE` 이면 `/agy-models`), `settings.json` 의 훅 경로가 모두 실제 파일인지, `ORCHESTRATOR_VERSION` 이 새 버전인지. 그다음 커밋 |
+| 8 | 비교 | Claude → 사람 | 작업 3~5건 뒤 `usage-report --since <업그레이드한 날>` 을 2번과 비교한다. 나빠졌으면 업그레이드 커밋을 되돌리거나(`git revert`) 원인 파일만 이전 버전으로 돌린다 |
+
+Claude 에게는 이렇게 시킨다: **"README 9장 표준 절차대로 v<내 버전> → v<새 버전> 업그레이드를 해 줘. 템플릿
+클론은 `<경로>` 야. 4단계 분류표를 보여 주고 승인받은 뒤 진행해."**
+
+**진행 중인 작업은 이어진다.** 업그레이드가 바꾸는 것은 템플릿 소유 파일뿐이다. 작업 상태는 프로젝트 소유
+파일에 있다 — `CLAUDE.md` 의 `## Current Project`(진행 중인 계획·검증 계획)와 `## Project Setup`(완료 지점,
+Jira·Confluence 설정), `.claude/docs/` 의 설계·조사 기록, `CLAUDE.local.md`, git 브랜치. 그래도 작업 단위
+사이에 하는 것은, 문제가 생겼을 때 업그레이드 커밋만 되돌릴 수 있게 하기 위해서다.
+
+**에이전트 동작은 "같다고 가정하지 않고" 잰다.** 동작을 정하는 것은 `.claude/agents/`, `.claude/rules/`,
+`.claude/skills/`, `CLAUDE.md` 다. 프로젝트가 고친 파일은 MERGE 로 나와 내 수정이 유지되지만(예: `/agy-models` 로
+고른 모델 표), 템플릿이 바꾼 지시는 바뀐다. 무엇이 바뀌는지는 4단계의 CHANGELOG 항목에 있고, 그래서 2번과
+8번의 숫자 비교가 이 절차의 일부다.
+
+**분류 도구 (`tools/upgrade-plan`)** — 읽기 전용이고 프로젝트에 복사되지 않는다. 이 저장소를 클론해 두고
+거기서 실행한다:
+
+```bash
+git -C <템플릿 클론> fetch --tags
+python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
 ```
 
-- **3번 분류표는 도구가 만든다** (읽기 전용, 아무것도 바꾸지 않는다). 이 저장소를 클론해 두고 거기서
-  실행한다. 도구는 프로젝트에 복사되지 않는다:
-  `git -C <템플릿 클론> fetch --tags` 후
-  `python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>`.
-  옛 버전 = 프로젝트의 `.claude/ORCHESTRATOR_VERSION`(없으면 `--from X.Y.Z`), 새 버전 = 클론의 최신 태그
+- 옛 버전 = 프로젝트의 `.claude/ORCHESTRATOR_VERSION`(없으면 `--from X.Y.Z`), 새 버전 = 클론의 최신 태그
   (`--to X.Y.Z` 로 중간 버전까지만).
-  파일마다 REPLACE·MERGE·KEEP·DELETE·ADD·PROJECT-ONLY 등으로 나누고, 예전 업그레이드에서 지웠어야 할
-  파일은 PROJECT-ONLY 아래 "last shipped in X" 로 모아 보여 준다. 실행 권한을 잃은 스크립트, 지워질 훅을
-  가리키는 `settings.json` 등록, 읽어야 할 CHANGELOG 항목도 함께 나온다.
-- "프로젝트가 고쳤나"는 그 파일을 **내 버전의 원본과 내용으로 비교**해서 판단한다 (도구도 이 규칙을 쓴다). git 의 내용 해시를
-  쓰면 Linux·macOS·Windows(PowerShell·cmd) 어디서나 같은 명령이고, 파일 권한 차이에 속지 않는다:
-  `git -C <템플릿 클론> rev-parse v<내 버전>:<경로>` 와 `git hash-object <경로>` 의 출력이 **같으면 안 고친 것**이다.
-  (`diff` 나 `git diff --no-index` 는 내용이 같아도 실행 권한 차이만으로 "다르다"고 나온다.)
-- 대개 그대로 교체해도 되는 것(템플릿 소유): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`,
-  `.claude/bin/`, `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
-  `rules/security.md`, `rules/language.md`, `rules/writing-style.md`,
-  `scripts/README.md`, `ORCHESTRATOR_VERSION`(새 버전 값이 된다)
-  — 단, 프로젝트가 고친 흔적이 있으면 병합한다. `/agy-models` 로 agy 모델을 바꿨다면
-  `rules/antigravity-delegation.md` 는 MERGE 로 나온다: 모델 표 4줄은 내 값을 유지한다.
-- 업그레이드 뒤 `.claude/bin/agy-probe` 를 한 번 돌린다. `STALE` 이면 `/agy-models` 로 모델을 다시 고른다.
-- 덮어쓰면 안 되는 것(프로젝트 소유): `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`,
-  `rules/test-writing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`,
-  `docs/writing-style.md`(팀의 문서 작성 규칙 — 5.0.0 부터. 5.0.0 으로 올릴 때 고치지 않은 템플릿 사본이면 새 파일로 바꾼다).
-- 덮어쓰지 않는 파일이라도 CHANGELOG 가 바꿨다고 적은 부분(예: `settings.json` 의 허용 경로, `CLAUDE.md` 에서
-  빠진 섹션)은 손으로 반영한다.
-- **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남아 있으면
-  훅 파일이 없어서 모든 편집이 실패한다. (3.0.0 은 1.x 대비 훅 6개를 지웠다.)
-- 이 과정을 Claude 에게 시켜도 된다: "CHANGELOG 를 보고 v4.3.1 → v5.0.0 업그레이드를 위 절차대로 해 줘.
-  먼저 파일별 분류표를 보여 주고 승인받은 뒤 진행해."
+- 분류: REPLACE(안 고침 → 교체), MERGE(양쪽 다 고침 → 새 파일에 내 수정 재적용), KEEP, DELETE(새 버전에서
+  삭제), ADD(새로 생김), PROJECT-ONLY(템플릿에 없는 파일 — 예전 업그레이드에서 지웠어야 할 것은 "last shipped in
+  X" 로 모아 보여 준다). 실행 권한을 잃은 스크립트, 지워질 훅을 가리키는 `settings.json` 등록도 함께 나온다.
+- **프로젝트가 다른 머신에 있으면**(원격 서버 등) 도구와 프로젝트가 같은 머신에 있어야 한다. 그 머신에 템플릿을
+  클론하거나, 그 머신의 Claude 세션에서 이 절차를 진행한다.
+
+**참고 — 분류의 기준**
+
+- "프로젝트가 고쳤나"는 그 파일을 **내 버전의 원본과 내용으로 비교**해서 판단한다(도구도 이 규칙을 쓴다).
+  손으로 확인할 때: `git -C <템플릿 클론> rev-parse v<내 버전>:<경로>` 와 `git hash-object <경로>` 가 **같으면 안
+  고친 것**이다. (`diff` 는 실행 권한 차이만으로도 "다르다"고 나온다.)
+- 템플릿 소유(대개 교체): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`, `.claude/bin/`,
+  `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
+  `rules/security.md`, `rules/language.md`, `rules/writing-style.md`, `scripts/README.md`, `ORCHESTRATOR_VERSION`.
+  프로젝트가 고쳤으면 MERGE 로 나온다.
+- 프로젝트 소유(덮어쓰지 않음): `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`,
+  `rules/test-writing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`,
+  `docs/research/`, `docs/writing-style.md`(5.0.0 부터. 5.0.0 으로 올릴 때 고치지 않은 템플릿 사본이면 새 파일로 바꾼다).
+  CHANGELOG 가 이 파일들에서 바꾸라고 한 부분(허용 경로, 빠진 섹션 등)은 손으로 반영한다.
+- **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남으면 훅 파일이 없어서
+  모든 편집(또는 Bash 명령)마다 오류가 난다.
 
 ### 5.0.0 으로 올릴 때
 
@@ -695,8 +707,13 @@ ssh -p <포트> <사용자>@<호스트> 'cd <그 머신에서 claude 를 연 폴
 - 기능 PR 은 변경을 `CHANGELOG.md` 의 `## [Unreleased]` 에 적는다.
 - 릴리스: `## [Unreleased]` 를 `## [X.Y.Z] - 날짜` 로 바꾸고 `.claude/ORCHESTRATOR_VERSION` 을 같은 버전으로
   올린다. **같은 PR 에서 README 를 그 릴리스 내용에 맞게 고친다** — 버전 표기만이 아니라 새 스킬·상태·절차와
-  11장 검증 현황까지(4.3.0 은 이걸 빠뜨렸다) → `develop` 을 `main` 으로 PR, **merge commit 으로 머지**
-  (squash 하면 다음 릴리스 PR 이 충돌한다 — 4.3.0 의 #59) → `main` 의 머지 커밋에 태그를 달고 push.
+  11장 검증 현황까지(4.3.0 은 이걸 빠뜨렸다) → `develop` 을 `main` 으로 PR, **merge commit 으로 머지** →
+  `main` 의 머지 커밋에 태그를 달고 push.
+- 머지 방식: **기능 PR → `develop` 은 squash**(기능마다 커밋 하나), **`develop` → `main` 은 merge commit**.
+  릴리스 PR 을 squash 하면 `main` 의 커밋이 `develop` 이력에 없어서 다음 릴리스 PR 이 충돌한다(4.2.0, 5.0.0 에서
+  실제로 일어났다). 그랬다면 `git diff origin/main origin/develop` 이 비어 있는지 확인하고
+  `git merge -s ours origin/main` 을 `develop` 에 PR 로 넣는다(merge commit 으로; #59, #67). 릴리스 목록은
+  `git log --first-parent --oneline main` 으로 한 줄씩 본다.
 - 다음 변경은 실사용 근거(`usage-report`, 불편 메모)로 정한다. 최근 점검과 다음 점검의 기준선:
   [`docs/direction-review-2026-10-13.md`](docs/direction-review-2026-10-13.md)
 
