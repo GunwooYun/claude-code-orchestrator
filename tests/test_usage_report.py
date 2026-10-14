@@ -269,6 +269,7 @@ class NothingLeaks(UsageReportCase):
                 hook_error("lint-on-save.py", stderr=SENTINEL),
                 tool_use("p1", "Bash", {"command": ".claude/bin/agy-probe"}),
                 tool_result("p1", f"{SENTINEL} state"),
+                tool_use("a1", f"mcp__{SENTINEL}_Atlassian__createJiraIssue", {}),
             ]
         )
         self.write_session([user_text(SENTINEL)], agent="x1")
@@ -506,6 +507,45 @@ class Agy(UsageReportCase):
             },
         )
         self.assertEqual(data["gate"], {"task": {"runs": 1, "failed": 0}})
+
+
+class Atlassian(UsageReportCase):
+    def test_calls_split_by_jira_skill_sessions_and_read_or_write(self) -> None:
+        # 2026-10-14: "1 skill call vs ~150 MCP calls" was read as the skills
+        # being bypassed; 136 of the calls predated the skills. Split them.
+        jira = "mcp__claude_ai_Atlassian_Rovo__"
+        self.write_session(
+            [
+                tool_use("j1", f"{jira}getJiraIssue", {}),
+                user_text("<command-name>/ticket</command-name>"),
+                tool_use("j2", f"{jira}editJiraIssue", {}),
+            ]
+        )
+        self.write_session(
+            [tool_use("j3", f"{jira}transitionJiraIssue", {})], agent="x1"
+        )
+        self.write_session(
+            [
+                tool_use("j4", "Skill", {"skill": "doc-write"}),
+                tool_use("j5", f"{jira}createConfluencePage", {}),
+            ],
+            session="22222222-aaaa-bbbb-cccc-000000000002",
+        )
+        self.write_session(
+            [
+                tool_use("j6", f"{jira}searchJiraIssuesUsingJql", {}),
+                tool_use("j7", f"{jira}addCommentToJiraIssue", {}),
+                tool_use("j8", "mcp__github__create_issue", {}),
+            ],
+            session="33333333-aaaa-bbbb-cccc-000000000003",
+        )
+        self.assertEqual(
+            self.report()["atlassian"],
+            {
+                "skill_sessions": {"read": 1, "write": 3},
+                "other_sessions": {"read": 1, "write": 1},
+            },
+        )
 
 
 class Since(UsageReportCase):

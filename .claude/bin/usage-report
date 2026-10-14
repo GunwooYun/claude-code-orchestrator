@@ -54,6 +54,8 @@ TEMPLATE_SKILLS = (
 TEMPLATE_HOOKS = ("bash-write-check.py", "lint-on-save.py")
 TEMPLATE_AGENTS = ("deep-reasoning", "general-purpose", "Explore", "Plan")
 PROBE_STATES = ("READY", "MISSING", "UNAUTHENTICATED", "DEGRADED", "STALE")
+JIRA_SKILLS = ("ticket", "jira-setup", "doc-write")
+ATLASSIAN_WRITE = re.compile(r"^(?:create|edit|update|add|transition|delete)")
 DENIED_MARKERS = (
     "Permission for this action was denied",
     "The user doesn't want to proceed",
@@ -173,6 +175,12 @@ class Tally:
         }
         self.agy = Counter(calls=0, failed=0, probe_runs=0)
         self.probe_states: Counter[str] = Counter()
+        # Atlassian MCP calls in sessions that ran /ticket, /jira-setup or
+        # /doc-write vs the rest: whether the skills are used or bypassed.
+        self.atlassian = {
+            kind: Counter(read=0, write=0)
+            for kind in ("skill_sessions", "other_sessions")
+        }
         self.unreadable = 0
         self.feature_progress: dict[str, int] = {}
 
@@ -192,6 +200,13 @@ class Session:
         self.design_review = False
         self.verify_run = False
         self.isolated_review = False
+        self.jira_skill = False
+        self.atlassian = Counter(read=0, write=0)
+
+    def saw_skill(self, name: str) -> None:
+        self.feature |= name == "feature"
+        self.isolated_review |= name == "isolated-review"
+        self.jira_skill |= name in JIRA_SKILLS
 
 
 def scan_file(
@@ -232,8 +247,7 @@ def scan_record(
         if side == "main" and isinstance(message, dict):
             for name in COMMAND_TAG.findall(text_of(message.get("content"))):
                 tally.skill_use(name, "typed", day)
-                session.feature |= name == "feature"
-                session.isolated_review |= name == "isolated-review"
+                session.saw_skill(name)
         for block in blocks(record):
             if block.get("type") == "tool_result":
                 scan_result(block, tally, pending)
@@ -269,8 +283,10 @@ def scan_tool_use(
     if name == "Skill":
         skill = str(tool_input.get("skill", ""))
         tally.skill_use(skill, "model", day)
-        session.feature |= skill == "feature"
-        session.isolated_review |= skill == "isolated-review"
+        session.saw_skill(skill)
+    elif name.startswith("mcp__") and "atlassian" in name.lower():
+        action = name.rsplit("__", 1)[-1]
+        session.atlassian["write" if ATLASSIAN_WRITE.match(action) else "read"] += 1
     elif name in ("Agent", "Task"):
         agent = str(tool_input.get("subagent_type", "general-purpose"))
         if agent in TEMPLATE_AGENTS:
@@ -348,6 +364,8 @@ def scan_transcripts(directory: Path, since: str) -> tuple[Tally, dict[str, int]
         for sub in sorted((directory / main.stem / "subagents").glob("*.jsonl")):
             subagent_files += 1
             scan_file(sub, "subagent", since, tally, session)
+        kind = "skill_sessions" if session.jira_skill else "other_sessions"
+        tally.atlassian[kind].update(session.atlassian)
         if session.feature:
             progress["sessions"] += 1
             progress["design_review"] += session.design_review
@@ -395,6 +413,7 @@ def build_report(
         "feature_sessions": tally.feature_progress,
         "tokens": {side: dict(c) for side, c in tally.tokens.items()},
         "agy": {**tally.agy, "probe_states": dict(sorted(tally.probe_states.items()))},
+        "atlassian": {kind: dict(c) for kind, c in tally.atlassian.items()},
         "isolated_review_runs": isolated_review_runs(project, since),
     }
 
@@ -486,7 +505,16 @@ def render_markdown(report: dict) -> str:
         + ".",
         "",
         f"/isolated-review runs logged: {report['isolated_review_runs']}.",
+        "",
+        "## Atlassian MCP calls",
+        "",
+        "Sessions that ran /ticket, /jira-setup or /doc-write vs the rest.",
+        "",
     ]
+    out += table(
+        ("sessions", "read", "write"),
+        [(k, c["read"], c["write"]) for k, c in report["atlassian"].items()],
+    )
     return "\n".join(out) + "\n"
 
 
