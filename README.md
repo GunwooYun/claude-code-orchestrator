@@ -114,6 +114,11 @@ your-project/
 | `/jira-setup`, `/ticket` | Jira 를 쓰는 팀 | Jira 연결 설정, 티켓에서 작업 시작 |
 | `/doc-write` | Confluence·문서 작성 | 작성 규칙에 맞춰 문서를 쓰고 발행 |
 
+Jira·Confluence 를 쓰지 않는 프로젝트는 `.claude/skills/jira-setup/`, `.claude/skills/ticket/`,
+`.claude/skills/doc-write/` 를 지워도 된다. 지우면 매 세션 약 1KB 의 컨텍스트(`/ticket`·`/doc-write` 의
+설명)가 줄고, "문서로 정리해줘" 같은 말에 `/doc-write` 가 불리지 않는다. `.claude/rules/writing-style.md`
+는 남긴다 — 정직성 규칙은 계획서·보고서 전부에 적용되고 `/feature` 도 가리킨다.
+
 ### 훅 (자동으로 도는 검사)
 
 | 훅 | 언제 | 하는 일 |
