@@ -71,6 +71,7 @@ PROJECT_OWNED = (
     ".agents/rules/AGENTS.md",
     "docs/DESIGN.md",
     "docs/research/",
+    "docs/writing-style.md",
 )
 CLASSES = (
     ("REPLACE", "unmodified in the project, changed upstream: take the new file"),

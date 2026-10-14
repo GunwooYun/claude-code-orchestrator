@@ -137,6 +137,58 @@ class SkillNamingTests(unittest.TestCase):
                 )
 
 
+class ProjectSetupWritersTests(unittest.TestCase):
+    """
+    DRIFT TRIPWIRE with an incident behind it: on a real project `### Jira`
+    (written by /jira-setup on 2026-09-29) was gone after a second /initproject
+    recreated `## Project Setup`, so the next /ticket had no write policy.
+    Every skill that writes the section must say it keeps the others' parts.
+    """
+
+    WRITERS = ("initproject", "jira-setup", "doc-write")
+
+    def test_each_writer_keeps_the_other_subsections(self) -> None:
+        for name in self.WRITERS:
+            raw = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            text = " ".join(raw.split())  # prose wraps anywhere
+            with self.subTest(skill=name):
+                self.assertIn("### Jira", text)
+                self.assertIn("### Confluence", text)
+                self.assertTrue(
+                    "never rewrite `## Project Setup` as a whole" in text
+                    or "`## Project Setup` 전체를 다시 쓰지 않는다" in text
+                )
+
+
+class NoTeamSpecificsTests(unittest.TestCase):
+    def test_shipped_files_link_no_teams_confluence(self) -> None:
+        # Until 5.0.0 the style guide linked one team's Confluence pages.
+        # Tracked files only: local reports may quote anything.
+        tracked = set(
+            subprocess.run(
+                ["git", "ls-files"],
+                cwd=REPO,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.splitlines()
+        )
+        shipped = [
+            REPO / "CLAUDE.md",
+            *(REPO / ".claude").rglob("*"),
+            *(REPO / ".agents").rglob("*"),
+        ]
+        for path in shipped:
+            if not path.is_file() or path.suffix not in (".md", ".json", ".py", ""):
+                continue
+            rel = path.relative_to(REPO).as_posix()
+            if rel not in tracked or "docs/research" in rel:
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            with self.subTest(path=rel):
+                self.assertNotRegex(text, r"\.atlassian\.net/wiki")
+
+
 class ReferenceTests(unittest.TestCase):
     def test_instructions_do_not_reference_missing_input_files(self) -> None:
         dangling: list[str] = []

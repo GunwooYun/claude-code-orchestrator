@@ -35,6 +35,11 @@ is 5.0.0.
    those by hand, and delete file and registration together (a registered
    leftover keeps running). Then run `.claude/bin/usage-report --since <today>`
    after a day of work: every hook's `errors` column should be 0.
+6. `.claude/docs/writing-style.md` is now project-owned. If your copy is the
+   template's, take the new file (it no longer carries another team's
+   Confluence links and examples); if you edited it, keep yours.
+7. If `/jira-setup` ran before and `CLAUDE.md` no longer has `### Jira` (a
+   second `/initproject` could erase it), run `/jira-setup` again.
 
 ### Removed (breaking)
 - Hook `log-cli-tools`. On a real adopter whose system `python3` is 3.10 it
@@ -62,6 +67,8 @@ is 5.0.0.
   periodically with `--since` and keep the reports. On another machine,
   without copying anything there:
   `ssh <host> 'cd <project> && python3 - --since <date>' < .claude/bin/usage-report`.
+  It also splits Atlassian MCP calls (read / write) between sessions that ran
+  `/ticket`, `/jira-setup` or `/doc-write` and the rest.
 
 ### Changed
 - The gate type-checks shipped Python at 3.10 (`ty` python-version, ruff
@@ -79,6 +86,19 @@ is 5.0.0.
   hook-writing facts. `docs/` design history trimmed (git keeps it).
 - The template's own tests: prose checks with no incident behind them removed;
   the Python-floor test now runs at 3.10 instead of being skipped.
+
+### Fixed
+- `## Project Setup` kept by every writer: on the work project `### Jira`
+  (from `/jira-setup`) was gone after a second `/initproject` recreated the
+  section, so `/ticket` had no write policy. `/initproject`, `/jira-setup` and
+  `/doc-write` now edit only their own part and create the section if absent.
+- `.claude/docs/writing-style.md` shipped one team's Confluence links, its
+  reference report and sentences from its own domain. Removed; the patterns
+  stay as general rules. It is project-owned from now on (`--plan` marks it).
+- `/ticket`, `/jira-setup`, `/doc-write` shortened where they restated the
+  style guide, each other or their own steps.
+- "1 skill call vs ~150 MCP calls" (README, design docs) mixed two periods:
+  136 of 153 calls predate the skills; after installation all 17 ran in sessions that ran them.
 
 ## [4.3.1] - 2026-10-13
 

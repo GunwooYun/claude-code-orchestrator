@@ -13,6 +13,8 @@ drift tripwire over prose, not behavioural coverage.
 
 from __future__ import annotations
 
+import importlib.machinery
+import importlib.util
 import json
 import os
 import re
@@ -482,6 +484,17 @@ class PlanClassificationTests(PlanFixture):
         self.assertIn("  CLAUDE.md  [project-owned]", stdout)
         self.assertIn("  .claude/keep.md\n", stdout)
         self.assertIn("[project-owned] = do not overwrite", stdout)
+
+    def test_the_style_guide_is_project_owned(self) -> None:
+        # It is a team's house style (it shipped one team's Confluence links
+        # until 5.0.0): an upgrade must not overwrite a project's version.
+        loader = importlib.machinery.SourceFileLoader("check", str(CHECK))
+        spec = importlib.util.spec_from_loader("check", loader)
+        assert spec is not None
+        check = importlib.util.module_from_spec(spec)
+        loader.exec_module(check)
+        self.assertTrue(check.project_owned(".claude/docs/writing-style.md"))
+        self.assertFalse(check.project_owned(".claude/rules/writing-style.md"))
 
     def test_runtime_state_is_not_part_of_the_plan(self) -> None:
         runtime = (
