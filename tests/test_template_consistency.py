@@ -137,6 +137,33 @@ class SkillNamingTests(unittest.TestCase):
                 )
 
 
+class UpgradeProcedureContractTests(unittest.TestCase):
+    """
+    /orchestrator-upgrade ships into projects and is never updated before it
+    runs, so the procedure path it names is a contract with every old copy:
+    moving the file breaks all of them. README §9's paste-in prompt and manual
+    fallback point at the same file.
+    """
+
+    SKILL = SKILLS / "orchestrator-upgrade" / "SKILL.md"
+
+    def procedure_path(self) -> str:
+        m = re.search(
+            r"^PROCEDURE\s*=\s*(\S+)", self.SKILL.read_text("utf-8"), re.MULTILINE
+        )
+        self.assertIsNotNone(m, "SKILL.md must name its PROCEDURE path")
+        assert m is not None
+        return m[1]
+
+    def test_skill_procedure_path_exists_in_the_template(self) -> None:
+        self.assertTrue((REPO / self.procedure_path()).is_file())
+
+    def test_readme_points_at_the_same_procedure(self) -> None:
+        path = self.procedure_path()
+        readme = (REPO / "README.md").read_text("utf-8")
+        self.assertTrue(path in readme, f"README.md must name {path}")
+
+
 class ProjectSetupWritersTests(unittest.TestCase):
     """
     DRIFT TRIPWIRE with an incident behind it: on a real project `### Jira`

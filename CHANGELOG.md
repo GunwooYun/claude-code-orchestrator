@@ -12,13 +12,43 @@ project changed, back up a gitignored `.claude/` first).
 
 ## [Unreleased]
 
+### Added
+- Skill `/orchestrator-upgrade`: clones the latest release into a temporary
+  directory and follows that clone's `tools/UPGRADE.md`, asking only at
+  decision points (GitHub unreachable → retry / a clone path / stop; dirty tree
+  or unfinished unit; the version; the plan; each MERGE; edits to project-owned
+  files; a failed check; commit; deleting the temporary clone). The skill only
+  bootstraps, so an old copy of it still runs the new procedure. Projects from
+  before this release paste one prompt instead (README 「업그레이드 절차」).
+- `tools/UPGRADE.md` — the one upgrade procedure (repository-only, never
+  copied). After applying, it re-runs `upgrade-plan --from <old>`: only MERGE
+  and KEEP may remain (no REPLACE / ADD / DELETE, except project-owned files
+  the user kept). A `[project-owned]` file the project edited is never copied
+  or merged, even as MERGE (`CLAUDE.md`); only CHANGELOG hand steps change it.
+  One it never edited (REPLACE) is offered. The commit stages only the files
+  the upgrade changed. Local-only template files (`.git/info/exclude`) roll
+  back from the backup.
+- `tools/hook-check <project>` — runs every hook registered in the project's
+  `settings.json` with a payload it reacts to and fails naming the hook that
+  crashed, swallowed its own error (`hook error (ignored)`), or whose file is
+  missing. It replaces "use it for a day, then read
+  `usage-report`" as the post-upgrade hook check; the `usage-report`
+  comparison after a few days stays optional.
+
+### Fixed
+- `tools/upgrade-plan` on Windows (found by the Windows rehearsal):
+  a CRLF checkout (Git for Windows' default `core.autocrlf=true`) no longer
+  makes every unedited file look edited — CRLF counts as LF, as with
+  `git hash-object`; and output is UTF-8, so a non-ASCII project path (a
+  Korean user name) no longer crashes it on the cp949 code page. `hook-check`
+  writes UTF-8 too.
+
 ### Changed
-- README 「업그레이드 절차」 is one standard procedure, step by step with the shell
-  commands and the lines to type into Claude as copyable code blocks (when,
-  baseline, backup, plan, approval, apply, check, compare), with who does each
-  and the sentence to give Claude. It says why work in progress survives (it
-  lives in project-owned files) and that agent behaviour after an upgrade is
-  measured, not assumed: `usage-report` before and after.
+- README 「업그레이드 절차」 is an overview: when, how to start (the skill or the
+  paste-in prompt), what Claude asks, the immediate check, the optional
+  comparison after a few days (3–5 tasks — the 5.0.0 list said "a day"), and
+  the manual fallback (follow `tools/UPGRADE.md`). The step-by-step shell
+  blocks are gone; the procedure is in one place.
 - README §12: feature PRs into `develop` are squash-merged, `develop` → `main`
   is a merge commit, and how to recover when a release PR was squashed.
 

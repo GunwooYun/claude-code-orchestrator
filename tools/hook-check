@@ -1,0 +1,263 @@
+#!/usr/bin/env python3
+"""
+hook-check — prove every hook registered in a project's settings.json runs.
+
+Usage: python3 <template clone>/tools/hook-check PROJECT
+
+Run it right after a template upgrade, on the machine and python3 the hooks
+will really use. It is a repository tool and is not copied into projects.
+
+For each `type: command` hook in PROJECT/.claude/settings.json it runs the
+command verbatim (`sh -c`) with a payload the hook is meant to react to, and
+reports one line per command:
+
+  ok   <Event>[<matcher>] <command>
+  FAIL <Event>[<matcher>] <command>: <reason>
+
+A command fails when it exits non-zero, prints a Python traceback, prints
+stdout that is not JSON, or points at a `$CLAUDE_PROJECT_DIR/...` file that
+does not exist. Exit 2 with a block reason on stderr (and no traceback) is the
+documented way for a hook to block a tool call, so it is not a failure; the
+template's own hooks never block (exit 0 always), so for them it would be
+unexpected but is still reported as "ok (blocked)", never hidden.
+
+Nothing in PROJECT is written: hooks run in a scratch copy of its `.claude/`
+(without logs and docs) and every payload points at a scratch file. Exit 0 all
+ok, 1 any FAIL, 2 usage error (reason on stderr).
+"""
+
+from __future__ import annotations
+
+import argparse
+import io
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+from typing import NamedTuple
+
+TIMEOUT_SECONDS = 60
+SETTINGS = Path(".claude") / "settings.json"
+SCRATCH_FILE = "hook-check-sample.py"
+SCRATCH_TEXT = "x = 1\n"
+SESSION_ID = "hook-check"
+TOOL_USE_ID = "toolu_hook_check"
+HOOK_ERROR = "hook error (ignored)"
+COPY_IGNORE = shutil.ignore_patterns("logs", "docs", "__pycache__", "*.pyc")
+# `$CLAUDE_PROJECT_DIR/x`, `"$CLAUDE_PROJECT_DIR"/x`, `${CLAUDE_PROJECT_DIR}/x`
+PROJECT_PATH = re.compile(r"\$\{?CLAUDE_PROJECT_DIR\}?\"?/([^\s\"';|&<>]+)")
+
+
+class Hook(NamedTuple):
+    event: str
+    matcher: str
+    command: str
+
+
+class Outcome(NamedTuple):
+    ok: bool
+    note: str  # failure reason, or "" / a short remark when ok
+
+
+def fail(message: str) -> int:
+    print(f"hook-check: {message}", file=sys.stderr)
+    return 2
+
+
+def load_hooks(project: Path) -> list[Hook]:
+    """Every `type: command` hook, in file order. Raises ValueError when unreadable."""
+    path = project / SETTINGS
+    if not path.is_file():
+        raise ValueError(f"no {SETTINGS} in {project}")
+    try:
+        settings = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"cannot read {path}: {exc}") from exc
+    events = settings.get("hooks", {}) if isinstance(settings, dict) else {}
+    if not isinstance(events, dict):
+        raise ValueError(f"{path}: `hooks` is not an object")
+    found: list[Hook] = []
+    for event, groups in events.items():
+        for group in groups if isinstance(groups, list) else []:
+            if not isinstance(group, dict):
+                continue
+            matcher = group.get("matcher", "")
+            for entry in group.get("hooks", []):
+                if (
+                    isinstance(entry, dict)
+                    and entry.get("type") == "command"
+                    and isinstance(entry.get("command"), str)
+                ):
+                    found.append(Hook(event, str(matcher), entry["command"]))
+    return found
+
+
+def tool_for(matcher: str) -> str:
+    """A tool name the matcher selects: the first plain alternative, else Bash."""
+    for part in matcher.split("|"):
+        if re.fullmatch(r"\w+", part):
+            return part
+    return "Bash"
+
+
+def payloads(hook: Hook, scratch: Path) -> list[dict]:
+    """
+    The payloads to send, in order. Bash PostToolUse hooks first get the Pre
+    payload (bash-write-check records its start mark there), then the scratch
+    file is rewritten between the two so the Post sees a file written by the
+    command. Every path points into the scratch copy.
+    """
+    base = {"session_id": SESSION_ID, "cwd": str(scratch)}
+    sample = str(scratch / SCRATCH_FILE)
+    if hook.event in ("PreToolUse", "PostToolUse"):
+        tool = tool_for(hook.matcher)
+        if tool == "Bash":
+            tool_input: dict = {"command": f"sed -i '' s/x/y/ {SCRATCH_FILE}"}
+        elif tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+            tool_input = {"file_path": sample, "new_string": SCRATCH_TEXT}
+        else:
+            tool_input = {}
+        pre = {
+            **base,
+            "hook_event_name": "PreToolUse",
+            "tool_use_id": TOOL_USE_ID,
+            "tool_name": tool,
+            "tool_input": tool_input,
+        }
+        if hook.event == "PreToolUse":
+            return [pre]
+        post = {
+            **pre,
+            "hook_event_name": "PostToolUse",
+            "tool_response": {"filePath": sample, "stdout": "", "stderr": ""},
+        }
+        return [pre, post] if tool == "Bash" else [post]
+    if hook.event == "UserPromptSubmit":
+        return [
+            {
+                **base,
+                "hook_event_name": hook.event,
+                "prompt": "Refactor the retry logic and explain the tradeoffs",
+            }
+        ]
+    return [{**base, "hook_event_name": hook.event}]
+
+
+def missing_files(project: Path, command: str) -> list[str]:
+    return [
+        rel for rel in PROJECT_PATH.findall(command) if not (project / rel).exists()
+    ]
+
+
+def first_traceback_line(stderr: str) -> str:
+    lines = [line for line in stderr.splitlines() if line.strip()]
+    # The exception line closes a traceback; fall back to the last line.
+    for line in reversed(lines):
+        if not line.startswith((" ", "\t", "Traceback")):
+            return line.strip()
+    return lines[-1].strip() if lines else "traceback"
+
+
+def run_one(hook: Hook, payload: dict, scratch: Path) -> Outcome:
+    env = dict(os.environ)
+    env.pop("CLAUDE_SESSION_ID", None)
+    env["CLAUDE_PROJECT_DIR"] = str(scratch)
+    try:
+        done = subprocess.run(
+            ["sh", "-c", hook.command],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT_SECONDS,
+            cwd=str(scratch),
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        return Outcome(False, f"timed out after {TIMEOUT_SECONDS}s")
+    if "Traceback (most recent call last)" in done.stderr:
+        return Outcome(False, f"traceback: {first_traceback_line(done.stderr)}")
+    # The template's hooks catch their own exceptions, print this and exit 0.
+    swallowed = [line for line in done.stderr.splitlines() if HOOK_ERROR in line]
+    if swallowed:
+        return Outcome(False, swallowed[0].strip()[:120])
+    blocked = ""
+    if done.returncode == 2 and done.stderr.strip():
+        blocked = "blocked: " + done.stderr.strip().splitlines()[0][:80]
+    elif done.returncode != 0:
+        tail = done.stderr.strip().splitlines()[-1:] or [""]
+        return Outcome(False, f"exit {done.returncode} {tail[0][:80]}".rstrip())
+    out = done.stdout.strip()
+    if out:
+        try:
+            json.loads(out)
+        except ValueError:
+            return Outcome(False, f"stdout is not JSON: {out[:60]!r}")
+    return Outcome(True, blocked)
+
+
+def check_hook(project: Path, hook: Hook, scratch: Path) -> Outcome:
+    missing = missing_files(project, hook.command)
+    if missing:
+        return Outcome(False, "missing file " + ", ".join(missing))
+    note = ""
+    sample = scratch / SCRATCH_FILE
+    for payload in payloads(hook, scratch):
+        sample.write_text(SCRATCH_TEXT, encoding="utf-8")
+        if payload["hook_event_name"] == "PostToolUse":
+            # Written after the Pre mark, as a Bash command would have.
+            time.sleep(0.02)
+            sample.write_text(SCRATCH_TEXT + "y = 2\n", encoding="utf-8")
+        outcome = run_one(hook, payload, scratch)
+        if not outcome.ok:
+            return outcome
+        note = note or outcome.note
+    return Outcome(True, note)
+
+
+def utf8_output() -> None:
+    """Windows pipes and consoles default to the ANSI code page (cp949 on Korean
+    Windows): printing a non-ASCII path crashed upgrade-plan; same here."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8")
+
+
+def main() -> int:
+    utf8_output()
+    parser = argparse.ArgumentParser(
+        description="Run every hook registered in PROJECT/.claude/settings.json "
+        "with a trigger payload and report the ones that fail."
+    )
+    parser.add_argument("project", help="project root (holds .claude/settings.json)")
+    args = parser.parse_args()
+    project = Path(args.project).resolve()
+    try:
+        hooks = load_hooks(project)
+    except ValueError as exc:
+        return fail(str(exc))
+
+    failures = 0
+    with tempfile.TemporaryDirectory(prefix="hook-check-") as tmp:
+        scratch = Path(tmp)
+        shutil.copytree(
+            project / ".claude", scratch / ".claude", ignore=COPY_IGNORE, symlinks=True
+        )
+        for hook in hooks:
+            label = f"{hook.event}[{hook.matcher}] {hook.command}"
+            outcome = check_hook(project, hook, scratch)
+            if outcome.ok:
+                print(f"ok   {label}" + (f"  ({outcome.note})" if outcome.note else ""))
+            else:
+                failures += 1
+                print(f"FAIL {label}: {outcome.note}")
+    print(f"hook-check: {len(hooks) - failures}/{len(hooks)} ok, {failures} failed")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

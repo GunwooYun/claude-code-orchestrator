@@ -3,6 +3,7 @@ paths:
   - "**/*.py"
   - ".claude/skills/isolated-review/run-review"
   - "tools/upgrade-plan"
+  - "tools/hook-check"
   - ".claude/bin/usage-report"
 ---
 # Coding Principles (Python)

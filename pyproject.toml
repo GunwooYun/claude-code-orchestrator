@@ -70,9 +70,9 @@ addopts = "-v --tb=short"
 # Read-only checks: these are the gate, so they must be able to fail.
 # Extensionless Python scripts are named explicitly: a directory scan skips
 # them (tests/test_isolated_review.py checks this list stays complete).
-lint = "ruff check . .claude/skills/isolated-review/run-review tools/upgrade-plan .claude/bin/usage-report"
-format-check = "ruff format --check . .claude/skills/isolated-review/run-review tools/upgrade-plan .claude/bin/usage-report"
-typecheck = "ty check .claude/hooks .claude/skills/isolated-review/run-review tools/upgrade-plan .claude/bin/usage-report tests"
+lint = "ruff check . .claude/skills/isolated-review/run-review tools/upgrade-plan tools/hook-check .claude/bin/usage-report"
+format-check = "ruff format --check . .claude/skills/isolated-review/run-review tools/upgrade-plan tools/hook-check .claude/bin/usage-report"
+typecheck = "ty check .claude/hooks .claude/skills/isolated-review/run-review tools/upgrade-plan tools/hook-check .claude/bin/usage-report tests"
 # Parallel: most of the suite waits on subprocesses (90 s serial, ~25 s here).
 # Scoped `verify-task <path>` and bare `uv run pytest` stay serial.
 test = "pytest -n auto"
