@@ -12,6 +12,11 @@ project changed, back up a gitignored `.claude/` first).
 
 ## [Unreleased]
 
+**Upgrade:**
+1. Delete `.claude/hooks/__pycache__/` if it exists. The old hooks wrote it and
+   the new ones do not; where `.gitignore` lacks it, the leftover keeps
+   `/isolated-review` refusing the working tree as dirty.
+
 ### Added
 - Skill `/orchestrator-upgrade`: clones the latest release into a temporary
   directory and follows that clone's `tools/UPGRADE.md`, asking only at
