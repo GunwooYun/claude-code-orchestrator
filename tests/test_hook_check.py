@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -110,6 +112,38 @@ class HookCheckTests(unittest.TestCase):
         )
         self.assertEqual(1, result.returncode, result.stderr.decode("utf-8", "replace"))
         self.assertIn("경로 윤건우", result.stdout.decode("utf-8"))
+
+    def test_a_save_check_that_never_ran_fails_the_run(self) -> None:
+        # The real hook, with a verify-save the OS refuses to exec (as Windows
+        # refused the sh script: the hook said "could not run" and exited 0).
+        for name in ("lint-on-save.py", "_savecheck.py"):
+            shutil.copy2(REPO / ".claude/hooks" / name, self.project / ".claude/hooks")
+        script = self.project / ".claude/scripts/verify-save"
+        script.parent.mkdir(parents=True)
+        script.write_bytes(b"\x00\x01not a program\n")
+        script.chmod(0o755)
+        self.write(
+            ".claude/settings.json",
+            settings_with(
+                (
+                    "PostToolUse",
+                    "Edit|Write",
+                    'python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/lint-on-save.py"',
+                )
+            ),
+        )
+        result = self.run_tool()
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertRegex(result.stdout, r"FAIL .*lint-on-save\.py.*could not run")
+
+    def test_never_ran_markers_match_the_save_check_s_messages(self) -> None:
+        source = (REPO / ".claude/hooks/_savecheck.py").read_text("utf-8")
+        tool = (REPO / "tools/hook-check").read_text("utf-8")
+        markers = re.search(r"^NEVER_RAN = \((.*)\)$", tool, re.MULTILINE)
+        assert markers is not None, "hook-check must define NEVER_RAN"
+        for marker in re.findall(r'"([^"]+)"', markers[1]):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, source)
 
     def test_a_hook_that_swallows_its_own_error_still_fails_the_run(self) -> None:
         # The template's hooks catch every exception, print this line and exit 0.
