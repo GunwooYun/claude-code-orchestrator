@@ -36,6 +36,15 @@ project changed, back up a gitignored `.claude/` first).
   comparison after a few days stays optional.
 
 ### Fixed
+- The save check never ran on Windows: the hooks exec'd the extensionless
+  `#!/bin/sh` `verify-save`, which Windows cannot do, and reported
+  `could not run … [WinError 193]` on every save. On Windows an extensionless
+  script now runs by its shebang — sh scripts through Git Bash's `sh` (or
+  `CLAUDE_CODE_GIT_BASH_PATH`) with `/` paths, Python ones through Python —
+  and without `sh` the message names Git Bash. `tools/hook-check` now fails a
+  hook whose save check never ran (`could not run` / `timed out after`); it
+  reported these hooks ok before. Projects without `verify-save` were not
+  affected.
 - `tools/upgrade-plan` on Windows (found by the Windows rehearsal):
   a CRLF checkout (Git for Windows' default `core.autocrlf=true`) no longer
   makes every unedited file look edited — CRLF counts as LF, as with
