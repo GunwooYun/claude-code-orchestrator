@@ -26,7 +26,11 @@ import re
 import sys
 import time
 
-from _savecheck import check, report, resolve_script
+# Importing _savecheck would leave .claude/hooks/__pycache__/ in the project: an
+# untracked file that made /isolated-review refuse the tree as dirty.
+sys.dont_write_bytecode = True
+
+from _savecheck import check, report, resolve_script  # noqa: E402
 
 MARKS_DIR = os.path.join(".claude", "logs", "bash-marks")
 STALE_SECONDS = 3600

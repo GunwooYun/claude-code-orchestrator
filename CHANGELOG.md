@@ -45,6 +45,10 @@ project changed, back up a gitignored `.claude/` first).
   hook whose save check never ran (`could not run` / `timed out after`); it
   reported these hooks ok before. Projects without `verify-save` were not
   affected.
+- The save-check hooks no longer write `.claude/hooks/__pycache__/`: in a
+  project whose `.gitignore` lacks it, that untracked file made
+  `/isolated-review` refuse the working tree as dirty (seen on the Windows
+  check; not Windows-specific).
 - `tools/upgrade-plan` on Windows (found by the Windows rehearsal):
   a CRLF checkout (Git for Windows' default `core.autocrlf=true`) no longer
   makes every unedited file look edited — CRLF counts as LF, as with

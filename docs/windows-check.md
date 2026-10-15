@@ -59,7 +59,7 @@ claude
 4. **W9 — agy 프로브 (Claude 없이).** `cd "$P" && .claude/bin/agy-probe; echo exit=$?`
    **통과:** 첫 단어가 `READY`·`MISSING`·`UNAUTHENTICATED`·`DEGRADED`·`STALE` 중 하나(agy 가 없으면 `MISSING`
    이 정답이다). **실패:** `bad interpreter`, `command not found`, `\r` 이 섞인 오류.
-5. **W10 — 사용 기록 (Claude 없이, W7 뒤).** `cd "$P" && $PY .claude/bin/usage-report | head -30`
+5. **W10 — 사용 기록 (Claude 없이, W7 뒤).** `cd "$P" && $PY .claude/bin/usage-report | head -45`
    **통과:** 세션이 1개 이상 집계되고 Hooks 표에 `lint-on-save.py`·`bash-write-check.py` 가 있다.
    **실패:** "no transcripts" — 그때 `ls ~/.claude/projects | grep -i save` 출력을 적는다(실제 폴더 이름과
    도구가 계산한 이름을 비교하려는 것).
@@ -67,6 +67,8 @@ claude
 
    ```bash
    cd "$P" && where claude
+   printf '%s\n' migrations/ u.py __pycache__/ >> .git/info/exclude   # W7 leftovers: the review needs a clean tree
+   git status --porcelain                                              # must be empty
    git switch -q -c probe && echo "# probe" >> CLAUDE.md && git -c user.name=r -c user.email=r@r commit -qam probe
    .claude/skills/isolated-review/run-review --base refs/heads/main --budget 0.5 --timeout 3; echo exit=$?
    ```

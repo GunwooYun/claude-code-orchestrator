@@ -30,7 +30,11 @@ import json
 import os
 import sys
 
-from _savecheck import SCRIPTS_DIR, TIER, check, report, resolve_script
+# Importing _savecheck would leave .claude/hooks/__pycache__/ in the project: an
+# untracked file that made /isolated-review refuse the tree as dirty.
+sys.dont_write_bytecode = True
+
+from _savecheck import SCRIPTS_DIR, TIER, check, report, resolve_script  # noqa: E402
 
 MAX_PATH_LENGTH = 4096
 EVENT = "PostToolUse"
