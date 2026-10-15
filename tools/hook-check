@@ -29,6 +29,7 @@ ok, 1 any FAIL, 2 usage error (reason on stderr).
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import re
@@ -218,7 +219,16 @@ def check_hook(project: Path, hook: Hook, scratch: Path) -> Outcome:
     return Outcome(True, note)
 
 
+def utf8_output() -> None:
+    """Windows pipes and consoles default to the ANSI code page (cp949 on Korean
+    Windows): printing a non-ASCII path crashed upgrade-plan; same here."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8")
+
+
 def main() -> int:
+    utf8_output()
     parser = argparse.ArgumentParser(
         description="Run every hook registered in PROJECT/.claude/settings.json "
         "with a trigger payload and report the ones that fail."

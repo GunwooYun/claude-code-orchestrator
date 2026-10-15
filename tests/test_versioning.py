@@ -548,5 +548,54 @@ class PlanAppliedTests(PlanFixture):
         self.assertEqual({"REPLACE", "MERGE"}, set(parsed))
 
 
+class PlanWindowsCopyTests(PlanFixture):
+    """
+    Found on a real Windows rehearsal (2026-10-15): Git for Windows checks
+    files out with CRLF (core.autocrlf=true), so every unedited file looked
+    edited (31 KEEP, 5 MERGE instead of 1 MERGE); and a Korean user name in
+    the project path crashed print() on the cp949 code page.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.release("1.0.0", {".claude/a.md": "one\ntwo\n", ".claude/same.md": "s\n"})
+        self.release("2.0.0", {".claude/a.md": "one\ntwo\nthree\n"})
+
+    def crlf(self, rel: str, text: str) -> None:
+        path = self.project / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+
+    def test_a_crlf_checkout_of_unedited_files_is_replace_and_noop(self) -> None:
+        self.crlf(".claude/ORCHESTRATOR_VERSION", "1.0.0\n")
+        self.crlf(".claude/a.md", "one\ntwo\n")
+        self.crlf(".claude/same.md", "s\n")
+        result = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertRegex(result.stdout, r"REPLACE \(2\)")
+        self.assertIn("NOOP: 1 files", result.stdout)
+        self.assertNotIn("MERGE", result.stdout)
+        self.assertNotIn("KEEP", result.stdout)
+
+    def test_a_real_edit_in_a_crlf_file_is_still_an_edit(self) -> None:
+        self.crlf(".claude/ORCHESTRATOR_VERSION", "1.0.0\n")
+        self.crlf(".claude/a.md", "one\nTWO\n")
+        self.crlf(".claude/same.md", "s\n")
+        result = self.plan()
+        self.assertRegex(result.stdout, r"MERGE \(1\)[^\n]*\n  \.claude/a\.md")
+
+    def test_a_non_ascii_project_path_prints_on_a_narrow_code_page(self) -> None:
+        self.project = self.project.rename(self.tmp / "프로젝트-윤")
+        self.put(".claude/ORCHESTRATOR_VERSION", "1.0.0\n")
+        result = subprocess.run(
+            [sys.executable, str(self.tpl / "tools/upgrade-plan"), str(self.project)],
+            capture_output=True,
+            timeout=60,
+            env={**os.environ, "PYTHONIOENCODING": "ascii"},
+        )
+        self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", "replace"))
+        self.assertIn("프로젝트-윤", result.stdout.decode("utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

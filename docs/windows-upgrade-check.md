@@ -66,10 +66,13 @@ git -c user.name=r -c user.email=r@r commit -qam "rehearsal release 5.0.1"
 git tag v5.0.1
 ```
 
-2. 프로젝트 사본을 만드는 함수다. 버전을 고르고, 스킬을 넣을지 정할 수 있다.
+2. 프로젝트 사본을 만드는 함수다. **이 블록은 고치지 않고 그대로 붙여 넣는다** — 아무것도 출력되지 않으면
+   정상이다. 폴더 이름·버전·스킬 여부는 아래 각 W 의 명령(`make_project p-full 5.0.0 skill` 등)에 이미 들어 있다.
+   함수와 `R`·`PY` 는 이 Git Bash 창에서만 살아 있다. 창을 새로 열면 `PY=…`, `R=~/upg-rehearsal`, 이 블록을
+   다시 붙여 넣는다(1번은 다시 할 필요 없다).
 
 ```bash
-make_project() {  # make_project <폴더 이름> <버전> [skill]
+make_project() {
   P="$R/$1"; rm -rf "$P"; mkdir -p "$P"
   git -C "$R/template" archive "v$2" .claude .agents CLAUDE.md | tar x -C "$P"
   printf '#!/bin/sh\necho "rehearsal gate ok"\n' > "$P/.claude/scripts/verify-task"
@@ -123,11 +126,14 @@ GitHub 접속을 **git 에서만** 막고 Claude 를 연다(Claude 자체의 연
 
 ```bash
 make_project p-full 5.0.0 skill
-cd "$R/p-full"
+cd "$R/p-full" && pwd                                     # .../upg-rehearsal/p-full 로 끝나야 한다
 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.http://127.0.0.1:9/.insteadOf GIT_CONFIG_VALUE_0=https://github.com/ \
   git ls-remote https://github.com/GunwooYun/claude-code-orchestrator.git; echo "exit=$?"   # 0 이 아니어야 한다
-GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.http://127.0.0.1:9/.insteadOf GIT_CONFIG_VALUE_0=https://github.com/ claude
+[ "$(basename "$PWD")" = p-full ] && \
+  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.http://127.0.0.1:9/.insteadOf GIT_CONFIG_VALUE_0=https://github.com/ claude
 ```
+
+마지막 줄은 `p-full` 안에 있을 때만 Claude 를 연다. 아무 일도 없으면 `make_project` 줄의 오류부터 본다.
 
 💬 `/orchestrator-upgrade` — 이후 질문에는 이렇게 답한다.
 
@@ -154,8 +160,13 @@ grep -c "Rehearsal project section" CLAUDE.md            # 1 (내 섹션이 남�
 grep -c "rehearsal upstream CLAUDE.md line" CLAUDE.md    # 0 (템플릿 쪽 줄은 들어오지 않는다)
 git log --oneline -1                                     # chore: upgrade ... v5.0.1
 ls -d "$R/template"                                      # 아직 있어야 한다
-$PY "$R/template/tools/upgrade-plan" . --from 5.0.0      # MERGE 는 security.md 하나뿐
+$PY "$R/template/tools/upgrade-plan" . --from 5.0.0      # MERGE 는 security.md·CLAUDE.md, KEEP 은 verify-task 뿐
 ```
+
+> 2026-10-15 의 첫 Windows 실행에서 마지막 줄이 MERGE 5개·KEEP 31개를 냈다. 줄바꿈(CRLF) 차이를 수정으로
+> 본 것이고, 이어서 고쳤다. 고치기 전에 받은 템플릿이면 1번부터 다시 한다(`rm -rf ~/upg-rehearsal`).
+> 줄바꿈을 직접 볼 때 Windows 의 `grep -c $'\r'` 는 CR 을 지우고 세므로 0 이 나온다 — `git hash-object`
+> 로 비교한다.
 
 **통과:** 위 주석대로 나온다. 그리고 Claude 의 보고에서 hook-check 가 `exit 0` 이다.
 **실패:** 어느 줄이 다른지 그 출력과 Claude 의 마지막 보고를 붙여 넣는다.

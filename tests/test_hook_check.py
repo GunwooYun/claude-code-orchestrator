@@ -10,6 +10,7 @@ points at a deleted file, and check the tool names both.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -81,6 +82,34 @@ class HookCheckTests(unittest.TestCase):
         self.assertEqual(1, result.returncode, result.stdout + result.stderr)
         self.assertRegex(result.stdout, r"FAIL PostToolUse\[Edit\|Write\] .*crash\.py")
         self.assertIn("boom from planted hook", result.stdout)
+
+    def test_a_non_ascii_failure_prints_on_a_narrow_code_page(self) -> None:
+        # Korean Windows: cp949 pipes, and tracebacks carry the user's name.
+        self.write(
+            ".claude/hooks/crash.py",
+            # Raw UTF-8 bytes: the hook's own encoding settings must not matter.
+            "import sys\nsys.stdin.read()\n"
+            "sys.stderr.buffer.write('Traceback (most recent call last):\\n"
+            "RuntimeError: 경로 윤건우\\n'.encode('utf-8'))\nsys.exit(1)\n",
+        )
+        self.write(
+            ".claude/settings.json",
+            settings_with(
+                (
+                    "PostToolUse",
+                    "Edit|Write",
+                    'python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/crash.py"',
+                )
+            ),
+        )
+        result = subprocess.run(
+            [sys.executable, str(TOOL), str(self.project)],
+            capture_output=True,
+            timeout=120,
+            env={**os.environ, "PYTHONIOENCODING": "ascii"},
+        )
+        self.assertEqual(1, result.returncode, result.stderr.decode("utf-8", "replace"))
+        self.assertIn("경로 윤건우", result.stdout.decode("utf-8"))
 
     def test_a_hook_that_swallows_its_own_error_still_fails_the_run(self) -> None:
         # The template's hooks catch every exception, print this line and exit 0.

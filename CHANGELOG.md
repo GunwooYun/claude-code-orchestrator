@@ -35,6 +35,14 @@ project changed, back up a gitignored `.claude/` first).
   `usage-report`" as the post-upgrade hook check; the `usage-report`
   comparison after a few days stays optional.
 
+### Fixed
+- `tools/upgrade-plan` on Windows (found by the Windows rehearsal):
+  a CRLF checkout (Git for Windows' default `core.autocrlf=true`) no longer
+  makes every unedited file look edited — CRLF counts as LF, as with
+  `git hash-object`; and output is UTF-8, so a non-ASCII project path (a
+  Korean user name) no longer crashes it on the cp949 code page. `hook-check`
+  writes UTF-8 too.
+
 ### Changed
 - README 「업그레이드 절차」 is an overview: when, how to start (the skill or the
   paste-in prompt), what Claude asks, the immediate check, the optional
