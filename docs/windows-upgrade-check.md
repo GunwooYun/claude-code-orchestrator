@@ -14,6 +14,67 @@ Windows 에서 따로 확인해야 하는 이유는 세 가지다.
 모든 명령은 **Git Bash** 창에 붙여 넣는다(시작 메뉴 → Git Bash). PowerShell 이 아니다. 💬 는 Claude 세션에
 입력하는 것이다.
 
+손으로 하지 않고 **Claude 에게 맡길 수도 있다** — 바로 아래 절. 사람이 할 일은 클론 한 번, 붙여 넣기 한 번,
+보고서 전달뿐이다.
+
+---
+
+## Claude 에게 맡기기
+
+🖥️ Git Bash 에서(처음 한 번):
+
+```bash
+mkdir -p ~/upg-rehearsal && cd ~/upg-rehearsal
+[ -d template ] || git clone -b claude/orchestrator-upgrade https://github.com/GunwooYun/claude-code-orchestrator.git template
+claude
+```
+
+💬 이 세션(테스터)에 붙여 넣는다:
+
+```text
+~/upg-rehearsal/template/docs/windows-upgrade-check.md 의 「테스터 세션이 따를 것」을 처음부터 끝까지 따라 해 줘.
+끝나면 ~/upg-rehearsal/REPORT.md 경로만 알려 줘.
+```
+
+테스터는 W1~W6 을 돌리는 동안 Claude 세션을 여러 번 새로 띄운다(헤드리스 `claude -p`). 권한을 묻는 창이 뜨면
+리허설 폴더(`~/upg-rehearsal`) 안의 일이면 승인한다. 비용은 대략 $5~10, 시간은 30~60분이다[추론: macOS 에서
+같은 시나리오가 그 정도였다]. 끝나면 `REPORT.md` 내용을 그대로 템플릿 저장소의 Claude 세션에 붙여 넣는다.
+
+### 테스터 세션이 따를 것
+
+너는 테스터다. 이 문서의 시나리오를 돌리고 **있는 그대로 보고**한다. 템플릿 파일(`~/upg-rehearsal/template`
+안의 코드·문서)을 고치지 않는다. 실패는 고치지 말고 출력과 함께 적는다. 모든 명령은 Bash 도구(Git Bash)로 한다.
+
+1. **준비.** `R=~/upg-rehearsal`. W1 을 돌려 `PY` 를 정한다. 「준비」 1번에서 `rm -rf`·`git clone`·`cd template`·
+   `git switch` 줄은 건너뛴다(클론은 이미 있다; 그 클론에 `v5.0.1` 태그가 이미 있으면 1번 전체를 건너뛴다).
+   나머지 줄은 `~/upg-rehearsal/template` 에서 돌린다. 「준비」 2번의 함수는 Bash 호출 사이에 남지 않으므로
+   `~/upg-rehearsal/make_project.sh` 로 저장해 두고 매번 `source` 한다. `R` 과 `PY` 도 매번 다시 정한다.
+2. **W1, W2** 는 문서의 명령을 그대로 돌린다.
+3. **W3~W6 은 새 Claude 세션이 사용자 역할을 받아 진행한다.** 아래 함수로 한 턴씩 보낸다. 권한 확인을 끄는
+   옵션(`--dangerously-skip-permissions`)은 쓰지 않는다.
+
+   ```bash
+   turn() {  # turn <프로젝트 폴더> <new | 세션 id> <메시지> [blockgh]
+     ( cd "$1" || exit 9
+       [ "$4" = blockgh ] && export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.http://127.0.0.1:9/.insteadOf GIT_CONFIG_VALUE_0=https://github.com/
+       res=(); [ "$2" != new ] && res=(--resume "$2")
+       claude -p "${res[@]}" "$3" --output-format json --allowedTools "Bash,Read,Edit,Write,Glob,Grep" > "$1.turn.json" 2> "$1.turn.err"
+       $PY -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); open(sys.argv[2],"w").write(d.get("session_id","")); print(d.get("result",""))' "$1.turn.json" "$1.sid" )
+   }
+   ```
+
+   - 첫 턴: `turn "$R/p-full" new "/orchestrator-upgrade" blockgh`. 다음 턴: `turn "$R/p-full" "$(cat "$R/p-full.sid")" "<답>" blockgh`.
+     W3 만 `blockgh`, W4·W5 는 붙이지 않는다. W6 의 첫 메시지는 W6 절의 붙여 넣기 문장이다.
+   - 답은 각 W 절의 표·설명대로 한다. 표에 없는 질문은 리허설이 계속되는 쪽으로 답하고 그 사실을 적는다.
+   - `.claude/` 아래 편집이 권한 때문에 막혔다고 하면 "Bash 로 써도 된다"고 답한다(헤드리스에서는 승인 창이
+     없다). W5 의 임시 클론 삭제(`rm -rf`)도 같은 이유로 막힐 수 있다 — 막히면 그대로 적고, 남은 경로는 네가
+     지운다.
+   - 각 W 가 끝나면 그 절의 확인 명령을 직접 돌린다.
+4. **보고서** `~/upg-rehearsal/REPORT.md` — 맨 아래 「결과 기록 양식」을 채우고, 시나리오마다 덧붙인다:
+   스킬이 한 질문 목록(순서대로), 보낸 답, 확인 명령의 출력 그대로, 스킬 세션의 마지막 보고, 각 턴의 `.turn.err`
+   에 나온 경고·오류, 그리고 Windows 에서만 보인 것(인코딩, 경로, 줄바꿈, 권한). 판정은 각 절의 "통과/실패"
+   기준으로만 한다. 확인하지 못한 것은 [미확인] 으로 적는다.
+
 ---
 
 ## W1 — 준비물
