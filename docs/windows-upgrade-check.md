@@ -58,10 +58,15 @@ claude
      ( cd "$1" || exit 9
        [ "$4" = blockgh ] && export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.http://127.0.0.1:9/.insteadOf GIT_CONFIG_VALUE_0=https://github.com/
        res=(); [ "$2" != new ] && res=(--resume "$2")
-       claude -p "${res[@]}" "$3" --output-format json --allowedTools "Bash,Read,Edit,Write,Glob,Grep" > "$1.turn.json" 2> "$1.turn.err"
-       $PY -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); open(sys.argv[2],"w").write(d.get("session_id","")); print(d.get("result",""))' "$1.turn.json" "$1.sid" )
+       # Git Bash rewrites a leading "/" argument into a Windows path: keep /orchestrator-upgrade as typed.
+       MSYS2_ARG_CONV_EXCL=/orchestrator-upgrade \
+         claude -p "${res[@]}" "$3" --output-format json --allowedTools "Bash,Read,Edit,Write,Glob,Grep" > "$1.turn.json" 2> "$1.turn.err"
+       PYTHONIOENCODING=utf-8 $PY -c 'import json,sys; d=json.load(open(sys.argv[1],encoding="utf-8")); open(sys.argv[2],"w").write(d.get("session_id","")); print(d.get("result",""))' "$1.turn.json" "$1.sid" )
    }
    ```
+
+   `PYTHONIOENCODING` 는 위 한 줄에만 둔다. 셸 전체에 export 하면 스킬 세션의 `upgrade-plan` 도 그 값을
+   물려받아, 도구가 UTF-8 출력을 스스로 처리하는지 확인할 수 없게 된다.
 
    - 첫 턴: `turn "$R/p-full" new "/orchestrator-upgrade" blockgh`. 다음 턴: `turn "$R/p-full" "$(cat "$R/p-full.sid")" "<답>" blockgh`.
      W3 만 `blockgh`, W4·W5 는 붙이지 않는다. W6 의 첫 메시지는 W6 절의 붙여 넣기 문장이다.
@@ -241,7 +246,8 @@ cd "$R/p-latest" && claude
 
 💬 `/orchestrator-upgrade`
 
-**통과:** "이미 최신(5.0.0)"이라고 말하고 멈춘다. `git status` 가 깨끗하다. (GitHub 의 최신 릴리스가
+**통과:** "이미 최신(5.0.0)"이라고 말하고 멈춘다. `git status` 에 바뀐 추적 파일이 없다(훅이 만든
+`.claude/hooks/__pycache__/`·`.claude/logs/` 같은 추적 안 된 산출물은 세지 않는다). (GitHub 의 최신 릴리스가
 5.0.0 인 동안만 맞는 시나리오다.)
 
 ## W5 — 임시 클론 만들고 지우기 (Claude, 2~3분)
@@ -296,4 +302,8 @@ Windows 업그레이드 확인 결과
 - 그 밖에 이상했던 것:
 ```
 
-정리: `rm -rf ~/upg-rehearsal`
+정리 — 업그레이드 절차가 리허설 폴더 밖(홈 폴더)에도 백업과 기준선 리포트를 남긴다:
+
+```bash
+rm -rf ~/upg-rehearsal ~/backup-p-*.tgz ~/usage-reports/p-*-before.md
+```

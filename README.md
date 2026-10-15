@@ -718,7 +718,7 @@ python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
 | 훅 2개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `/agy-models` | 템플릿 저장소에서 실제 agy 1.3.3 으로 1회 완주(2026-10-13): Gemini 3개 제시 → 등급별 선택 → 표 기록 → 프로브 `READY`. 선택지가 4개를 넘는 경우와 `/initproject` Step 3c 경유 실행은 아직 돌려 보지 않았다 |
 | `/doc-write`, `/jira-setup`, `/ticket` | 실제 업무 프로젝트에서 사용(2026-09~10, 각 1회 호출. 설치 뒤 Jira·Confluence 호출 17회는 모두 스킬을 실행한 세션 안). 이전 판의 "돌려 본 적 없다"는 그 프로젝트를 집계하기 전의 기록이었다 |
-| Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다. 업그레이드(`/orchestrator-upgrade`, `tools/hook-check`)는 [Windows 업그레이드 확인 가이드](docs/windows-upgrade-check.md)로 확인한다 — 2026-10-15 첫 실행(Windows 11, Git Bash, 한글 사용자 이름)에서 업그레이드는 끝까지 됐고 hook-check 3/3, `upgrade-plan` 의 CRLF·cp949 문제 두 건이 나와 고쳤다. **같은 실행에서 저장 검사가 돌지 않았다**: `bash-write-check` 가 `verify-save`(sh 스크립트)를 직접 실행하다 `WinError 193` 으로 실패한다(경고만, 편집은 막지 않음). 아직 고치지 않았다 |
+| Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다. 업그레이드(`/orchestrator-upgrade`, `tools/hook-check`)는 [Windows 업그레이드 확인 가이드](docs/windows-upgrade-check.md)로 확인한다 — 2026-10-15 첫 실행(Windows 11, Git Bash, 한글 사용자 이름)에서 `upgrade-plan` 의 CRLF·cp949 문제 두 건이 나와 고쳤고, 고친 뒤 W1~W6(테스터 Claude 세션이 새 세션을 띄워 진행)이 모두 통과했다. 대화형 세션의 승인 창 동작은 이 방식으로 확인되지 않았다. **같은 실행에서 저장 검사가 돌지 않았다**: `bash-write-check` 가 `verify-save`(sh 스크립트)를 직접 실행하다 `WinError 193` 으로 실패한다(경고만, 편집은 막지 않음). 아직 고치지 않았다 |
 
 ### 사용 근거 남기기
 
