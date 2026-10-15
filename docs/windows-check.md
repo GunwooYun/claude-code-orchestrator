@@ -13,7 +13,7 @@
 
 ```bash
 mkdir -p ~/win-check && cd ~/win-check
-[ -d template ] || git clone -b claude/windows-save-check https://github.com/GunwooYun/claude-code-orchestrator.git template
+[ -d template ] || git clone -b develop https://github.com/GunwooYun/claude-code-orchestrator.git template
 claude
 ```
 

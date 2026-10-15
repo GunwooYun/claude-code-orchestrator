@@ -80,7 +80,9 @@ def shebang_runner(path: str, which: Callable[[str], str | None]) -> list[str] |
         return None
     name = os.path.basename(words[0]).lower().removesuffix(".exe")
     if name in SH_NAMES:
-        sh = which("sh") or which("bash") or os.environ.get(GIT_BASH_ENV)
+        # The explicit setting before a bare `bash`: on PATH that can be WSL's
+        # launcher, which cannot see C:/ paths and would pass every file.
+        sh = which("sh") or os.environ.get(GIT_BASH_ENV) or which("bash")
         return [sh or NO_SH]
     if name.startswith("python"):
         return [sys.executable]

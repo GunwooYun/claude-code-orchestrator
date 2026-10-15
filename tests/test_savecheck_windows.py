@@ -90,11 +90,16 @@ class WindowsSaveCheckTests(unittest.TestCase):
         self.assertIn("Git Bash", message)
         self.assertFalse(self.marker.exists(), "the script must not be exec'd directly")
 
-    def test_git_bash_path_env_is_the_last_resort(self) -> None:
+    def test_git_bash_path_env_wins_over_a_bash_on_path(self) -> None:
+        # A bare `bash` on a Windows PATH can be WSL's launcher (review, 2026-10-15).
         path = self.recording_sh()
         os.environ[savecheck.GIT_BASH_ENV] = "/bin/sh"
         self.addCleanup(os.environ.pop, savecheck.GIT_BASH_ENV, None)
-        resolved = savecheck.resolve_script(str(self.root), True, which_nothing)
+
+        def which_wsl_bash(name: str) -> str | None:
+            return "C:/Windows/System32/bash.exe" if name == "bash" else None
+
+        resolved = savecheck.resolve_script(str(self.root), True, which_wsl_bash)
         self.assertEqual(["/bin/sh", str(path)], resolved and resolved[0])
 
     def test_shebangs_map_to_their_runner(self) -> None:

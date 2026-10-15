@@ -25,7 +25,7 @@ Windows 에서 따로 확인해야 하는 이유는 세 가지다.
 
 ```bash
 mkdir -p ~/upg-rehearsal && cd ~/upg-rehearsal
-[ -d template ] || git clone -b claude/orchestrator-upgrade https://github.com/GunwooYun/claude-code-orchestrator.git template
+[ -d template ] || git clone -b develop https://github.com/GunwooYun/claude-code-orchestrator.git template
 claude
 ```
 
@@ -112,7 +112,7 @@ R=~/upg-rehearsal
 rm -rf "$R" && mkdir -p "$R" && cd "$R"
 git clone https://github.com/GunwooYun/claude-code-orchestrator.git template
 cd template
-git switch claude/orchestrator-upgrade     # 머지된 뒤에는: git switch develop
+git switch develop
 echo 5.0.1 > .claude/ORCHESTRATOR_VERSION
 printf '\n- Rehearsal: an upstream line.\n' >> .claude/rules/security.md
 printf '\n<!-- rehearsal upstream CLAUDE.md line -->\n' >> CLAUDE.md
