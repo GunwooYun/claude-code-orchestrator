@@ -6,7 +6,7 @@
 ![Claude Code Orchestrator](./summary.png)
 
 > 현재 버전: **5.1.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md). 이미 쓰고 있는 프로젝트를 올리려면
-> [업그레이드 절차](#업그레이드-절차) — 5.1.0 부터는 `/orchestrator-upgrade`, 그 전 사본은 프롬프트 하나를 붙여 넣는다.
+> [업그레이드 절차](#업그레이드-절차) — 5.1.0 부터는 `/orchestrator-upgrade`, 그 전 사본은 한 줄을 붙여 넣는다.
 
 ## 목차
 
@@ -541,20 +541,38 @@ Claude 는 최신 릴리스를 임시 폴더에 클론해서 **그 클론의 절
 
 #### 시작하기
 
-프로젝트 루트에서 Claude 를 연다. 💬 프로젝트에 `/orchestrator-upgrade` 가 있으면:
+프로젝트 루트에서 Claude 를 연다. 첫 입력만 내 버전에 따라 다르고, 그다음은 같다 — Claude 가 확인하고
+묻고, 사용자는 답만 한다.
+
+| 내 버전 (`cat .claude/ORCHESTRATOR_VERSION`) | 💬 Claude 세션에 입력 |
+|---|---|
+| 5.1.0 이상 | `/orchestrator-upgrade` |
+| 5.0.0 이하 — 스킬이 아직 없다 | 아래 한 줄 (처음 한 번만) |
 
 ```text
-/orchestrator-upgrade
+https://raw.githubusercontent.com/GunwooYun/claude-code-orchestrator/main/.claude/skills/orchestrator-upgrade/SKILL.md 를 curl 로 받아서 그대로 따라 해 줘.
 ```
 
-💬 없으면(이 스킬이 생기기 전 버전) 아래를 붙여 넣는다. 하는 일은 같다.
+- 이 한 줄은 `/orchestrator-upgrade` 의 스킬 파일을 읽게 한다. 스킬을 설치하지 않고 같은 일을 한다.
+  업그레이드가 끝나면 스킬이 프로젝트에 들어오므로 다음부터는 `/orchestrator-upgrade` 한 줄이다.
+- `main` 의 파일을 읽는다. `main` 에는 릴리스된 것만 있다.
 
-```text
-claude-code-orchestrator 템플릿을 최신 릴리스로 업그레이드해 줘.
-https://github.com/GunwooYun/claude-code-orchestrator.git 의 최신 vX.Y.Z 태그를 mktemp -d 로 만든 임시 폴더에
-전체 클론(--depth 없이 --branch <태그>)하고, 그 클론의 tools/UPGRADE.md 를 처음부터 따라 해 줘.
-클론은 이번 실행용 임시 클론이야(CLONE_KIND=temporary).
-```
+**진행되는 모습** — 2026-10-16 리허설(스킬 없는 5.0.0 사본에서 위 한 줄 → 5.1.0)에서 실제로 나온 순서다.
+
+1. GitHub 의 최신 릴리스를 확인하고 임시 폴더에 받는다. 이미 최신이면 "이미 최신"이라고 하고 끝난다.
+2. 사전 점검(커밋 안 된 변경, 진행 중인 작업 단위)과 바뀌는 내용 요약 → **"5.0.0 → 5.1.0 으로 올릴까요?"**
+3. 브랜치(`upgrade-orchestrator`)·백업·기준선 리포트를 만들고 분류표를 보여 준다 → **"이대로 적용할까요?"**
+   빼고 싶은 파일이 있으면 말한다.
+4. 적용. MERGE 파일과 프로젝트 소유 파일(`CLAUDE.md`, `settings.json` 등)을 고치는 단계는 하나씩 보여 주고 묻는다.
+5. 직후 확인 네 가지(아래 「직후 확인」)를 돌리고 보고 → **"커밋할까요?"**
+6. **"임시 클론을 지울까요?"** → 끝. 마지막 안내대로 **새 Claude 세션**을 열고 작업을 이어 간다.
+
+그 리허설의 비용은 세션 하나에 약 $1.1 이었다(질문 4번, 바뀐 파일 7개). 이미 최신일 때는 $0.2 였다.
+
+**권한 확인 창이 뜨면** 업그레이드가 쓰는 명령인지 보고 승인한다. Claude Code 는 `.claude/` 아래 파일을
+쓰거나 지울 때, 그리고 임시 클론을 지우는 `rm -rf` 에서 승인을 묻는다. 거부하거나 승인이 안 되는 환경이면
+Claude 가 그 자리에서 멈추고, 직접 실행할 명령 블록을 준다. 그 블록을 `! <명령>` 으로 붙여 넣은 뒤 "했어"라고
+하면 이어서 진행한다.
 
 - **Windows** 는 Git for Windows 가 설치돼 있어야 한다. Claude Code 는 Git Bash 로 명령을 실행하고, 템플릿의
   훅도 Git Bash 가 있어야 돈다. 확인 방법: [Windows 업그레이드 확인 가이드](docs/windows-upgrade-check.md).
@@ -661,10 +679,10 @@ python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
 
 ### 5.1.0 으로 올릴 때
 
-아래 버전별 목록은 `/orchestrator-upgrade`(또는 붙여 넣기 프롬프트)가 CHANGELOG 에서 읽어 **알아서 안내하는**
+아래 버전별 목록은 `/orchestrator-upgrade`(또는 한 줄 프롬프트)가 CHANGELOG 에서 읽어 **알아서 안내하는**
 손 단계다. 손으로 올릴 때 참고한다. 4.x 이하에서 5.1.0 으로 한 번에 올리면 5.0.0 목록까지 함께 나온다.
 
-1. 5.0.0 사본에는 아직 스킬이 없다 — [시작하기](#시작하기)의 붙여 넣기 프롬프트로 올린다. 다음부터는
+1. 5.0.0 사본에는 아직 스킬이 없다 — [시작하기](#시작하기)의 한 줄 프롬프트로 올린다. 다음부터는
    `/orchestrator-upgrade`.
 2. `.claude/hooks/__pycache__/` 가 있으면 한 번 지운다. 옛 훅이 만든 것이고 새 훅은 만들지 않는다.
    `.gitignore` 에 없으면 `/isolated-review` 가 작업 트리가 깨끗하지 않다며 거부한다.
@@ -727,7 +745,7 @@ python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
 | deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중. 업무 프로젝트(2026-08~10, `usage-report`): deep-reasoning 71회, general-purpose 20회, agy 23회(실패 1). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
 | `usage-report` | 도입 프로젝트 두 곳에서 실행(업무 서버는 ssh 로). 리뷰에서 집계 오류 4건(서브에이전트 토큰, 게이트 횟수, 프로브 상태, 날짜 경계)을 찾아 고친 뒤 다시 셌다. Claude Code 의 기록 형식은 문서화돼 있지 않아 버전이 바뀌면 틀릴 수 있다 |
 | `tools/upgrade-plan` (4.x 의 `/orchestrator-version --plan`) | 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치). 5.0.0 업그레이드 안내는 v3.0.1·v4.3.1 사본으로 확인했다 |
-| `/orchestrator-upgrade`, `tools/UPGRADE.md`, `tools/hook-check` | macOS 에서 연습용 릴리스(5.0.0 → 5.0.1, MERGE·프로젝트 소유 `CLAUDE.md`·손 단계 포함)로 새 Claude 세션이 끝까지 진행했다: GitHub 접속 실패 → 클론 경로, 커밋 안 된 변경 → 중단, 스킬 없는 사본 → 붙여 넣기 프롬프트. GitHub 의 임시 클론 생성·삭제도 확인했다. Windows 11(Git Bash, 영문·한글 사용자 폴더)에서도 같은 시나리오가 통과했다(2026-10-15~16, 헤드리스 세션이 막힌 `.claude/rules`·`CLAUDE.md` 편집은 사용자 역할로 실행). 실제 프로젝트 업그레이드는 아직이다. hook-check 는 훅을 `.claude/` 사본에서 돌려서, 프로젝트 루트 파일에 기대는 훅은 실제와 다르게 돌 수 있다 |
+| `/orchestrator-upgrade`, `tools/UPGRADE.md`, `tools/hook-check` | macOS 에서 연습용 릴리스(5.0.0 → 5.0.1, MERGE·프로젝트 소유 `CLAUDE.md`·손 단계 포함)로 새 Claude 세션이 끝까지 진행했다: GitHub 접속 실패 → 클론 경로, 커밋 안 된 변경 → 중단, 스킬 없는 사본 → 붙여 넣기 프롬프트. 2026-10-16 에는 실제 GitHub 의 v5.1.0 으로, 스킬 없는 5.0.0 사본이 [시작하기](#시작하기)의 한 줄 프롬프트로 끝까지 올라갔고(헤드리스라 `.claude/` 쓰기와 `rm -rf` 는 Claude 가 준 명령을 사용자 역할로 실행), 업그레이드된 사본의 새 세션에서 `/orchestrator-upgrade` 가 인식돼 "이미 최신"으로 끝났다. GitHub 의 임시 클론 생성·삭제도 확인했다. Windows 11(Git Bash, 영문·한글 사용자 폴더)에서도 같은 시나리오가 통과했다(2026-10-15~16, 헤드리스 세션이 막힌 `.claude/rules`·`CLAUDE.md` 편집은 사용자 역할로 실행). 실제 프로젝트 업그레이드는 아직이다. hook-check 는 훅을 `.claude/` 사본에서 돌려서, 프로젝트 루트 파일에 기대는 훅은 실제와 다르게 돌 수 있다 |
 | 훅 2개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `/agy-models` | 템플릿 저장소에서 실제 agy 1.3.3 으로 1회 완주(2026-10-13): Gemini 3개 제시 → 등급별 선택 → 표 기록 → 프로브 `READY`. 선택지가 4개를 넘는 경우와 `/initproject` Step 3c 경유 실행은 아직 돌려 보지 않았다 |
 | `/doc-write`, `/jira-setup`, `/ticket` | 실제 업무 프로젝트에서 사용(2026-09~10, 각 1회 호출. 설치 뒤 Jira·Confluence 호출 17회는 모두 스킬을 실행한 세션 안). 이전 판의 "돌려 본 적 없다"는 그 프로젝트를 집계하기 전의 기록이었다 |
