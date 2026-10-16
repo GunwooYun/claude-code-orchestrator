@@ -48,6 +48,10 @@ SCRATCH_TEXT = "x = 1\n"
 SESSION_ID = "hook-check"
 TOOL_USE_ID = "toolu_hook_check"
 HOOK_ERROR = "hook error (ignored)"
+# What the template's save check tells Claude when verify-save never ran
+# (.claude/hooks/_savecheck.py): the hook still exits 0 with valid JSON, so
+# only the text shows it — on Windows it said so on every save, unnoticed.
+NEVER_RAN = ("could not run", "timed out after")
 COPY_IGNORE = shutil.ignore_patterns("logs", "docs", "__pycache__", "*.pyc")
 # `$CLAUDE_PROJECT_DIR/x`, `"$CLAUDE_PROJECT_DIR"/x`, `${CLAUDE_PROJECT_DIR}/x`
 PROJECT_PATH = re.compile(r"\$\{?CLAUDE_PROJECT_DIR\}?\"?/([^\s\"';|&<>]+)")
@@ -172,7 +176,8 @@ def run_one(hook: Hook, payload: dict, scratch: Path) -> Outcome:
             ["sh", "-c", hook.command],
             input=json.dumps(payload),
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=TIMEOUT_SECONDS,
             cwd=str(scratch),
             env=env,
@@ -194,9 +199,17 @@ def run_one(hook: Hook, payload: dict, scratch: Path) -> Outcome:
     out = done.stdout.strip()
     if out:
         try:
-            json.loads(out)
+            parsed = json.loads(out)
         except ValueError:
             return Outcome(False, f"stdout is not JSON: {out[:60]!r}")
+        context = str(
+            (parsed.get("hookSpecificOutput") or {}).get("additionalContext", "")
+            if isinstance(parsed, dict)
+            else ""
+        )
+        for line in context.splitlines():
+            if any(marker in line for marker in NEVER_RAN):
+                return Outcome(False, line.strip()[:120])
     return Outcome(True, blocked)
 
 

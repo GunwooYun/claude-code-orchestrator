@@ -194,7 +194,10 @@ Local-only template files (step 1) skip this; the backup is their way back.
     `.claude/bin/usage-report --since <today>` and compare it with the `before` report in
     `~/usage-reports/` — delegation counts, `/feature` phases, gate runs, hook errors. If
     something got worse, roll back (step 9).
-  - the branch `upgrade-orchestrator` goes to a PR or a merge as usual.
+  - the branch `upgrade-orchestrator` goes to a PR or a merge as usual;
+  - **start a new Claude session before working on**: this session loaded the old
+    `CLAUDE.md`, rules and skills when it started (hooks are picked up live). Work in
+    progress continues from `## Current Project`.
 
 ## 9. Roll back
 
