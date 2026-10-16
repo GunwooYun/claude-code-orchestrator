@@ -6,11 +6,20 @@ work that has not been released. From 1.0.0 the template is used across real
 projects, and changes are driven by evidence from that use (`usage-report`
 counts, or "what I tried, what happened, how I worked around it").
 
-Upgrading an adopted copy: do not copy the template over it — follow README
-「업그레이드 절차」 (compare each file with the template's history, merge what the
-project changed, back up a gitignored `.claude/` first).
+Upgrading an adopted copy: do not copy the template over it — run
+`/orchestrator-upgrade` (from 5.1.0), or paste the prompt in README
+「업그레이드 절차」 into a copy that predates it. Both follow `tools/UPGRADE.md`
+from a fresh clone of the latest release.
 
-## [Unreleased]
+## [5.1.0] - 2026-10-16
+
+Upgrading becomes a skill, and the template works on Windows. The upgrade no
+longer means reading README §9 and waiting a day: `/orchestrator-upgrade`
+follows the procedure shipped with the release it installs, asks only where the
+choice is yours, and checks the hooks right away (`tools/hook-check`). On
+Windows the save check never ran before (every save: `WinError 193`); it now
+runs, also under a Korean user folder. Verified by rehearsals on macOS and on
+Windows 11 (Git Bash), not yet by a real project's upgrade.
 
 **Upgrade:**
 1. Delete `.claude/hooks/__pycache__/` if it exists. The old hooks wrote it and
@@ -72,7 +81,11 @@ project changed, back up a gitignored `.claude/` first).
   paste-in prompt), what Claude asks, the immediate check, the optional
   comparison after a few days (3–5 tasks — the 5.0.0 list said "a day"), and
   the manual fallback (follow `tools/UPGRADE.md`). The step-by-step shell
-  blocks are gone; the procedure is in one place.
+  blocks are gone; the procedure is in one place. After an upgrade, start a
+  new Claude session: the running one loaded the old instructions.
+- `docs/windows-upgrade-check.md` and `docs/windows-check.md`: Windows checks
+  a person or a tester Claude session runs (Git Bash), with pass/fail per
+  scenario.
 - README §12: feature PRs into `develop` are squash-merged, `develop` → `main`
   is a merge commit, and how to recover when a release PR was squashed.
 

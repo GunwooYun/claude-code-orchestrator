@@ -5,8 +5,8 @@
 
 ![Claude Code Orchestrator](./summary.png)
 
-> 현재 버전: **5.0.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md). 4.x 에서 올린다면
-> [5.0.0 으로 올릴 때](#500-으로-올릴-때)를 먼저 본다.
+> 현재 버전: **5.1.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md). 이미 쓰고 있는 프로젝트를 올리려면
+> [업그레이드 절차](#업그레이드-절차) — 5.1.0 부터는 `/orchestrator-upgrade`, 그 전 사본은 프롬프트 하나를 붙여 넣는다.
 
 ## 목차
 
@@ -103,7 +103,7 @@ your-project/
 ├── .agents/
 │   └── rules/AGENTS.md            # agy 가 읽는 프로젝트 설명
 └── .claude/
-    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 5.0.0)
+    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 5.1.0)
     ├── settings.json              # 훅 등록 + 권한(allow / ask / deny)
     ├── agents/                    # 서브에이전트 정의 (deep-reasoning, general-purpose)
     ├── skills/                    # 슬래시 커맨드 (아래 표)
@@ -160,7 +160,7 @@ Jira·Confluence 를 쓰지 않는 프로젝트는 `.claude/skills/jira-setup/`,
 | 도구 | 필요한가 | 설치 |
 |---|---|---|
 | **Claude Code** | 필수 | Linux / macOS: `curl -fsSL https://claude.ai/install.sh \| bash` → `claude` 로 로그인. Windows: Claude Code 공식 설치 안내를 따른다 |
-| **git** | 필수 | — |
+| **git** | 필수 — Windows 는 Git for Windows(Git Bash 포함) | — |
 | **Python 3.10 이상** (`python3`) | 필수 — 훅과 스크립트가 쓴다 | OS 패키지 |
 | **Antigravity CLI (`agy`)** | 권장 — 없으면 Claude 도구로 대신 조사한다 | Linux / macOS: `curl -fsSL https://antigravity.google/cli/install.sh \| bash` → `agy` 로 Google 로그인 → `agy models`. Windows: Antigravity 공식 안내를 따른다 |
 | **GitHub CLI (`gh`)** | 선택 — PR·머지를 Claude 에게 맡길 때 | `gh auth login` |
@@ -227,11 +227,11 @@ Remove-Item -Recurse -Force .starter
 - **`--branch main` 을 꼭 붙인다.** `main` 에는 릴리스된 버전만 있다. 기본 브랜치 `develop` 에는 아직
   검증 중인 변경이 들어 있다.
 - 받은 버전은 `.claude/ORCHESTRATOR_VERSION` 에 기록된다.
-- **Windows 는 아직 실제로 검증하지 않았다**([11장](#11-지금-무엇이-검증됐나)). 훅은 `python3` 명령으로
-  등록돼 있으므로, PowerShell 에서 `python3 --version` 이 Python 3.10 이상을 출력하는지 먼저 확인한다
-  (Microsoft Store 설치 안내 창이 뜨면 `python3` 이 실제 Python 을 가리키지 않는 것이다).
-  `verify-*` 는 sh 셸 스크립트라 PowerShell·cmd 에서 직접 실행되지 않는다 — `/initproject` 에 Windows 라고
-  알려 주면 이 프로젝트에 맞는 형태로 작성한다(미검증).
+- **Windows 는 Git for Windows(Git Bash)가 있어야 한다.** Claude Code 가 훅을 Git Bash 로 실행하고, 훅은
+  `verify-*`(sh 스크립트)를 Git Bash 의 `sh` 로 실행한다(5.1.0 부터). Git Bash 에서의 동작은 확인했고, Git Bash
+  없이 PowerShell 로만 쓰는 경우는 확인하지 않았다([11장](#11-지금-무엇이-검증됐나)). 훅은 `python3` 명령으로
+  등록돼 있으므로 `python3 --version` 이 Python 3.10 이상을 출력하는지 먼저 확인한다(Microsoft Store 설치
+  안내 창이 뜨면 `python3` 이 실제 Python 을 가리키지 않는 것이다).
 
 ### 2단계 — 커밋할지 정하기
 
@@ -313,7 +313,7 @@ agy 할당량이 넉넉하면 전부 high 로 두어도 된다. 나중에 `STALE
 `/agy-models` 만 다시 실행한다.
 
 **Step 4 — `CLAUDE.md` 갱신.** 맨 위 제목을 프로젝트 이름으로 바꾸고, `## 기술 스택` 에 실제 명령을 적고,
-`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v5.0.0`)을 기록한다. 나중에 `/jira-setup`·
+`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v5.1.0`)을 기록한다. 나중에 `/jira-setup`·
 `/doc-write` 가 같은 섹션에 `### Jira`·`### Confluence` 를 덧붙인다 — 각자 자기 부분만 고친다.
 
 **Step 5 — 검증 스크립트 작성.** Step 2 의 답으로 `.claude/scripts/verify-save`, `verify-task` 등을 만든다.
@@ -659,6 +659,19 @@ python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
 - **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남으면 훅 파일이 없어서
   모든 편집(또는 Bash 명령)마다 오류가 난다.
 
+### 5.1.0 으로 올릴 때
+
+아래 버전별 목록은 `/orchestrator-upgrade`(또는 붙여 넣기 프롬프트)가 CHANGELOG 에서 읽어 **알아서 안내하는**
+손 단계다. 손으로 올릴 때 참고한다. 4.x 이하에서 5.1.0 으로 한 번에 올리면 5.0.0 목록까지 함께 나온다.
+
+1. 5.0.0 사본에는 아직 스킬이 없다 — [시작하기](#시작하기)의 붙여 넣기 프롬프트로 올린다. 다음부터는
+   `/orchestrator-upgrade`.
+2. `.claude/hooks/__pycache__/` 가 있으면 한 번 지운다. 옛 훅이 만든 것이고 새 훅은 만들지 않는다.
+   `.gitignore` 에 없으면 `/isolated-review` 가 작업 트리가 깨끗하지 않다며 거부한다.
+3. Windows 프로젝트는 업그레이드 뒤 저장 검사가 돌기 시작한다(전에는 저장마다 `WinError 193` 으로 빠졌다).
+   `verify-save` 가 있는 프로젝트라면 lint 결과가 새로 보이기 시작하는 것이 정상이다.
+4. 끝나면 새 Claude 세션을 연다.
+
 ### 5.0.0 으로 올릴 때
 
 5.0.0 은 쓰이지 않던 것을 걷어낸 릴리스라 **지우는 파일이 있다.** 훅 하나를 지우므로 **1·2번은 한 번에**
@@ -714,11 +727,11 @@ python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
 | deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중. 업무 프로젝트(2026-08~10, `usage-report`): deep-reasoning 71회, general-purpose 20회, agy 23회(실패 1). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
 | `usage-report` | 도입 프로젝트 두 곳에서 실행(업무 서버는 ssh 로). 리뷰에서 집계 오류 4건(서브에이전트 토큰, 게이트 횟수, 프로브 상태, 날짜 경계)을 찾아 고친 뒤 다시 셌다. Claude Code 의 기록 형식은 문서화돼 있지 않아 버전이 바뀌면 틀릴 수 있다 |
 | `tools/upgrade-plan` (4.x 의 `/orchestrator-version --plan`) | 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치). 5.0.0 업그레이드 안내는 v3.0.1·v4.3.1 사본으로 확인했다 |
-| `/orchestrator-upgrade`, `tools/UPGRADE.md`, `tools/hook-check` | macOS 에서 연습용 릴리스(5.0.0 → 5.0.1, MERGE·프로젝트 소유 `CLAUDE.md`·손 단계 포함)로 새 Claude 세션이 끝까지 진행했다: GitHub 접속 실패 → 클론 경로, 커밋 안 된 변경 → 중단, 스킬 없는 사본 → 붙여 넣기 프롬프트. GitHub 의 임시 클론 생성·삭제도 확인했다. Windows 와 실제 프로젝트 업그레이드는 아직이다. hook-check 는 훅을 `.claude/` 사본에서 돌려서, 프로젝트 루트 파일에 기대는 훅은 실제와 다르게 돌 수 있다 |
+| `/orchestrator-upgrade`, `tools/UPGRADE.md`, `tools/hook-check` | macOS 에서 연습용 릴리스(5.0.0 → 5.0.1, MERGE·프로젝트 소유 `CLAUDE.md`·손 단계 포함)로 새 Claude 세션이 끝까지 진행했다: GitHub 접속 실패 → 클론 경로, 커밋 안 된 변경 → 중단, 스킬 없는 사본 → 붙여 넣기 프롬프트. GitHub 의 임시 클론 생성·삭제도 확인했다. Windows 11(Git Bash, 영문·한글 사용자 폴더)에서도 같은 시나리오가 통과했다(2026-10-15~16, 헤드리스 세션이 막힌 `.claude/rules`·`CLAUDE.md` 편집은 사용자 역할로 실행). 실제 프로젝트 업그레이드는 아직이다. hook-check 는 훅을 `.claude/` 사본에서 돌려서, 프로젝트 루트 파일에 기대는 훅은 실제와 다르게 돌 수 있다 |
 | 훅 2개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `/agy-models` | 템플릿 저장소에서 실제 agy 1.3.3 으로 1회 완주(2026-10-13): Gemini 3개 제시 → 등급별 선택 → 표 기록 → 프로브 `READY`. 선택지가 4개를 넘는 경우와 `/initproject` Step 3c 경유 실행은 아직 돌려 보지 않았다 |
 | `/doc-write`, `/jira-setup`, `/ticket` | 실제 업무 프로젝트에서 사용(2026-09~10, 각 1회 호출. 설치 뒤 Jira·Confluence 호출 17회는 모두 스킬을 실행한 세션 안). 이전 판의 "돌려 본 적 없다"는 그 프로젝트를 집계하기 전의 기록이었다 |
-| Windows | **Git Bash 에서 일부 확인 (2026-10-15).** 업그레이드·저장 검사·hook-check·agy-probe·usage-report·격리 리뷰 시작은 아래처럼 확인했다. **미확인:** README 의 PowerShell 명령(복사·백업·제외 목록·스모크 테스트), Git Bash 없이 PowerShell 로 도는 훅. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다. 업그레이드(`/orchestrator-upgrade`, `tools/hook-check`)는 [Windows 업그레이드 확인 가이드](docs/windows-upgrade-check.md)로 확인한다 — 2026-10-15 첫 실행(Windows 11, Git Bash, 한글 사용자 이름)에서 `upgrade-plan` 의 CRLF·cp949 문제 두 건이 나와 고쳤고, 고친 뒤 W1~W6(테스터 Claude 세션이 새 세션을 띄워 진행)이 모두 통과했다. 대화형 세션의 승인 창 동작은 이 방식으로 확인되지 않았다. 같은 실행에서 저장 검사가 돌지 않은 것(훅이 sh 스크립트 `verify-save` 를 직접 실행하다 `WinError 193`)은 고쳤다 — Windows 에서는 shebang 을 보고 Git Bash 의 `sh` 로 실행한다. [Windows 점검 가이드](docs/windows-check.md)로 2026-10-15 확인했다(영문 사용자 폴더). 2026-10-16 한글 사용자 폴더(`C:\Users\…윤건우`)에서는 훅이 입력을 cp949 로 읽어 저장 검사가 조용히 빠지는 문제가 나와 고쳤다(Windows 재확인 전). 영문 폴더 결과: Write·Bash 저장 모두 저장 검사가 돌았고(경로는 `/`), hook-check 3/3, agy-probe `READY`, usage-report 가 Windows 기록 폴더를 찾았고, `/isolated-review` 가 COMPLETE 까지 갔다($0.42 상한 실행). 확인하지 않은 것: `.claude/` 를 커밋한 저장소를 `core.autocrlf=true` 로 새로 클론하면 sh 스크립트가 CRLF 가 되어 실패할 수 있다(git 이 경고했다, 실제 프로젝트에서는 아직 관측 안 됨) |
+| Windows | **Git Bash 에서 확인 (2026-10-15~16).** 업그레이드·저장 검사·hook-check·agy-probe·usage-report·격리 리뷰 시작은 아래처럼 확인했다. **미확인:** README 의 PowerShell 명령(복사·백업·제외 목록·스모크 테스트), Git Bash 없이 PowerShell 로 도는 훅. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다. 업그레이드(`/orchestrator-upgrade`, `tools/hook-check`)는 [Windows 업그레이드 확인 가이드](docs/windows-upgrade-check.md)로 확인한다 — 2026-10-15 첫 실행(Windows 11, Git Bash, 한글 사용자 이름)에서 `upgrade-plan` 의 CRLF·cp949 문제 두 건이 나와 고쳤고, 고친 뒤 W1~W6(테스터 Claude 세션이 새 세션을 띄워 진행)이 모두 통과했다. 대화형 세션의 승인 창 동작은 이 방식으로 확인되지 않았다. 같은 실행에서 저장 검사가 돌지 않은 것(훅이 sh 스크립트 `verify-save` 를 직접 실행하다 `WinError 193`)은 고쳤다 — Windows 에서는 shebang 을 보고 Git Bash 의 `sh` 로 실행한다. [Windows 점검 가이드](docs/windows-check.md)로 2026-10-15 확인했다(영문 사용자 폴더). 2026-10-16 한글 사용자 폴더(`C:\Users\…윤건우`)에서는 훅이 입력을 cp949 로 읽어 저장 검사가 조용히 빠지는 문제가 나와 고쳤고, 같은 PC 에서 다시 확인했다(Write·Bash 모두 검사 출력, 한글 경로 정상). 영문 폴더 결과: Write·Bash 저장 모두 저장 검사가 돌았고(경로는 `/`), hook-check 3/3, agy-probe `READY`, usage-report 가 Windows 기록 폴더를 찾았고, `/isolated-review` 가 COMPLETE 까지 갔다($0.42 상한 실행). 확인하지 않은 것: `.claude/` 를 커밋한 저장소를 `core.autocrlf=true` 로 새로 클론하면 sh 스크립트가 CRLF 가 되어 실패할 수 있다(git 이 경고했다, 실제 프로젝트에서는 아직 관측 안 됨) |
 
 ### 사용 근거 남기기
 
