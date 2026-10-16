@@ -154,7 +154,10 @@ def check(
             [*argv, arg],
             cwd=project_dir,
             capture_output=True,
-            text=True,
+            # Not the locale (cp949 on Korean Windows): decoding the tools' UTF-8
+            # output with it failed and the report to Claude became "None".
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
         )
     except subprocess.TimeoutExpired:

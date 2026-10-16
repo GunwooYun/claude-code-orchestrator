@@ -102,9 +102,13 @@ ENV_PREFIX = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 
 def read_payload() -> dict:
-    """Read the hook payload from stdin. Returns {} when unusable."""
+    """
+    Read the hook payload from stdin. Returns {} when unusable. Bytes, not the
+    text stream: Claude Code sends UTF-8, and on Korean Windows the text stream
+    is cp949 — a non-ASCII path came out garbled.
+    """
     try:
-        payload = json.load(sys.stdin)
+        payload = json.loads(sys.stdin.buffer.read())
     except (json.JSONDecodeError, ValueError):
         return {}
     return payload if isinstance(payload, dict) else {}

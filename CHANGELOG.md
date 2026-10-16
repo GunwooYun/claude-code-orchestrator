@@ -50,6 +50,12 @@ project changed, back up a gitignored `.claude/` first).
   hook whose save check never ran (`could not run` / `timed out after`); it
   reported these hooks ok before. Projects without `verify-save` were not
   affected.
+- The save-check hooks under a non-ASCII path on Korean Windows (found under
+  `C:\Users\<name>윤건우`): they read Claude Code's UTF-8 payload through the
+  cp949 text stream, so the path came out garbled and `lint-on-save` went
+  silent; and the check's UTF-8 output was decoded as cp949, so the report
+  read "None". They now read the payload as bytes and decode the check's
+  output as UTF-8 (`hook-check` too).
 - The save-check hooks no longer write `.claude/hooks/__pycache__/`: in a
   project whose `.gitignore` lacks it, that untracked file made
   `/isolated-review` refuse the working tree as dirty (seen on the Windows
