@@ -483,5 +483,119 @@ class PlanExtrasTests(PlanFixture):
         )
 
 
+class PlanAppliedTests(PlanFixture):
+    """V11: after the plan is applied, a rerun lists only what needs a hand."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.release(
+            "1.0.0",
+            {
+                ".claude/replace.md": "r1",
+                ".claude/delete.md": "d",
+                ".claude/merge.md": "m1",
+                ".claude/untouched.md": "u",
+            },
+        )
+        self.release(
+            "2.0.0",
+            {
+                ".claude/replace.md": "r2",
+                ".claude/delete.md": None,
+                ".claude/merge.md": "m2",
+                ".claude/add.md": "new",
+            },
+        )
+        for rel in ("replace.md", "delete.md", "merge.md", "untouched.md"):
+            self.put(f".claude/{rel}", self.shipped("1.0.0", f".claude/{rel}"))
+        self.put(".claude/ORCHESTRATOR_VERSION", "1.0.0\n")
+        self.put(".claude/merge.md", "m1\nproject line\n")
+
+    def shipped(self, version: str, rel: str) -> str:
+        return self.git("-C", str(self.tpl), "show", f"v{version}:{rel}")
+
+    def apply(self, skip: tuple[str, ...] = ()) -> None:
+        """Apply the plan the way the procedure does (README §9)."""
+        plan = parse_plan(self.plan().stdout)
+        for rel in (*plan["REPLACE"], *plan["ADD"]):
+            if rel not in skip:
+                self.put(rel, self.shipped("2.0.0", rel))
+        for rel in plan["DELETE"]:
+            (self.project / rel).unlink()
+        for rel in plan["MERGE"]:
+            self.put(rel, self.shipped("2.0.0", rel) + "project line\n")
+
+    def test_a_correct_apply_leaves_only_the_merge_file(self) -> None:
+        self.apply()
+        self.assertEqual(
+            "2.0.0", (self.project / ".claude/ORCHESTRATOR_VERSION").read_text().strip()
+        )
+        result = self.plan("--from", "1.0.0")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            {"MERGE": {".claude/merge.md": ""}},
+            parse_plan(result.stdout),
+            result.stdout,
+        )
+        for name in ("HOOKS", "EXEC BIT", "ABSENT"):
+            self.assertNotIn(f"\n{name}", result.stdout)
+
+    def test_a_skipped_replace_is_still_listed_as_replace(self) -> None:
+        self.apply(skip=(".claude/replace.md",))
+        parsed = parse_plan(self.plan("--from", "1.0.0").stdout)
+        self.assertEqual({".claude/replace.md": ""}, parsed["REPLACE"])
+        self.assertEqual({".claude/merge.md": ""}, parsed["MERGE"])
+        self.assertEqual({"REPLACE", "MERGE"}, set(parsed))
+
+
+class PlanWindowsCopyTests(PlanFixture):
+    """
+    Found on a real Windows rehearsal (2026-10-15): Git for Windows checks
+    files out with CRLF (core.autocrlf=true), so every unedited file looked
+    edited (31 KEEP, 5 MERGE instead of 1 MERGE); and a Korean user name in
+    the project path crashed print() on the cp949 code page.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.release("1.0.0", {".claude/a.md": "one\ntwo\n", ".claude/same.md": "s\n"})
+        self.release("2.0.0", {".claude/a.md": "one\ntwo\nthree\n"})
+
+    def crlf(self, rel: str, text: str) -> None:
+        path = self.project / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+
+    def test_a_crlf_checkout_of_unedited_files_is_replace_and_noop(self) -> None:
+        self.crlf(".claude/ORCHESTRATOR_VERSION", "1.0.0\n")
+        self.crlf(".claude/a.md", "one\ntwo\n")
+        self.crlf(".claude/same.md", "s\n")
+        result = self.plan()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertRegex(result.stdout, r"REPLACE \(2\)")
+        self.assertIn("NOOP: 1 files", result.stdout)
+        self.assertNotIn("MERGE", result.stdout)
+        self.assertNotIn("KEEP", result.stdout)
+
+    def test_a_real_edit_in_a_crlf_file_is_still_an_edit(self) -> None:
+        self.crlf(".claude/ORCHESTRATOR_VERSION", "1.0.0\n")
+        self.crlf(".claude/a.md", "one\nTWO\n")
+        self.crlf(".claude/same.md", "s\n")
+        result = self.plan()
+        self.assertRegex(result.stdout, r"MERGE \(1\)[^\n]*\n  \.claude/a\.md")
+
+    def test_a_non_ascii_project_path_prints_on_a_narrow_code_page(self) -> None:
+        self.project = self.project.rename(self.tmp / "프로젝트-윤")
+        self.put(".claude/ORCHESTRATOR_VERSION", "1.0.0\n")
+        result = subprocess.run(
+            [sys.executable, str(self.tpl / "tools/upgrade-plan"), str(self.project)],
+            capture_output=True,
+            timeout=60,
+            env={**os.environ, "PYTHONIOENCODING": "ascii"},
+        )
+        self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", "replace"))
+        self.assertIn("프로젝트-윤", result.stdout.decode("utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

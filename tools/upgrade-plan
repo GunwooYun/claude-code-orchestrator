@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import re
@@ -180,7 +181,7 @@ def plan(project: Path, from_arg: str | None, to_arg: str | None) -> int:
         )
     old, new, source = resolve_versions(project, from_arg, to_arg)
     old_tree, new_tree = tree(f"v{fmt(old)}"), tree(f"v{fmt(new)}")
-    hashes = {rel: blob_sha(path) for rel, path in project_files(project).items()}
+    hashes = {rel: blob_shas(path) for rel, path in project_files(project).items()}
     classes, unchanged = classify(old_tree, new_tree, hashes)
 
     print(f"upgrade plan: {fmt(old)} -> {fmt(new)} (read-only, nothing is changed)")
@@ -306,10 +307,19 @@ def tree(tag: str) -> dict[str, Blob]:
     return entries
 
 
-def blob_sha(path: Path) -> str:
-    """`git hash-object` without filters: the raw bytes, also outside a repo."""
+def blob_shas(path: Path) -> frozenset[str]:
+    """
+    The blob ids the file may stand for, also outside a repo: its raw bytes,
+    and — for a text file — the same with CRLF read as LF, as `git hash-object`
+    does under core.autocrlf=true. Git for Windows checks files out with CRLF
+    by default; raw bytes alone made every unedited file look edited there.
+    """
     data = path.read_bytes()
-    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+    shas = {hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()}
+    if b"\0" not in data and b"\r\n" in data:
+        lf = data.replace(b"\r\n", b"\n")
+        shas.add(hashlib.sha1(b"blob %d\0" % len(lf) + lf).hexdigest())
+    return frozenset(shas)
 
 
 def is_runtime(rel: str) -> bool:
@@ -339,14 +349,14 @@ def project_files(project: Path) -> dict[str, Path]:
 
 
 def classify(
-    old: dict[str, Blob], new: dict[str, Blob], hashes: dict[str, str]
+    old: dict[str, Blob], new: dict[str, Blob], hashes: dict[str, frozenset[str]]
 ) -> tuple[dict[str, list[str]], int]:
     """(class -> sorted paths, count of files already matching the new version)."""
     classes: dict[str, list[str]] = {name: [] for name, _ in CLASSES}
     unchanged = 0
     for rel in sorted(set(old) | set(new) | set(hashes)):
         was, now, have = old.get(rel), new.get(rel), hashes.get(rel)
-        unmodified = was is not None and have == was.sha
+        unmodified = was is not None and have is not None and was.sha in have
         if have is None:
             if now is None:
                 continue
@@ -356,7 +366,7 @@ def classify(
                 name = "PROJECT-ONLY"
             else:
                 name = "DELETE" if unmodified else "DELETE-MODIFIED"
-        elif have == now.sha:
+        elif now.sha in have:
             unchanged += 1
             continue
         elif unmodified:
@@ -406,7 +416,16 @@ def print_project_only(paths: list[str], tags: list[tuple[int, int, int]]) -> No
             print(f"    {rel}{owned}")
 
 
+def utf8_output() -> None:
+    """Windows pipes and consoles default to the ANSI code page (cp949 on Korean
+    Windows): printing a non-ASCII project path crashed with UnicodeEncodeError."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8")
+
+
 def main() -> int:
+    utf8_output()
     parser = argparse.ArgumentParser(prog="upgrade-plan")
     parser.add_argument("project", type=Path, metavar="PROJECT")
     parser.add_argument("--from", dest="from_version", metavar="X.Y.Z")

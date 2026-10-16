@@ -5,8 +5,8 @@
 
 ![Claude Code Orchestrator](./summary.png)
 
-> 현재 버전: **5.0.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md). 4.x 에서 올린다면
-> [5.0.0 으로 올릴 때](#500-으로-올릴-때)를 먼저 본다.
+> 현재 버전: **5.1.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md). 이미 쓰고 있는 프로젝트를 올리려면
+> [업그레이드 절차](#업그레이드-절차) — 5.1.0 부터는 `/orchestrator-upgrade`, 그 전 사본은 프롬프트 하나를 붙여 넣는다.
 
 ## 목차
 
@@ -103,7 +103,7 @@ your-project/
 ├── .agents/
 │   └── rules/AGENTS.md            # agy 가 읽는 프로젝트 설명
 └── .claude/
-    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 5.0.0)
+    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 5.1.0)
     ├── settings.json              # 훅 등록 + 권한(allow / ask / deny)
     ├── agents/                    # 서브에이전트 정의 (deep-reasoning, general-purpose)
     ├── skills/                    # 슬래시 커맨드 (아래 표)
@@ -122,6 +122,7 @@ your-project/
 | **`/initproject`** | 복사 직후 **프로젝트당 한 번** | 스택을 감지하고 템플릿을 이 프로젝트에 맞게 고친다 |
 | **`/feature <기능명>`** | **작업 하나마다** | 조사 → 요구사항 → 검증 계획 → 설계 리뷰 → 할 일 목록 → 승인 → 구현 → 리뷰 |
 | **`/isolated-review`** | 구현을 커밋한 뒤 | 이 세션과 무관한 격리된 리뷰어가 읽기 전용으로 리뷰한다 |
+| `/orchestrator-upgrade` | 새 릴리스로 올릴 때 | 최신 릴리스를 임시로 클론해 그 안의 절차대로 업그레이드하고, 정할 일만 묻는다 ([9장](#업그레이드-절차)) |
 | `/agy-models` | agy 프로브가 `STALE` 일 때, 등급별 모델을 바꾸고 싶을 때 | agy 등급 T1~T4 의 모델을 사용자가 고른다 (`/initproject` 도 이 절차를 쓴다) |
 | `/jira-setup`, `/ticket` | Jira 를 쓰는 팀 | Jira 연결 설정, 티켓에서 작업 시작 |
 | `/doc-write` | Confluence·문서 작성 | 작성 규칙에 맞춰 문서를 쓰고 발행 |
@@ -159,7 +160,7 @@ Jira·Confluence 를 쓰지 않는 프로젝트는 `.claude/skills/jira-setup/`,
 | 도구 | 필요한가 | 설치 |
 |---|---|---|
 | **Claude Code** | 필수 | Linux / macOS: `curl -fsSL https://claude.ai/install.sh \| bash` → `claude` 로 로그인. Windows: Claude Code 공식 설치 안내를 따른다 |
-| **git** | 필수 | — |
+| **git** | 필수 — Windows 는 Git for Windows(Git Bash 포함) | — |
 | **Python 3.10 이상** (`python3`) | 필수 — 훅과 스크립트가 쓴다 | OS 패키지 |
 | **Antigravity CLI (`agy`)** | 권장 — 없으면 Claude 도구로 대신 조사한다 | Linux / macOS: `curl -fsSL https://antigravity.google/cli/install.sh \| bash` → `agy` 로 Google 로그인 → `agy models`. Windows: Antigravity 공식 안내를 따른다 |
 | **GitHub CLI (`gh`)** | 선택 — PR·머지를 Claude 에게 맡길 때 | `gh auth login` |
@@ -226,11 +227,11 @@ Remove-Item -Recurse -Force .starter
 - **`--branch main` 을 꼭 붙인다.** `main` 에는 릴리스된 버전만 있다. 기본 브랜치 `develop` 에는 아직
   검증 중인 변경이 들어 있다.
 - 받은 버전은 `.claude/ORCHESTRATOR_VERSION` 에 기록된다.
-- **Windows 는 아직 실제로 검증하지 않았다**([11장](#11-지금-무엇이-검증됐나)). 훅은 `python3` 명령으로
-  등록돼 있으므로, PowerShell 에서 `python3 --version` 이 Python 3.10 이상을 출력하는지 먼저 확인한다
-  (Microsoft Store 설치 안내 창이 뜨면 `python3` 이 실제 Python 을 가리키지 않는 것이다).
-  `verify-*` 는 sh 셸 스크립트라 PowerShell·cmd 에서 직접 실행되지 않는다 — `/initproject` 에 Windows 라고
-  알려 주면 이 프로젝트에 맞는 형태로 작성한다(미검증).
+- **Windows 는 Git for Windows(Git Bash)가 있어야 한다.** Claude Code 가 훅을 Git Bash 로 실행하고, 훅은
+  `verify-*`(sh 스크립트)를 Git Bash 의 `sh` 로 실행한다(5.1.0 부터). Git Bash 에서의 동작은 확인했고, Git Bash
+  없이 PowerShell 로만 쓰는 경우는 확인하지 않았다([11장](#11-지금-무엇이-검증됐나)). 훅은 `python3` 명령으로
+  등록돼 있으므로 `python3 --version` 이 Python 3.10 이상을 출력하는지 먼저 확인한다(Microsoft Store 설치
+  안내 창이 뜨면 `python3` 이 실제 Python 을 가리키지 않는 것이다).
 
 ### 2단계 — 커밋할지 정하기
 
@@ -312,7 +313,7 @@ agy 할당량이 넉넉하면 전부 high 로 두어도 된다. 나중에 `STALE
 `/agy-models` 만 다시 실행한다.
 
 **Step 4 — `CLAUDE.md` 갱신.** 맨 위 제목을 프로젝트 이름으로 바꾸고, `## 기술 스택` 에 실제 명령을 적고,
-`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v5.0.0`)을 기록한다. 나중에 `/jira-setup`·
+`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v5.1.0`)을 기록한다. 나중에 `/jira-setup`·
 `/doc-write` 가 같은 섹션에 `### Jira`·`### Confluence` 를 덧붙인다 — 각자 자기 부분만 고친다.
 
 **Step 5 — 검증 스크립트 작성.** Step 2 의 답으로 `.claude/scripts/verify-save`, `verify-task` 등을 만든다.
@@ -524,52 +525,152 @@ git worktree add --detach ../<project>-review <작업 브랜치>
 
 ### 업그레이드 절차
 
-**템플릿을 그대로 다시 복사하면 안 된다.** `/initproject` 로 맞춘 내용이 모두 원본으로 덮어써진다.
-파일마다 "프로젝트가 고쳤는가"를 확인하고 골라서 가져온다.
+**템플릿을 그대로 다시 복사하면 안 된다.** `/initproject` 로 맞춘 내용과 진행 중인 작업 기록이 원본으로
+덮어써진다. 파일마다 "프로젝트가 고쳤는가"를 확인하고 골라서 가져와야 한다 — 그 일을 Claude 가 한다.
 
-```mermaid
-flowchart TD
-    A["1. 백업<br/>tar czf backup.tgz .claude .agents CLAUDE.md"] --> B["2. CHANGELOG 에서<br/>내 버전 이후 바뀐 것 확인"]
-    B --> C{"3. 파일마다:<br/>프로젝트가 고쳤나?"}
-    C -- "안 고침<br/>(내 버전 원본과 같음)" --> D["새 버전으로 교체"]
-    C -- "고침" --> E["새 버전을 받고<br/>프로젝트 수정을 다시 적용"]
-    C -- "새 버전에서 삭제됨" --> F["삭제<br/>(훅이면 settings.json 등록도 함께!)"]
-    C -- "새 버전에 새로 생김" --> H["추가<br/>(실행 파일이면 settings.json 허용도 함께)"]
-    D --> G["4. 검사: 훅 등록 경로가 모두 실제 파일인지,<br/>ORCHESTRATOR_VERSION 이 새 버전인지"]
-    E --> G
-    F --> G
-    H --> G
+절차는 템플릿 저장소의 [`tools/UPGRADE.md`](tools/UPGRADE.md) 한 곳에만 있고 프로젝트에는 복사되지 않는다.
+Claude 는 최신 릴리스를 임시 폴더에 클론해서 **그 클론의 절차**를 따른다. 그래서 옛 버전 프로젝트도 늘 새
+버전의 절차로 올라간다. 확인할 수 있는 것은 직접 확인하고, 사용자가 정할 일만 묻는다.
+
+💬 는 **Claude 세션**(`claude` 를 실행한 화면)에 입력하는 것, 🖥️ 는 **터미널**에 입력하는 것이다.
+
+#### 언제
+
+하던 작업 단위를 끝내고 커밋한 뒤, **작업 단위 사이에** 한다. 업그레이드는 `upgrade-orchestrator` 브랜치에
+커밋 하나로 남아서 문제가 생기면 그것만 되돌릴 수 있다.
+
+#### 시작하기
+
+프로젝트 루트에서 Claude 를 연다. 💬 프로젝트에 `/orchestrator-upgrade` 가 있으면:
+
+```text
+/orchestrator-upgrade
 ```
 
-- **3번 분류표는 도구가 만든다** (읽기 전용, 아무것도 바꾸지 않는다). 이 저장소를 클론해 두고 거기서
-  실행한다. 도구는 프로젝트에 복사되지 않는다:
-  `git -C <템플릿 클론> fetch --tags` 후
-  `python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>`.
-  옛 버전 = 프로젝트의 `.claude/ORCHESTRATOR_VERSION`(없으면 `--from X.Y.Z`), 새 버전 = 클론의 최신 태그
+💬 없으면(이 스킬이 생기기 전 버전) 아래를 붙여 넣는다. 하는 일은 같다.
+
+```text
+claude-code-orchestrator 템플릿을 최신 릴리스로 업그레이드해 줘.
+https://github.com/GunwooYun/claude-code-orchestrator.git 의 최신 vX.Y.Z 태그를 mktemp -d 로 만든 임시 폴더에
+전체 클론(--depth 없이 --branch <태그>)하고, 그 클론의 tools/UPGRADE.md 를 처음부터 따라 해 줘.
+클론은 이번 실행용 임시 클론이야(CLONE_KIND=temporary).
+```
+
+- **Windows** 는 Git for Windows 가 설치돼 있어야 한다. Claude Code 는 Git Bash 로 명령을 실행하고, 템플릿의
+  훅도 Git Bash 가 있어야 돈다. 확인 방법: [Windows 업그레이드 확인 가이드](docs/windows-upgrade-check.md).
+- **프로젝트가 다른 머신에 있으면**(원격 서버 등) 그 머신의 Claude 세션에서 실행한다. 그 머신에서 GitHub 에
+  접속할 수 없으면 Claude 가 묻는다 — 다른 경로로 옮겨 둔 템플릿 클론의 위치를 알려 주면 그것을 쓴다.
+
+#### Claude 가 묻는 것
+
+| 언제 | 묻는 것 |
+|---|---|
+| GitHub 에 접속하지 못했을 때 | 다시 시도 / 가지고 있는 클론의 경로 / 중단 |
+| 커밋하지 않은 변경이나 끝나지 않은 작업 단위가 있을 때 | 정리하고 다시 / 그대로 진행 / 중단 |
+| 시작 전 | 지금 버전 → 새 버전, 바뀌는 것 요약. 올릴지 |
+| 분류표를 만든 뒤 | 이대로 적용할지. 빼고 싶은 파일을 말하면 뺀다 |
+| MERGE 파일마다 | 내 수정을 새 파일에 다시 넣은 결과가 맞는지 |
+| 프로젝트 소유 파일을 고칠 때 | `settings.json` 훅 등록, CHANGELOG 가 손으로 하라고 한 변경 |
+| 직후 확인이 실패했을 때 | 원인을 고칠지 / 되돌릴지 |
+| 끝 | 커밋할지, 임시 클론을 지울지 |
+
+분류표에서 볼 것:
+
+- **MERGE** — 내가(또는 `/initproject` 가) 고친 파일. 새 파일에 내 수정을 다시 적용한다. 어떤 수정을 지키는지 확인한다.
+- **DELETE** 와 **HOOKS** — 지워질 파일, 그리고 같이 지워야 할 `settings.json` 의 훅 등록.
+- **PROJECT-ONLY "last shipped in X"** — 예전 업그레이드에서 지웠어야 할 파일. 지울지 정한다.
+- **`[project-owned]`** — 프로젝트 소유 파일. 내가 고친 것이면(MERGE·KEEP — 보통 `CLAUDE.md`) MERGE 여도 덮어쓰지
+  않고, CHANGELOG 가 바꾸라고 한 부분만 손으로 고친다. 한 번도 고치지 않은 것(REPLACE)은 새 버전을 받을지 묻는다.
+
+#### 직후 확인 — 몇 분, 여기서 업그레이드가 끝난다
+
+Claude 가 적용 직후 네 가지를 돌리고 보고한다. 기다릴 것은 없다.
+
+1. 분류 도구를 다시 돌려 **빠뜨린 교체·삭제가 없는지** — MERGE(내 수정을 다시 넣은 파일)와 KEEP(프로젝트가
+   고친 파일)만 남아야 한다. REPLACE·ADD·DELETE 가 남아 있으면 빠뜨린 것이다.
+2. `tools/hook-check` — `settings.json` 에 등록된 **훅이 모두 실제로 실행되는지**. 지운 훅의 등록이 남았거나
+   훅이 이 머신의 Python 에서 죽으면 여기서 이름과 함께 나온다.
+3. `.claude/scripts/verify-task` — 프로젝트의 게이트(있으면).
+4. `.claude/bin/agy-probe` — `STALE` 이면 💬 `/agy-models`.
+
+🖥️ 직접 한 번 본다: `cat .claude/ORCHESTRATOR_VERSION`(새 버전이어야 한다, Windows PowerShell 은
+`Get-Content .claude\ORCHESTRATOR_VERSION`)과 `git status`. 그다음은 평소처럼 브랜치를 PR 로 올리거나 머지한다.
+
+#### 선택 — 며칠 쓴 뒤 비교
+
+업그레이드를 끝내는 조건이 **아니다.** 바뀐 지시문이 에이전트 동작을 나쁘게 바꿨는지 보고 싶을 때, 작업
+3~5건을 평소처럼 한 뒤 한다. 업그레이드 전 숫자(`before` 리포트)는 Claude 가 홈 폴더 `usage-reports` 에 저장해
+둔다.
+
+💬
+
+```text
+.claude/bin/usage-report --since <업그레이드한 날> 을 돌리고, 홈 폴더 usage-reports 의 이 프로젝트 before 리포트와 비교해 줘.
+위임(deep-reasoning·general-purpose), /feature 진행 단계, 게이트 실행, 훅 오류를 중심으로, 나빠진 게 있는지.
+```
+
+**나빠졌으면 되돌린다.** 커밋했으면 `git revert <업그레이드 커밋 해시>`. 커밋하지 않은(로컬 전용) 프로젝트는
+Claude 가 만들어 둔 백업(홈 폴더의 `backup-<프로젝트>-<날짜>.tgz`)으로 되돌린다 — 💬 "업그레이드 전 백업으로
+되돌려 줘".
+
+#### 손으로 할 때
+
+Claude 없이 하거나 중간에 막혔을 때: 템플릿을 클론하고(`git clone <URL>` 뒤 `git -C <클론> switch --detach
+v<최신>`) 클론의 `tools/UPGRADE.md` 를 순서대로 따른다. 명령이 모두 그 안에 있다. Windows 는 Git Bash 에서 한다.
+
+**진행 중인 작업은 이어진다.** 업그레이드가 바꾸는 것은 템플릿 소유 파일뿐이다. 작업 상태는 프로젝트 소유
+파일에 있다 — `CLAUDE.md` 의 `## Current Project`(진행 중인 계획·검증 계획)와 `## Project Setup`(완료 지점,
+Jira·Confluence 설정), `.claude/docs/` 의 설계·조사 기록, `CLAUDE.local.md`, git 브랜치. 그래도 작업 단위
+사이에 하는 것은, 문제가 생겼을 때 업그레이드 커밋만 되돌릴 수 있게 하기 위해서다.
+
+**에이전트 동작은 "같다고 가정하지 않고" 잰다.** 동작을 정하는 것은 `.claude/agents/`, `.claude/rules/`,
+`.claude/skills/`, `CLAUDE.md` 다. 프로젝트가 고친 파일은 MERGE 로 나와 내 수정이 유지되지만(예: `/agy-models` 로
+고른 모델 표), 템플릿이 바꾼 지시는 바뀐다. 무엇이 바뀌는지는 시작 전 요약(CHANGELOG)에 있고, 그래서 업그레이드
+전 숫자를 남기고 며칠 뒤 비교를 권한다.
+
+**분류 도구 (`tools/upgrade-plan`)** — 업그레이드 중 Claude 가 돌리는 도구. 읽기 전용이고 프로젝트에 복사되지
+않는다. 분류표만 따로 보고 싶으면 템플릿 클론에서 실행한다:
+
+```bash
+git -C <템플릿 클론> fetch --tags
+python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
+```
+
+- 옛 버전 = 프로젝트의 `.claude/ORCHESTRATOR_VERSION`(없으면 `--from X.Y.Z`), 새 버전 = 클론의 최신 태그
   (`--to X.Y.Z` 로 중간 버전까지만).
-  파일마다 REPLACE·MERGE·KEEP·DELETE·ADD·PROJECT-ONLY 등으로 나누고, 예전 업그레이드에서 지웠어야 할
-  파일은 PROJECT-ONLY 아래 "last shipped in X" 로 모아 보여 준다. 실행 권한을 잃은 스크립트, 지워질 훅을
-  가리키는 `settings.json` 등록, 읽어야 할 CHANGELOG 항목도 함께 나온다.
-- "프로젝트가 고쳤나"는 그 파일을 **내 버전의 원본과 내용으로 비교**해서 판단한다 (도구도 이 규칙을 쓴다). git 의 내용 해시를
-  쓰면 Linux·macOS·Windows(PowerShell·cmd) 어디서나 같은 명령이고, 파일 권한 차이에 속지 않는다:
-  `git -C <템플릿 클론> rev-parse v<내 버전>:<경로>` 와 `git hash-object <경로>` 의 출력이 **같으면 안 고친 것**이다.
-  (`diff` 나 `git diff --no-index` 는 내용이 같아도 실행 권한 차이만으로 "다르다"고 나온다.)
-- 대개 그대로 교체해도 되는 것(템플릿 소유): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`,
-  `.claude/bin/`, `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
-  `rules/security.md`, `rules/language.md`, `rules/writing-style.md`,
-  `scripts/README.md`, `ORCHESTRATOR_VERSION`(새 버전 값이 된다)
-  — 단, 프로젝트가 고친 흔적이 있으면 병합한다. `/agy-models` 로 agy 모델을 바꿨다면
-  `rules/antigravity-delegation.md` 는 MERGE 로 나온다: 모델 표 4줄은 내 값을 유지한다.
-- 업그레이드 뒤 `.claude/bin/agy-probe` 를 한 번 돌린다. `STALE` 이면 `/agy-models` 로 모델을 다시 고른다.
-- 덮어쓰면 안 되는 것(프로젝트 소유): `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`,
-  `rules/test-writing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`, `docs/research/`,
-  `docs/writing-style.md`(팀의 문서 작성 규칙 — 5.0.0 부터. 5.0.0 으로 올릴 때 고치지 않은 템플릿 사본이면 새 파일로 바꾼다).
-- 덮어쓰지 않는 파일이라도 CHANGELOG 가 바꿨다고 적은 부분(예: `settings.json` 의 허용 경로, `CLAUDE.md` 에서
-  빠진 섹션)은 손으로 반영한다.
-- **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남아 있으면
-  훅 파일이 없어서 모든 편집이 실패한다. (3.0.0 은 1.x 대비 훅 6개를 지웠다.)
-- 이 과정을 Claude 에게 시켜도 된다: "CHANGELOG 를 보고 v4.3.1 → v5.0.0 업그레이드를 위 절차대로 해 줘.
-  먼저 파일별 분류표를 보여 주고 승인받은 뒤 진행해."
+- 분류: REPLACE(안 고침 → 교체), MERGE(양쪽 다 고침 → 새 파일에 내 수정 재적용), KEEP, DELETE(새 버전에서
+  삭제), ADD(새로 생김), PROJECT-ONLY(템플릿에 없는 파일 — 예전 업그레이드에서 지웠어야 할 것은 "last shipped in
+  X" 로 모아 보여 준다). 실행 권한을 잃은 스크립트, 지워질 훅을 가리키는 `settings.json` 등록도 함께 나온다.
+- 도구와 프로젝트는 같은 머신에 있어야 한다.
+
+**참고 — 분류의 기준**
+
+- "프로젝트가 고쳤나"는 그 파일을 **내 버전의 원본과 내용으로 비교**해서 판단한다(도구도 이 규칙을 쓴다).
+  손으로 확인할 때: `git -C <템플릿 클론> rev-parse v<내 버전>:<경로>` 와 `git hash-object <경로>` 가 **같으면 안
+  고친 것**이다. (`diff` 는 실행 권한 차이만으로도 "다르다"고 나온다.)
+- 템플릿 소유(대개 교체): `.claude/agents/`, `.claude/skills/`, `.claude/hooks/`, `.claude/bin/`,
+  `rules/deep-reasoning-delegation.md`, `rules/antigravity-delegation.md`, `rules/coding-principles.md`,
+  `rules/security.md`, `rules/language.md`, `rules/writing-style.md`, `scripts/README.md`, `ORCHESTRATOR_VERSION`.
+  프로젝트가 고쳤으면 MERGE 로 나온다.
+- 프로젝트 소유(덮어쓰지 않음): `CLAUDE.md`, `rules/dev-environment.md`, `rules/testing.md`,
+  `rules/test-writing.md`, `scripts/verify-*`, `settings.json`, `.agents/rules/AGENTS.md`, `docs/DESIGN.md`,
+  `docs/research/`, `docs/writing-style.md`(5.0.0 부터. 5.0.0 으로 올릴 때 고치지 않은 템플릿 사본이면 새 파일로 바꾼다).
+  CHANGELOG 가 이 파일들에서 바꾸라고 한 부분(허용 경로, 빠진 섹션 등)은 손으로 반영한다.
+- **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남으면 훅 파일이 없어서
+  모든 편집(또는 Bash 명령)마다 오류가 난다.
+
+### 5.1.0 으로 올릴 때
+
+아래 버전별 목록은 `/orchestrator-upgrade`(또는 붙여 넣기 프롬프트)가 CHANGELOG 에서 읽어 **알아서 안내하는**
+손 단계다. 손으로 올릴 때 참고한다. 4.x 이하에서 5.1.0 으로 한 번에 올리면 5.0.0 목록까지 함께 나온다.
+
+1. 5.0.0 사본에는 아직 스킬이 없다 — [시작하기](#시작하기)의 붙여 넣기 프롬프트로 올린다. 다음부터는
+   `/orchestrator-upgrade`.
+2. `.claude/hooks/__pycache__/` 가 있으면 한 번 지운다. 옛 훅이 만든 것이고 새 훅은 만들지 않는다.
+   `.gitignore` 에 없으면 `/isolated-review` 가 작업 트리가 깨끗하지 않다며 거부한다.
+3. Windows 프로젝트는 업그레이드 뒤 저장 검사가 돌기 시작한다(전에는 저장마다 `WinError 193` 으로 빠졌다).
+   `verify-save` 가 있는 프로젝트라면 lint 결과가 새로 보이기 시작하는 것이 정상이다.
+4. 끝나면 새 Claude 세션을 연다.
 
 ### 5.0.0 으로 올릴 때
 
@@ -587,8 +688,8 @@ flowchart TD
    이 분류표에 DELETE 로 나온다.
 5. `.claude/docs/writing-style.md` 는 이제 프로젝트 소유다. 고치지 않았으면 새 파일로 바꾸고, 고쳤으면 그대로 둔다.
 6. `/jira-setup` 을 쓴 적이 있는데 `CLAUDE.md` 에 `### Jira` 가 없으면 `/jira-setup` 을 다시 실행한다.
-7. 하루 정도 쓴 뒤 `.claude/bin/usage-report --since <업그레이드한 날>` 을 돌려 "Hooks" 표의 `errors` 가
-   모두 0 인지 본다([사용 근거 남기기](#사용-근거-남기기)).
+7. 훅이 모두 실행되는지는 업그레이드 직후 확인한다(위 「직후 확인」의 `tools/hook-check`). 기다릴 필요가 없다.
+   `usage-report` 의 "Hooks" 표 비교는 며칠 쓴 뒤의 선택 사항이다([사용 근거 남기기](#사용-근거-남기기)).
 
 ---
 
@@ -626,10 +727,11 @@ flowchart TD
 | deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중. 업무 프로젝트(2026-08~10, `usage-report`): deep-reasoning 71회, general-purpose 20회, agy 23회(실패 1). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
 | `usage-report` | 도입 프로젝트 두 곳에서 실행(업무 서버는 ssh 로). 리뷰에서 집계 오류 4건(서브에이전트 토큰, 게이트 횟수, 프로브 상태, 날짜 경계)을 찾아 고친 뒤 다시 셌다. Claude Code 의 기록 형식은 문서화돼 있지 않아 버전이 바뀌면 틀릴 수 있다 |
 | `tools/upgrade-plan` (4.x 의 `/orchestrator-version --plan`) | 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치). 5.0.0 업그레이드 안내는 v3.0.1·v4.3.1 사본으로 확인했다 |
+| `/orchestrator-upgrade`, `tools/UPGRADE.md`, `tools/hook-check` | macOS 에서 연습용 릴리스(5.0.0 → 5.0.1, MERGE·프로젝트 소유 `CLAUDE.md`·손 단계 포함)로 새 Claude 세션이 끝까지 진행했다: GitHub 접속 실패 → 클론 경로, 커밋 안 된 변경 → 중단, 스킬 없는 사본 → 붙여 넣기 프롬프트. GitHub 의 임시 클론 생성·삭제도 확인했다. Windows 11(Git Bash, 영문·한글 사용자 폴더)에서도 같은 시나리오가 통과했다(2026-10-15~16, 헤드리스 세션이 막힌 `.claude/rules`·`CLAUDE.md` 편집은 사용자 역할로 실행). 실제 프로젝트 업그레이드는 아직이다. hook-check 는 훅을 `.claude/` 사본에서 돌려서, 프로젝트 루트 파일에 기대는 훅은 실제와 다르게 돌 수 있다 |
 | 훅 2개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `/agy-models` | 템플릿 저장소에서 실제 agy 1.3.3 으로 1회 완주(2026-10-13): Gemini 3개 제시 → 등급별 선택 → 표 기록 → 프로브 `READY`. 선택지가 4개를 넘는 경우와 `/initproject` Step 3c 경유 실행은 아직 돌려 보지 않았다 |
 | `/doc-write`, `/jira-setup`, `/ticket` | 실제 업무 프로젝트에서 사용(2026-09~10, 각 1회 호출. 설치 뒤 Jira·Confluence 호출 17회는 모두 스킬을 실행한 세션 안). 이전 판의 "돌려 본 적 없다"는 그 프로젝트를 집계하기 전의 기록이었다 |
-| Windows | **미확인.** PowerShell 명령(복사·백업·제외 목록·스모크 테스트)을 안내하지만 실행해 보지 않았다. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다 |
+| Windows | **Git Bash 에서 확인 (2026-10-15~16).** 업그레이드·저장 검사·hook-check·agy-probe·usage-report·격리 리뷰 시작은 아래처럼 확인했다. **미확인:** README 의 PowerShell 명령(복사·백업·제외 목록·스모크 테스트), Git Bash 없이 PowerShell 로 도는 훅. 훅은 `python3` 명령으로 등록돼 있고, `verify-*` 는 sh 스크립트다. 업그레이드(`/orchestrator-upgrade`, `tools/hook-check`)는 [Windows 업그레이드 확인 가이드](docs/windows-upgrade-check.md)로 확인한다 — 2026-10-15 첫 실행(Windows 11, Git Bash, 한글 사용자 이름)에서 `upgrade-plan` 의 CRLF·cp949 문제 두 건이 나와 고쳤고, 고친 뒤 W1~W6(테스터 Claude 세션이 새 세션을 띄워 진행)이 모두 통과했다. 대화형 세션의 승인 창 동작은 이 방식으로 확인되지 않았다. 같은 실행에서 저장 검사가 돌지 않은 것(훅이 sh 스크립트 `verify-save` 를 직접 실행하다 `WinError 193`)은 고쳤다 — Windows 에서는 shebang 을 보고 Git Bash 의 `sh` 로 실행한다. [Windows 점검 가이드](docs/windows-check.md)로 2026-10-15 확인했다(영문 사용자 폴더). 2026-10-16 한글 사용자 폴더(`C:\Users\…윤건우`)에서는 훅이 입력을 cp949 로 읽어 저장 검사가 조용히 빠지는 문제가 나와 고쳤고, 같은 PC 에서 다시 확인했다(Write·Bash 모두 검사 출력, 한글 경로 정상). 영문 폴더 결과: Write·Bash 저장 모두 저장 검사가 돌았고(경로는 `/`), hook-check 3/3, agy-probe `READY`, usage-report 가 Windows 기록 폴더를 찾았고, `/isolated-review` 가 COMPLETE 까지 갔다($0.42 상한 실행). 확인하지 않은 것: `.claude/` 를 커밋한 저장소를 `core.autocrlf=true` 로 새로 클론하면 sh 스크립트가 CRLF 가 되어 실패할 수 있다(git 이 경고했다, 실제 프로젝트에서는 아직 관측 안 됨) |
 
 ### 사용 근거 남기기
 
@@ -695,8 +797,13 @@ ssh -p <포트> <사용자>@<호스트> 'cd <그 머신에서 claude 를 연 폴
 - 기능 PR 은 변경을 `CHANGELOG.md` 의 `## [Unreleased]` 에 적는다.
 - 릴리스: `## [Unreleased]` 를 `## [X.Y.Z] - 날짜` 로 바꾸고 `.claude/ORCHESTRATOR_VERSION` 을 같은 버전으로
   올린다. **같은 PR 에서 README 를 그 릴리스 내용에 맞게 고친다** — 버전 표기만이 아니라 새 스킬·상태·절차와
-  11장 검증 현황까지(4.3.0 은 이걸 빠뜨렸다) → `develop` 을 `main` 으로 PR, **merge commit 으로 머지**
-  (squash 하면 다음 릴리스 PR 이 충돌한다 — 4.3.0 의 #59) → `main` 의 머지 커밋에 태그를 달고 push.
+  11장 검증 현황까지(4.3.0 은 이걸 빠뜨렸다) → `develop` 을 `main` 으로 PR, **merge commit 으로 머지** →
+  `main` 의 머지 커밋에 태그를 달고 push.
+- 머지 방식: **기능 PR → `develop` 은 squash**(기능마다 커밋 하나), **`develop` → `main` 은 merge commit**.
+  릴리스 PR 을 squash 하면 `main` 의 커밋이 `develop` 이력에 없어서 다음 릴리스 PR 이 충돌한다(4.2.0, 5.0.0 에서
+  실제로 일어났다). 그랬다면 `git diff origin/main origin/develop` 이 비어 있는지 확인하고
+  `git merge -s ours origin/main` 을 `develop` 에 PR 로 넣는다(merge commit 으로; #59, #67). 릴리스 목록은
+  `git log --first-parent --oneline main` 으로 한 줄씩 본다.
 - 다음 변경은 실사용 근거(`usage-report`, 불편 메모)로 정한다. 최근 점검과 다음 점검의 기준선:
   [`docs/direction-review-2026-10-13.md`](docs/direction-review-2026-10-13.md)
 

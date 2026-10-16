@@ -6,11 +6,88 @@ work that has not been released. From 1.0.0 the template is used across real
 projects, and changes are driven by evidence from that use (`usage-report`
 counts, or "what I tried, what happened, how I worked around it").
 
-Upgrading an adopted copy: do not copy the template over it — follow README
-「업그레이드 절차」 (compare each file with the template's history, merge what the
-project changed, back up a gitignored `.claude/` first).
+Upgrading an adopted copy: do not copy the template over it — run
+`/orchestrator-upgrade` (from 5.1.0), or paste the prompt in README
+「업그레이드 절차」 into a copy that predates it. Both follow `tools/UPGRADE.md`
+from a fresh clone of the latest release.
 
-## [Unreleased]
+## [5.1.0] - 2026-10-16
+
+Upgrading becomes a skill, and the template works on Windows. The upgrade no
+longer means reading README §9 and waiting a day: `/orchestrator-upgrade`
+follows the procedure shipped with the release it installs, asks only where the
+choice is yours, and checks the hooks right away (`tools/hook-check`). On
+Windows the save check never ran before (every save: `WinError 193`); it now
+runs, also under a Korean user folder. Verified by rehearsals on macOS and on
+Windows 11 (Git Bash), not yet by a real project's upgrade.
+
+**Upgrade:**
+1. Delete `.claude/hooks/__pycache__/` if it exists. The old hooks wrote it and
+   the new ones do not; where `.gitignore` lacks it, the leftover keeps
+   `/isolated-review` refusing the working tree as dirty.
+
+### Added
+- Skill `/orchestrator-upgrade`: clones the latest release into a temporary
+  directory and follows that clone's `tools/UPGRADE.md`, asking only at
+  decision points (GitHub unreachable → retry / a clone path / stop; dirty tree
+  or unfinished unit; the version; the plan; each MERGE; edits to project-owned
+  files; a failed check; commit; deleting the temporary clone). The skill only
+  bootstraps, so an old copy of it still runs the new procedure. Projects from
+  before this release paste one prompt instead (README 「업그레이드 절차」).
+- `tools/UPGRADE.md` — the one upgrade procedure (repository-only, never
+  copied). After applying, it re-runs `upgrade-plan --from <old>`: only MERGE
+  and KEEP may remain (no REPLACE / ADD / DELETE, except project-owned files
+  the user kept). A `[project-owned]` file the project edited is never copied
+  or merged, even as MERGE (`CLAUDE.md`); only CHANGELOG hand steps change it.
+  One it never edited (REPLACE) is offered. The commit stages only the files
+  the upgrade changed. Local-only template files (`.git/info/exclude`) roll
+  back from the backup.
+- `tools/hook-check <project>` — runs every hook registered in the project's
+  `settings.json` with a payload it reacts to and fails naming the hook that
+  crashed, swallowed its own error (`hook error (ignored)`), or whose file is
+  missing. It replaces "use it for a day, then read
+  `usage-report`" as the post-upgrade hook check; the `usage-report`
+  comparison after a few days stays optional.
+
+### Fixed
+- The save check never ran on Windows: the hooks exec'd the extensionless
+  `#!/bin/sh` `verify-save`, which Windows cannot do, and reported
+  `could not run … [WinError 193]` on every save. On Windows an extensionless
+  script now runs by its shebang — sh scripts through Git Bash's `sh` (or
+  `CLAUDE_CODE_GIT_BASH_PATH`) with `/` paths, Python ones through Python —
+  and without `sh` the message names Git Bash. `tools/hook-check` now fails a
+  hook whose save check never ran (`could not run` / `timed out after`); it
+  reported these hooks ok before. Projects without `verify-save` were not
+  affected.
+- The save-check hooks under a non-ASCII path on Korean Windows (found under
+  `C:\Users\<name>윤건우`): they read Claude Code's UTF-8 payload through the
+  cp949 text stream, so the path came out garbled and `lint-on-save` went
+  silent; and the check's UTF-8 output was decoded as cp949, so the report
+  read "None". They now read the payload as bytes and decode the check's
+  output as UTF-8 (`hook-check` too).
+- The save-check hooks no longer write `.claude/hooks/__pycache__/`: in a
+  project whose `.gitignore` lacks it, that untracked file made
+  `/isolated-review` refuse the working tree as dirty (seen on the Windows
+  check; not Windows-specific).
+- `tools/upgrade-plan` on Windows (found by the Windows rehearsal):
+  a CRLF checkout (Git for Windows' default `core.autocrlf=true`) no longer
+  makes every unedited file look edited — CRLF counts as LF, as with
+  `git hash-object`; and output is UTF-8, so a non-ASCII project path (a
+  Korean user name) no longer crashes it on the cp949 code page. `hook-check`
+  writes UTF-8 too.
+
+### Changed
+- README 「업그레이드 절차」 is an overview: when, how to start (the skill or the
+  paste-in prompt), what Claude asks, the immediate check, the optional
+  comparison after a few days (3–5 tasks — the 5.0.0 list said "a day"), and
+  the manual fallback (follow `tools/UPGRADE.md`). The step-by-step shell
+  blocks are gone; the procedure is in one place. After an upgrade, start a
+  new Claude session: the running one loaded the old instructions.
+- `docs/windows-upgrade-check.md` and `docs/windows-check.md`: Windows checks
+  a person or a tester Claude session runs (Git Bash), with pass/fail per
+  scenario.
+- README §12: feature PRs into `develop` are squash-merged, `develop` → `main`
+  is a merge commit, and how to recover when a release PR was squashed.
 
 ## [5.0.0] - 2026-10-14
 
