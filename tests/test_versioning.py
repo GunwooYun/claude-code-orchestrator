@@ -548,6 +548,37 @@ class PlanAppliedTests(PlanFixture):
         self.assertEqual({"REPLACE", "MERGE"}, set(parsed))
 
 
+class PlanLoadedLeftoverTests(PlanFixture):
+    """
+    A real project (2026-10-19) kept `startproject` and `review` from the
+    template's pre-fork original: never shipped here, so the plan listed them as
+    the project's own and the upgrade asked nobody, though every session loaded
+    them and `review` was still auto-invoked.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.release("1.0.0", {".claude/a.md": "a"})
+        self.release("2.0.0", {".claude/a.md": "a2"})
+        self.put(".claude/ORCHESTRATOR_VERSION", "1.0.0\n")
+        self.put(".claude/a.md", "a")
+
+    def test_a_never_shipped_skill_is_marked_loaded(self) -> None:
+        self.put(
+            ".claude/skills/startproject/SKILL.md", "---\nname: startproject\n---\n"
+        )
+        self.put(".claude/docs/research/notes.md", "the project's own notes")
+        stdout = self.plan().stdout
+        self.assertIn("    .claude/skills/startproject/SKILL.md  [loaded]\n", stdout)
+        self.assertIn("    .claude/docs/research/notes.md  [project-owned]\n", stdout)
+        self.assertIn("[loaded] = loaded into every session", stdout)
+
+    def test_no_loaded_leftover_no_note(self) -> None:
+        self.put(".claude/docs/research/notes.md", "the project's own notes")
+        stdout = self.plan().stdout
+        self.assertNotIn("[loaded]", stdout)
+
+
 class PlanWindowsCopyTests(PlanFixture):
     """
     Found on a real Windows rehearsal (2026-10-15): Git for Windows checks
