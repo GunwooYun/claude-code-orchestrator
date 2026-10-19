@@ -11,7 +11,11 @@ Upgrading an adopted copy: do not copy the template over it — run
 「업그레이드 절차」 into a copy that predates it. Both follow `tools/UPGRADE.md`
 from a fresh clone of the latest release.
 
-## [Unreleased]
+## [5.1.1] - 2026-10-19
+
+What the first real upgrade (Linux, 3.0.1 → 5.1.0) taught. Projects' files do
+not change (only `ORCHESTRATOR_VERSION`); the upgrade tools and README do. No
+hand steps.
 
 ### Added
 - `tools/upgrade-plan` marks never-shipped skills, agents and rules
