@@ -85,6 +85,12 @@ Exit 2 → show its stderr and stop. Otherwise show the user, grouped:
   `settings.json` registrations that must go in the same step.
 - **ABSENT**, **PROJECT-ONLY "last shipped in X"** — shipped files the project lacks;
   leftovers an earlier upgrade should have removed.
+- **PROJECT-ONLY "never shipped" marked `[loaded]`** — skills, agents or rules this
+  template never shipped but every session loads: the project's own, or leftovers of an
+  older template (a real project kept `startproject` and `review` from the pre-fork
+  original). For each, show its `description:` line and, if the project has transcripts,
+  how often it ran: `grep -rlE 'command-name>/<name><|"skill": ?"<name>"'
+  ~/.claude/projects/*<project dir name>*/*.jsonl | wc -l`.
 - **`[project-owned]`** — never overwritten; only the CHANGELOG hand steps touch them.
 - REPLACE / ADD — counts, and the list on request.
 
@@ -114,6 +120,7 @@ The table is for every path not kept by these rules.
 | DELETE-MODIFIED | **Ask** per file: delete / keep |
 | ABSENT | **Ask** once for the list: add back / leave out |
 | PROJECT-ONLY "last shipped in X" | **Ask** once for the list: delete / keep |
+| PROJECT-ONLY "never shipped" `[loaded]` | **Ask** once for the list: keep (the project's own) / delete (a leftover; the backup still has it) |
 | MERGE | One file at a time: show the project's edit (`git -C "$CLONE" show vOLD:<path>` vs the project file) and the upstream change (`vOLD` vs `vNEW`); write the `vNEW` file with the project's edit re-applied; show the result diff; **Ask** to confirm |
 | EXEC BIT | `chmod +x` each listed path |
 | HOOKS | Remove each listed registration from `.claude/settings.json` (it is project-owned: show the edit, **Ask**) |

@@ -83,6 +83,16 @@ CLASSES = (
 OWNED_NOTE = (
     "[project-owned] = do not overwrite; apply what the CHANGELOG says changed by hand"
 )
+# Never shipped by this template, yet loaded into every session. On a real
+# project these held two skills from the template's pre-fork original
+# (`startproject`, `review`), unused for weeks and still auto-invoked: the
+# plan listed them as the project's own and nobody was asked.
+SESSION_LOADED = (".claude/skills/", ".claude/agents/", ".claude/rules/")
+LOADED_MARK = "[loaded]"
+LOADED_NOTE = (
+    f"{LOADED_MARK} = loaded into every session: the project's own, or a leftover "
+    "of an older template? Confirm before keeping it"
+)
 
 
 class PlanError(Exception):
@@ -413,7 +423,10 @@ def print_project_only(paths: list[str], tags: list[tuple[int, int, int]]) -> No
         print(f"  never shipped ({len(groups[None])}):")
         for rel in groups[None]:
             owned = "  [project-owned]" if project_owned(rel) else ""
-            print(f"    {rel}{owned}")
+            loaded = f"  {LOADED_MARK}" if rel.startswith(SESSION_LOADED) else ""
+            print(f"    {rel}{owned}{loaded}")
+        if any(rel.startswith(SESSION_LOADED) for rel in groups[None]):
+            print(f"  {LOADED_NOTE}")
 
 
 def utf8_output() -> None:

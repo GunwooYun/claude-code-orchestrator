@@ -597,6 +597,9 @@ Claude 가 그 자리에서 멈추고, 직접 실행할 명령 블록을 준다.
 - **MERGE** — 내가(또는 `/initproject` 가) 고친 파일. 새 파일에 내 수정을 다시 적용한다. 어떤 수정을 지키는지 확인한다.
 - **DELETE** 와 **HOOKS** — 지워질 파일, 그리고 같이 지워야 할 `settings.json` 의 훅 등록.
 - **PROJECT-ONLY "last shipped in X"** — 예전 업그레이드에서 지웠어야 할 파일. 지울지 정한다.
+- **PROJECT-ONLY "never shipped" 의 `[loaded]`** — 이 템플릿이 배포한 적 없는데 매 세션 읽히는 스킬·에이전트·
+  규칙. 프로젝트가 직접 만든 것인지, 더 오래된 템플릿의 잔재인지 정한다. Claude 가 각 파일의 설명과 실제
+  사용 횟수를 보여 준다. 실제 프로젝트에서 포크 이전 원본의 `startproject`·`review` 스킬이 이렇게 남아 있었다.
 - **`[project-owned]`** — 프로젝트 소유 파일. 내가 고친 것이면(MERGE·KEEP — 보통 `CLAUDE.md`) MERGE 여도 덮어쓰지
   않고, CHANGELOG 가 바꾸라고 한 부분만 손으로 고친다. 한 번도 고치지 않은 것(REPLACE)은 새 버전을 받을지 묻는다.
 
@@ -745,7 +748,7 @@ python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
 | deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중. 업무 프로젝트(2026-08~10, `usage-report`): deep-reasoning 71회, general-purpose 20회, agy 23회(실패 1). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
 | `usage-report` | 도입 프로젝트 두 곳에서 실행(업무 서버는 ssh 로). 리뷰에서 집계 오류 4건(서브에이전트 토큰, 게이트 횟수, 프로브 상태, 날짜 경계)을 찾아 고친 뒤 다시 셌다. Claude Code 의 기록 형식은 문서화돼 있지 않아 버전이 바뀌면 틀릴 수 있다 |
 | `tools/upgrade-plan` (4.x 의 `/orchestrator-version --plan`) | 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치). 5.0.0 업그레이드 안내는 v3.0.1·v4.3.1 사본으로 확인했다 |
-| `/orchestrator-upgrade`, `tools/UPGRADE.md`, `tools/hook-check` | macOS 에서 연습용 릴리스(5.0.0 → 5.0.1, MERGE·프로젝트 소유 `CLAUDE.md`·손 단계 포함)로 새 Claude 세션이 끝까지 진행했다: GitHub 접속 실패 → 클론 경로, 커밋 안 된 변경 → 중단, 스킬 없는 사본 → 붙여 넣기 프롬프트. 2026-10-16 에는 실제 GitHub 의 v5.1.0 으로, 스킬 없는 5.0.0 사본이 [시작하기](#시작하기)의 한 줄 프롬프트로 끝까지 올라갔고(헤드리스라 `.claude/` 쓰기와 `rm -rf` 는 Claude 가 준 명령을 사용자 역할로 실행), 업그레이드된 사본의 새 세션에서 `/orchestrator-upgrade` 가 인식돼 "이미 최신"으로 끝났다. GitHub 의 임시 클론 생성·삭제도 확인했다. Windows 11(Git Bash, 영문·한글 사용자 폴더)에서도 같은 시나리오가 통과했다(2026-10-15~16, 헤드리스 세션이 막힌 `.claude/rules`·`CLAUDE.md` 편집은 사용자 역할로 실행). 실제 프로젝트 업그레이드는 아직이다. hook-check 는 훅을 `.claude/` 사본에서 돌려서, 프로젝트 루트 파일에 기대는 훅은 실제와 다르게 돌 수 있다 |
+| `/orchestrator-upgrade`, `tools/UPGRADE.md`, `tools/hook-check` | macOS 에서 연습용 릴리스(5.0.0 → 5.0.1, MERGE·프로젝트 소유 `CLAUDE.md`·손 단계 포함)로 새 Claude 세션이 끝까지 진행했다: GitHub 접속 실패 → 클론 경로, 커밋 안 된 변경 → 중단, 스킬 없는 사본 → 붙여 넣기 프롬프트. 2026-10-16 에는 실제 GitHub 의 v5.1.0 으로, 스킬 없는 5.0.0 사본이 [시작하기](#시작하기)의 한 줄 프롬프트로 끝까지 올라갔고(헤드리스라 `.claude/` 쓰기와 `rm -rf` 는 Claude 가 준 명령을 사용자 역할로 실행), 업그레이드된 사본의 새 세션에서 `/orchestrator-upgrade` 가 인식돼 "이미 최신"으로 끝났다. GitHub 의 임시 클론 생성·삭제도 확인했다. Windows 11(Git Bash, 영문·한글 사용자 폴더)에서도 같은 시나리오가 통과했다(2026-10-15~16, 헤드리스 세션이 막힌 `.claude/rules`·`CLAUDE.md` 편집은 사용자 역할로 실행). **실제 프로젝트 1회 (2026-10-16~19, Linux, 업무 프로젝트 3.0.1 → 5.1.0, 한 줄 프롬프트로 시작, `.claude/` 로컬 전용)**: 8개 릴리스를 건너뛰고도 적용 후 확인에 REPLACE·ADD·DELETE·HOOKS 가 0, hook-check 3/3, 지운 훅(`log-cli-tools.py`)의 등록과 예전 2.0.0 훅 파일이 정리됐고, 프로젝트가 고른 `deep-reasoning` 모델(`opus`)은 MERGE 로 유지됐다. 놓친 것: 포크 이전 원본의 `startproject`·`review` 스킬을 묻지 않았다 — 분류표에 `[loaded]` 표시를 더했다. 5.1.0 이후 `/orchestrator-upgrade` 로 하는 실제 업그레이드와 Windows 실제 프로젝트는 아직이다. hook-check 는 훅을 `.claude/` 사본에서 돌려서, 프로젝트 루트 파일에 기대는 훅은 실제와 다르게 돌 수 있다 |
 | 훅 2개, `verify-save`/`verify-task` | 테스트로 확인 + 실제 세션에서 결과가 모델에게 도달하는 것을 확인 |
 | `/agy-models` | 템플릿 저장소에서 실제 agy 1.3.3 으로 1회 완주(2026-10-13): Gemini 3개 제시 → 등급별 선택 → 표 기록 → 프로브 `READY`. 선택지가 4개를 넘는 경우와 `/initproject` Step 3c 경유 실행은 아직 돌려 보지 않았다 |
 | `/doc-write`, `/jira-setup`, `/ticket` | 실제 업무 프로젝트에서 사용(2026-09~10, 각 1회 호출. 설치 뒤 Jira·Confluence 호출 17회는 모두 스킬을 실행한 세션 안). 이전 판의 "돌려 본 적 없다"는 그 프로젝트를 집계하기 전의 기록이었다 |

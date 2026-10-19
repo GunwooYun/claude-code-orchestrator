@@ -13,7 +13,17 @@ from a fresh clone of the latest release.
 
 ## [Unreleased]
 
+### Added
+- `tools/upgrade-plan` marks never-shipped skills, agents and rules
+  `[loaded]`, and `tools/UPGRADE.md` asks once whether each is the project's
+  own or a leftover (showing its description and how often it ran). The first
+  real upgrade (3.0.1 → 5.1.0) kept two skills from the template's pre-fork
+  original — `startproject`, `review` — unused for weeks yet loaded every
+  session, because never-shipped files counted as the project's own.
+
 ### Changed
+- README §11: the first real project upgrade (Linux, 3.0.1 → 5.1.0) and what
+  it showed.
 - README 「업그레이드 절차」: copies from before 5.1.0 start the upgrade with one
   line — read the skill file from `main` and follow it — instead of a
   four-line prompt; what the session asks, in the order a 5.0.0 → 5.1.0
