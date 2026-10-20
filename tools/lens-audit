@@ -17,7 +17,8 @@ them. This reads the session's transcript and its subagent transcripts
      agent's final message, unchanged;
   3. every lens-reviewer request ran on an Opus model at effort medium;
   4. lens-reviewer agents used no tool other than Read, Grep, Glob;
-  5. the report's `## Findings` section appears verbatim in the session's text.
+  5. the report's `## Summary` section appears verbatim in the session's text
+     (the full findings are read from the report file, not from the session).
 """
 
 from __future__ import annotations
@@ -48,18 +49,6 @@ def load_script(root: Path) -> ModuleType:
     return module
 
 
-def jsonl(path: Path) -> list[dict]:
-    rows = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line:
-            try:
-                rows.append(json.loads(line))
-            except ValueError:
-                continue
-    return rows
-
-
 def content_items(row: dict) -> list[dict]:
     message = row.get("message")
     content = message.get("content") if isinstance(message, dict) else None
@@ -87,17 +76,12 @@ def agent_calls(rows: list[dict]) -> dict[str, str]:
     return calls
 
 
-def expected_prompts(lr: ModuleType, root: Path, run: Path) -> dict[str, str]:
-    """Stripped prompt text -> the answer file it should be saved to."""
-    return lr.expected_answers(root, run)
-
-
 def audit(root: Path, transcript: Path, run: Path) -> list[str]:
     lr = load_script(root)
     problems: list[str] = []
-    main_rows = jsonl(transcript)
+    main_rows = lr.transcript_rows(transcript)
     calls = agent_calls(main_rows)
-    expected = expected_prompts(lr, root, run)
+    expected = lr.expected_answers(root, run)  # prompt -> answer file
 
     sent: dict[str, int] = {}
     for tool_id, prompt in calls.items():
@@ -113,7 +97,7 @@ def audit(root: Path, transcript: Path, run: Path) -> list[str]:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         if meta.get("agentType") != AGENT:
             continue
-        rows = jsonl(
+        rows = lr.transcript_rows(
             meta_path.with_name(meta_path.name.replace(".meta.json", ".jsonl"))
         )
         tag = meta.get("description") or meta_path.stem
@@ -122,7 +106,9 @@ def audit(root: Path, transcript: Path, run: Path) -> list[str]:
         if name:
             saved = run / name
             text = saved.read_text(encoding="utf-8").strip() if saved.exists() else None
-            if text != lr.final_answer(rows):
+            final = lr.final_answer(rows)
+            # None == None would pass an unfinished agent with no saved file.
+            if final is None or text != final:
                 problems.append(
                     f"2: {name} differs from the agent's final message ({tag})"
                 )
@@ -158,7 +144,7 @@ def audit(root: Path, transcript: Path, run: Path) -> list[str]:
         problems.append("5: no report for this run under " + lr.REPORT_REL)
     else:
         text = report.read_text(encoding="utf-8")
-        findings = text.split("## Findings", 1)[1].split("\n## ", 1)[0].strip()
+        summary = text.split("## Summary", 1)[1].split("\n## ", 1)[0].strip()
         said = "\n".join(
             c.get("text", "")
             for row in main_rows
@@ -166,9 +152,9 @@ def audit(root: Path, transcript: Path, run: Path) -> list[str]:
             for c in content_items(row)
             if c.get("type") == "text"
         )
-        if findings not in said:
+        if summary not in said:
             problems.append(
-                f"5: the ## Findings of {report.name} was not shown verbatim"
+                f"5: the ## Summary of {report.name} was not shown verbatim"
             )
     return problems
 

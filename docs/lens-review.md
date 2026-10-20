@@ -107,6 +107,23 @@ Found and fixed during the rehearsals:
 - A clean change still collects ~15 true but trivial findings → the report
   header counts confirmed findings by impact.
 
-Not shown: a person-opened interactive run (approval prompts, the ask, the
-translation step); Windows; projects other than this repository and the small
-JS repo.
+Found by the first person-opened interactive run in this repository
+(2026-10-20), after the rehearsals:
+- An interactive session's background agent answers through a
+  `SubagentHandback` tool call, not a final text row; `collect` found nothing
+  → it reads the hand-back (1cbc21b).
+- The report was 33 KB, so "show `## Findings` verbatim" (step 7) could not be
+  done → the report starts with `## Summary`, one line per finding
+  (`<verdict> · <impact> · <lens> F<n> · <location> — <claim>`, refuted ones
+  as `REFUTED · <lens> F<n> — <claim>`); step 7 shows and translates the
+  Summary and names the file for the rest, and `tools/lens-audit` check 5 now
+  requires the Summary verbatim. The rehearsals above showed `## Findings`.
+- The same run's lens review of this branch was applied: a relative `--base`
+  (`HEAD~3`) was read as `origin/HEAD~3`; a retried agent's old transcript
+  could be saved; the "also reported by another lens" label ignored which lens
+  reported; reviewer answers under `.claude/logs/` could fail the repository's
+  prose-scan tests.
+
+Not shown: other projects, and Windows. An interactive run in this repository
+has been shown (approval prompts, the ask, the translation step); one in
+another real project has not.

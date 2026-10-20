@@ -7,9 +7,9 @@ disable-model-invocation: true
 # Lens Review
 
 **Five reviewers, one concern each, then a verifier per finding.** You (the main
-session) only start the agents and save what they say. Everything that must not
-depend on how you read or retype text — the scope, the prompts, the report — is
-done by the script.
+session) only start the agents; the script's `collect` saves what they say.
+Everything that must not depend on how you read or retype text — the scope, the
+prompts, the answers, the report — is done by the script.
 
 Design, measurements and rejected alternatives: `docs/lens-review.md` in the
 template repository. Read it before changing anything here.
@@ -88,10 +88,13 @@ Run every script call as `python3 .claude/skills/lens-review/lens-review …`
    report was written but something is missing (a lens answer, a verdict, text
    the parser could not read) — the report's `## Incomplete` section says what.
 
-7. **Show the report.** Print its `## Findings`, `## Refuted` and any
+7. **Show the report.** The full report is long (tens of KB); do not paste it.
+   Print its `## Summary` — one line per finding, refuted ones included — and any
    `## Unparsed` / `## Incomplete` sections verbatim, then a complete translation
-   into the user's language — every finding, in order, nothing merged or
-   dropped. Then, per finding, ask: fix / dispute / defer. **This is where the
+   of them into the user's language: every line, in order, nothing merged or
+   dropped. Give the report path; the full findings (claim, failure, evidence,
+   verifier's correction) are there. Then, per finding, ask: fix / dispute /
+   defer, reading the finding's section in the report as needed. **This is where the
    real-occurrence rule applies** (`CLAUDE.md` 운영 주의사항 「일어나지 않는 조건을
    이론만으로 쫓지 않는다」): show next to each finding whether its input occurs in real use,
    and recommend defer when it does not. The verifier never makes that call.

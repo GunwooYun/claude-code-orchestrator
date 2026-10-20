@@ -1,0 +1,47 @@
+### F1
+severity: minor
+location: README.md:511
+claim: The README's new `/lens-review` section says the main Claude saves the agents' answers to files, but the shipped procedure forbids that and has the script's `collect` command save them from transcripts.
+failure: A user or maintainer reading README §7 expects the main session to write `lens-*.md` files. Under the current SKILL.md, the main session must never copy an answer. If it did, it would hit an approval prompt for every file under `.claude/`, and lens-audit check 2 would flag the copy if it differed from the transcript.
+evidence: README.md:511-512 "메인 Claude 는 요청문을 바꾸지 않고 전달하고, 답을 그대로 파일에 저장할 뿐이다." vs .claude/skills/lens-review/SKILL.md step 4 "Collect — do not save answers yourself ... You never copy or retype an answer (writing under `.claude/` would also ask for approval on every file)"
+confidence: high
+
+### F2
+severity: minor
+location: .claude/skills/lens-review/lens-review:541
+claim: `collect` writes reviewer prose as `.md` files under `.claude/logs/lens-review/<run>/`, and the repository's prose-scan gate tests read every `*.md` in the repo without skipping `logs`. So running /lens-review in this repository can make the task gate fail because of what a reviewer wrote.
+failure: A lens or verifier answer that mentions, say, "5 files" within 80 characters of "N lines" is saved as `lens-<lens>.md` or `verify-*.md`. `LargeChangeThresholdTests` then reports a second threshold value and fails `verify-task`. The same thing happened before with isolated-review report headers, which is why `reviews` was added to the skip list. The pointer scan (test_template_consistency.py:548) and PhaseReferenceTests (test_feature_workflow.py:157) also read these files.
+evidence: lens-review:541 `(run / name).write_text(answer + "\n", encoding="utf-8")` with RUN_REL = ".claude/logs/lens-review" (line 47); tests/test_template_consistency.py:41 `PROSE_SCAN_SKIP = (".git", "research", "node_modules", "checkpoints", "reviews")` and :254 `for path in sorted(REPO.rglob("*.md")):`; tests/test_feature_workflow.py:159 skips only `(".git", "node_modules", "checkpoints")`
+confidence: medium
+
+### F3
+severity: minor
+location: .claude/skills/lens-review/lens-review:51
+claim: The comment says IGNORED also covers Claude Code's runtime files, but the tuple leaves out the runtime list (`CLAUDE_RUNTIME`) that run-review excludes.
+failure: If `.claude/scheduled_tasks.lock`, `.claude/worktrees/...` or a similar runtime file shows up as untracked, `dirty()` returns True. `--mode auto` then switches to worktree mode, and `untracked_files` adds the runtime file to the reviewed change. The range line then says "uncommitted and untracked changes" on a clean branch. run-review excludes these files because one of them made a real review INVALID.
+evidence: lens-review:49-51 "# Never reviewed and never make the tree "dirty": this skill's own output and the other review's, plus Claude Code's runtime files.\nIGNORED = (".claude/logs", REPORT_REL, ".claude/isolated-review")"; .claude/skills/isolated-review/run-review:75-81 `CLAUDE_RUNTIME = tuple(".claude/" + name for name in ("scheduled_tasks.lock", "scheduled_tasks.json", "routines/.state", "worktrees", ...`
+confidence: medium
+
+### F4
+severity: minor
+location: .claude/skills/initproject/SKILL.md:120
+claim: /initproject Step 3's model matrix was not updated for the new `lens-reviewer` agent. The agent's `opus` pin is measured and required, but /initproject still offers every agent's `model:` for reassignment.
+failure: On a new project, Step 3 greps `.claude/agents/*.md`, finds `lens-reviewer: opus` without a table row explaining it, and asks "keep this matrix, or reassign?". The user can then downgrade it to sonnet or `inherit`, which silently breaks what lens-audit check 3 enforces (Opus/medium). The user is also never told that /lens-review needs Opus access, although the isolated-review row gives that warning for Fable.
+evidence: initproject/SKILL.md:117-120 lists only `deep-reasoning`, `general-purpose`, agy and the `/isolated-review` reviewer ("**Not reassignable.**"); :130 "Apply any change to the `model:` frontmatter of the agent files"; .claude/agents/lens-reviewer.md `model: opus` with the comment "Pinned on purpose, measured".
+confidence: high
+
+### F5
+severity: minor
+location: CHANGELOG.md:14
+claim: The change edits the project-owned `CLAUDE.md` review bullet, but the Unreleased entry gives no **Upgrade:** step or "by hand" note. Adopted copies that keep their CLAUDE.md therefore never get the new routing.
+failure: When a project with an edited `CLAUDE.md` (classified MERGE/KEEP, never copied over) upgrades, it keeps "세션 안의 가벼운 리뷰는 deep-reasoning 으로 충분하다". The shipped /feature Phase 6 now says B1 `/lens-review` is the default in-session review. The upgrade procedure only applies by hand what the CHANGELOG says, so the two instructions contradict each other in that project.
+evidence: CLAUDE.md:127 (changed in this diff) "세션 안 리뷰는 `/lens-review`(5관점+검증, A1 전에), 작은 변경은 deep-reasoning."; tools/upgrade-plan:49-50 `PROJECT_OWNED = ("CLAUDE.md", ...`; :84 OWNED_NOTE "apply what the CHANGELOG says changed by hand"; CHANGELOG.md:14-32 has only "### Added" and "### Corrected", with no mention of CLAUDE.md.
+confidence: high
+
+### F6
+severity: minor
+location: README.md:768
+claim: README §11 "지금 무엇이 검증됐나" lists the status of every shipped skill and tool, but has no row for the new `/lens-review`. That skill has never had a person-opened interactive run or a run on Windows.
+failure: A reader checking §11 before adopting the template sees no warning that /lens-review has only been run headless in this repository and one small JS repo. Those limits are recorded only in the unshipped docs/lens-review.md.
+evidence: README.md:768-773 has rows for `/initproject`, `/feature`, `/isolated-review`, deep-reasoning/agy and others, none for `/lens-review`; docs/lens-review.md:112-114 "Not shown: a person-opened interactive run (approval prompts, the ask, the translation step); Windows; projects other than this repository and the small JS repo."
+confidence: high

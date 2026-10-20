@@ -13,6 +13,14 @@ from a fresh clone of the latest release.
 
 ## [Unreleased]
 
+**Upgrade:**
+1. If your project rewrote `CLAUDE.md` (it is project-owned, so the upgrade
+   does not touch it), update the review sentence in 운영 주의사항 by hand: where
+   it says "세션 안의 가벼운 리뷰는 deep-reasoning 으로 충분하다" (or similar),
+   use the new ending: "세션 안 리뷰는 `/lens-review`(5관점+검증, A1 전에),
+   작은 변경은 deep-reasoning." Otherwise `CLAUDE.md` and the shipped
+   `/feature` Phase 6 (B1 `/lens-review`) give two different defaults.
+
 ### Added
 - `/lens-review`: an in-session review through five lenses (correctness,
   security, integration, tests, simplicity), each a separate read-only

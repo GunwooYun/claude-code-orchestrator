@@ -77,7 +77,7 @@ class Repo:
         (self.root / ".claude" / "rules").mkdir(parents=True)
         (self.root / ".claude" / "rules" / "security.md").write_text("# rule\n")
         self.write("base.py", "x = 1\n")
-        self.write("old_name.py", "def f():\n    return 1\n")
+        self.write("old_name.py", "".join(f"v{i} = {i}\n" for i in range(20)))
         self.write("gone.py", "y = 2\n")
         self.commit("base")
         git(self.root, "push", "-q", "-u", "origin", "main")
@@ -202,6 +202,21 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual("A", status["blob.bin"])
         self.assertNotIn("old_name.py", status)
 
+    def test_scope_renamed_and_edited_file_counts_its_lines_under_the_new_path(
+        self,
+    ) -> None:
+        """V-edge: the numstat rename record must be keyed by the new path."""
+        git(self.repo.root, "mv", "old_name.py", "new_name.py")
+        text = (self.repo.root / "new_name.py").read_text()
+        self.repo.write("new_name.py", text.replace("v3 = 3", "v3 = 33"))
+        self.repo.commit("rename and edit")
+        done, data = self.repo.scope("--base", "main")
+        self.assertEqual(0, done.returncode, done.stderr)
+        assert data is not None
+        lines = {f["path"]: f["lines"] for f in data["files"]}
+        self.assertEqual({"new_name.py": 2}, lines)
+        self.assertEqual(2, data["lines"])
+
     def test_scope_base_as_sha_and_full_ref_and_detached(self) -> None:
         """V-edge"""
         start = git(self.repo.root, "rev-parse", "origin/main").strip()
@@ -239,6 +254,22 @@ class ScopeTests(unittest.TestCase):
         self.assertTrue(saved["over_cap"])
         self.assertIsNone(data)
 
+    def test_scope_cap_boundary_exactly_the_cap_is_reviewed(self) -> None:
+        """V-edge: 3000 lines pass, 3001 are refused."""
+        cap = lr.HARD_CAP_LINES
+        self.repo.write("big.py", "".join(f"v{i} = {i}\n" for i in range(cap)))
+        self.repo.commit("exactly the cap")
+        done, data = self.repo.scope("--base", "main")
+        self.assertEqual(0, done.returncode, done.stderr)
+        assert data is not None
+        self.assertEqual(cap, data["lines"])
+        self.assertFalse(data["over_cap"])
+        self.repo.write("big.py", "".join(f"v{i} = {i}\n" for i in range(cap + 1)))
+        self.repo.commit("one over")
+        done, _ = self.repo.scope("--base", "main")
+        self.assertEqual(2, done.returncode)
+        self.assertIn("cap", done.stderr)
+
     def test_scope_paths_narrow_the_change(self) -> None:
         """V-edge"""
         self.repo.three_commits()
@@ -267,11 +298,63 @@ class SharedGitHelperTests(unittest.TestCase):
                 return ast.dump(node)
         raise AssertionError(f"{name} not found in {path}")
 
-    def test_resolve_base_matches_run_review(self) -> None:
+    def test_git_matches_run_review(self) -> None:
         self.assertEqual(
+            self.function_source(RUN_REVIEW, "git"),
+            self.function_source(SCRIPT, "git"),
+        )
+
+    def test_resolve_base_differs_from_run_review_on_purpose(self) -> None:
+        """lens-review's copy fixes the relative-ref bug run-review still has
+        (`HEAD~3` became `origin/HEAD~3`). When run-review gets the same fix,
+        replace this with an equality check like test_git_matches_run_review."""
+        self.assertNotEqual(
             self.function_source(RUN_REVIEW, "resolve_base"),
             self.function_source(SCRIPT, "resolve_base"),
         )
+
+
+class ResolveBaseTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.repo = Repo()
+        self.addCleanup(self.repo.close)
+        root = self.repo.root
+        # origin/main gets history and origin/HEAD is set, as after `git clone`.
+        git(root, "checkout", "-q", "main")
+        for name in ("m1", "m2"):
+            self.repo.write(f"{name}.py", "m = 1\n")
+            self.repo.commit(name)
+        git(root, "push", "-q", "origin", "main")
+        git(root, "remote", "set-head", "origin", "main")
+        git(root, "checkout", "-q", "feat")
+        self.repo.three_commits()
+
+    def resolve(self, base: str | None) -> str:
+        return lr.resolve_base(self.repo.root, base)
+
+    def test_resolve_base_relative_refs_are_used_as_given(self) -> None:
+        for base in ("HEAD", "HEAD~1", "HEAD^", "HEAD@{1}"):
+            self.assertEqual(base, self.resolve(base))
+
+    def test_resolve_base_sha_and_full_refs_are_used_as_given(self) -> None:
+        sha = git(self.repo.root, "rev-parse", "HEAD").strip()
+        for base in (sha, sha[:8], "refs/heads/main", "origin/main"):
+            self.assertEqual(base, self.resolve(base))
+
+    def test_resolve_base_bare_branch_with_origin_copy_maps_to_origin(self) -> None:
+        self.assertEqual("origin/main", self.resolve("main"))
+
+    def test_resolve_base_bare_name_without_origin_copy_is_kept(self) -> None:
+        git(self.repo.root, "branch", "local-only")
+        self.assertEqual("local-only", self.resolve("local-only"))
+
+    def test_scope_with_relative_base_reviews_the_asked_range(self) -> None:
+        """origin/HEAD~1 exists here, so the old mapping silently picked it."""
+        done, data = self.repo.scope("--base", "HEAD~1")
+        self.assertEqual(0, done.returncode, done.stderr)
+        assert data is not None
+        self.assertEqual("HEAD~1", data["base"])
+        self.assertEqual({"c.py"}, {f["path"] for f in data["files"]})
 
 
 def make_run(tmp: Path, files: list[str] | None = None) -> Path:
@@ -450,7 +533,9 @@ class ParseTests(unittest.TestCase):
 
     def test_parse_recorded_answers(self) -> None:
         """V-parse: real lens answers recorded in rehearsals parse completely."""
-        cases = sorted(FIXTURES.glob("*.md")) if FIXTURES.exists() else []
+        # .txt, not .md: the repo's prose-scan tests read every .md file.
+        cases = sorted(FIXTURES.glob("*.txt"))
+        self.assertGreaterEqual(len(cases), 4, "fixtures missing")
         for path in cases:
             expected = int(path.stem.rsplit("-", 1)[-1])  # name ends in -<count>
             answer = lr.parse_lens(path.read_text(encoding="utf-8"))
@@ -499,7 +584,7 @@ class ReportTests(unittest.TestCase):
         )
         self.verdict("correctness", 1, "verdict: CONFIRMED\nimpact: low\n")
         self.verdict("correctness", 2, "verdict: REFUTED\nevidence: x.py:8 guards it\n")
-        text, complete = lr.build_report(self.run_dir)
+        text, complete = lr.build_report(self.root, self.run_dir)
         self.assertTrue(complete)
         parts = self.sections(text)
         self.assertIn("`x.py:3`", parts["Findings"])
@@ -520,7 +605,7 @@ class ReportTests(unittest.TestCase):
         self.verdict(
             "tests", 3, "verdict: CONFIRMED\nimpact: hit in normal use — users\n"
         )
-        text, _ = lr.build_report(self.run_dir)
+        text, _ = lr.build_report(self.root, self.run_dir)
         findings = self.sections(text)["Findings"]
         order = [m.group(1) for m in re.finditer(r"`x\.py:(\d)`", findings)]
         self.assertEqual(["3", "1", "2"], order)
@@ -537,8 +622,53 @@ class ReportTests(unittest.TestCase):
         self.lens("tests", FINDING)
         self.verdict("correctness", 1, "verdict: CONFIRMED\n")
         self.verdict("tests", 1, "verdict: CONFIRMED\n")
-        text, _ = lr.build_report(self.run_dir)
+        text, _ = lr.build_report(self.root, self.run_dir)
         self.assertEqual(2, text.count("also reported by another lens"))
+
+    def test_report_same_location_from_one_lens_is_not_corroboration(self) -> None:
+        """V8: two findings of one lens at one location carry no label."""
+        self.lens(
+            "correctness", FINDING + FINDING.replace("F1", "F2").replace("loop", "list")
+        )
+        self.verdict("correctness", 1, "verdict: CONFIRMED\n")
+        self.verdict("correctness", 2, "verdict: CONFIRMED\n")
+        text, _ = lr.build_report(self.root, self.run_dir)
+        self.assertNotIn("also reported by another lens", text)
+        # With a second lens at that location, all three carry it.
+        self.lens("tests", FINDING)
+        self.verdict("tests", 1, "verdict: CONFIRMED\n")
+        text, _ = lr.build_report(self.root, self.run_dir)
+        self.assertEqual(3, text.count("also reported by another lens"))
+
+    def test_report_summary_is_one_line_per_finding_sorted_like_findings(self) -> None:
+        """V8: the Summary is what the main session shows; detail stays in the file."""
+        blocks = "".join(
+            FINDING.replace("F1", f"F{n}")
+            .replace("x.py:3", f"x.py:{n}")
+            .replace("The loop skips the last item.", f"Claim {n}\nwraps.")
+            for n in (1, 2, 3)
+        )
+        self.lens("tests", blocks)
+        self.verdict("tests", 1, "verdict: CONFIRMED\nimpact: none\n")
+        self.verdict("tests", 2, "verdict: REFUTED\nevidence: guarded\n")
+        self.verdict(
+            "tests", 3, "verdict: CONFIRMED\nimpact: hit in normal use — users\n"
+        )
+        text, _ = lr.build_report(self.root, self.run_dir)
+        parts = self.sections(text)
+        self.assertLess(text.index("## Summary"), text.index("## Findings"))
+        self.assertEqual(
+            [
+                "- CONFIRMED · hit in normal use · tests F3 · x.py:3 — Claim 3 wraps.",
+                "- CONFIRMED · none · tests F1 · x.py:1 — Claim 1 wraps.",
+                "- REFUTED · tests F2 — Claim 2 wraps.",
+            ],
+            [line for line in parts["Summary"].splitlines() if line.startswith("- ")],
+        )
+
+    def test_report_summary_without_findings_says_none(self) -> None:
+        text, _ = lr.build_report(self.root, self.run_dir)
+        self.assertEqual("Summary\n\nNone.", self.sections(text)["Summary"].strip())
 
     def test_report_flags_a_line_past_the_end_of_the_file(self) -> None:
         """V-loc: a diff-file line number cited as a file line is marked."""
@@ -549,14 +679,16 @@ class ReportTests(unittest.TestCase):
         )
         self.verdict("correctness", 1, "verdict: CONFIRMED\n")
         self.verdict("correctness", 2, "verdict: CONFIRMED\n")
-        findings = self.sections(lr.build_report(self.run_dir)[0])["Findings"]
+        findings = self.sections(lr.build_report(self.root, self.run_dir)[0])[
+            "Findings"
+        ]
         self.assertIn("`x.py:3` (line 3 is past the end of the file, 2 lines", findings)
         self.assertIn("`x.py:2` — CONFIRMED", findings)
 
     def test_report_without_verdict_is_written_and_incomplete(self) -> None:
         """V8b"""
         self.lens("security", FINDING)
-        text, complete = lr.build_report(self.run_dir)
+        text, complete = lr.build_report(self.root, self.run_dir)
         self.assertFalse(complete)
         self.assertIn("— UNVERIFIED", self.sections(text)["Findings"])
         self.assertIn("security F1: no verdict", self.sections(text)["Incomplete"])
@@ -565,7 +697,7 @@ class ReportTests(unittest.TestCase):
         """V8b"""
         (self.run_dir / "lens-simplicity.md").unlink()
         self.lens("integration", "Looks fine to me.")
-        text, complete = lr.build_report(self.run_dir)
+        text, complete = lr.build_report(self.root, self.run_dir)
         self.assertFalse(complete)
         parts = self.sections(text)
         self.assertIn("Looks fine to me.", parts["Unparsed"])
@@ -578,6 +710,7 @@ class ReportTests(unittest.TestCase):
         first = run_script(self.root, "report", "--run", ".claude/logs/lens-review/r1")
         second = run_script(self.root, "report", "--run", ".claude/logs/lens-review/r1")
         self.assertEqual(3, first.returncode, first.stderr)
+        self.assertEqual(3, second.returncode, second.stderr)
         self.assertNotEqual(first.stdout.strip(), second.stdout.strip())
         for done in (first, second):
             path = self.root / done.stdout.strip()
@@ -585,6 +718,16 @@ class ReportTests(unittest.TestCase):
             self.assertEqual(
                 ".claude/docs/reviews", path.parent.relative_to(self.root).as_posix()
             )
+
+    def test_report_cli_exits_0_when_complete(self) -> None:
+        """V5: every lens answered and every finding has a verdict."""
+        git(self.root, "init", "-q")
+        self.lens("security", FINDING)
+        self.verdict("security", 1, "verdict: CONFIRMED\nimpact: low\n")
+        done = run_script(self.root, "report", "--run", ".claude/logs/lens-review/r1")
+        self.assertEqual(0, done.returncode, done.stderr)
+        report = (self.root / done.stdout.strip()).read_text(encoding="utf-8")
+        self.assertNotIn("## Incomplete", report)
 
 
 class CollectTests(unittest.TestCase):
@@ -649,6 +792,50 @@ class CollectTests(unittest.TestCase):
         saved, missing = lr.collect(self.root, self.run_dir)
         self.assertIn("verify-tests-1.md", saved)
         self.assertEqual([], missing)
+
+    def test_collect_saves_lens_and_verifier_answers_in_one_call(self) -> None:
+        """Both transcripts exist already: the second pass picks up the verifier."""
+        (self.run_dir / "lens-tests.md").write_text(FINDING.strip() + "\n")
+        verify = lr.verify_prompt(self.run_dir, "tests:1")
+        (self.run_dir / "lens-tests.md").unlink()
+        for lens in LENSES:
+            answer = FINDING.strip() if lens == "tests" else "NO FINDINGS"
+            self.agent(lr.lens_prompt(self.root, self.run_dir, lens), answer)
+        self.agent(verify, "verdict: CONFIRMED")
+        saved, missing = lr.collect(self.root, self.run_dir)
+        self.assertIn("verify-tests-1.md", saved)
+        self.assertEqual(6, len(saved))
+        self.assertEqual([], missing)
+
+    def stamp(self, n: int, mtime: int) -> None:
+        os.utime(self.agents / f"agent-{n}.jsonl", (mtime, mtime))
+
+    def test_collect_retried_prompt_takes_the_newest_transcript(self) -> None:
+        """The first by file name is not the newest: a failed attempt must lose."""
+        prompt = lr.lens_prompt(self.root, self.run_dir, "security")
+        self.agent(prompt, "API error, giving up")  # agent-1: old, sorts first
+        self.agent(prompt, "NO FINDINGS")  # agent-2: the retry, newest
+        self.agent(prompt, "older still")  # agent-3: sorts last, oldest
+        self.stamp(1, 2000)
+        self.stamp(2, 3000)
+        self.stamp(3, 1000)
+        saved, _ = lr.collect(self.root, self.run_dir)
+        self.assertEqual(["lens-security.md"], saved)
+        self.assertEqual(
+            "NO FINDINGS\n", (self.run_dir / "lens-security.md").read_text()
+        )
+
+    def test_collect_unfinished_retry_does_not_fall_back_to_the_old_answer(
+        self,
+    ) -> None:
+        prompt = lr.lens_prompt(self.root, self.run_dir, "security")
+        self.agent(prompt, "API error, giving up")
+        self.agent(prompt, "partial", tool_last=True)  # the retry, still working
+        self.stamp(1, 1000)
+        self.stamp(2, 2000)
+        saved, missing = lr.collect(self.root, self.run_dir)
+        self.assertEqual([], saved)
+        self.assertIn("lens-security.md", missing)
 
     def test_collect_skips_a_changed_prompt_and_an_unfinished_agent(self) -> None:
         self.agent(
@@ -740,8 +927,11 @@ class AuditTests(unittest.TestCase):
         (self.run_dir / "verify-correctness-1.md").write_text(
             "verdict: CONFIRMED\nimpact: low"
         )
-        report_text, _ = lr.build_report(self.run_dir)
+        report_text, _ = lr.build_report(self.root, self.run_dir)
         self.report = lr.write_report_file(self.root, "feat", report_text)
+        self.summary = (
+            report_text.split("## Summary", 1)[1].split("\n## ", 1)[0].strip()
+        )
         self.findings = (
             report_text.split("## Findings", 1)[1].split("\n## ", 1)[0].strip()
         )
@@ -769,31 +959,42 @@ class AuditTests(unittest.TestCase):
         effort: str = "medium",
         extra_tool: str | None = None,
         shown: str | None = None,
+        model: str = "claude-opus-5-5",
+        drop: int | None = None,
+        repeat: int | None = None,
+        finish: bool = True,
     ) -> None:
+        """drop: leave call i out; repeat: send call i twice; finish: the
+        agents hand back (False: an agent that never answered)."""
         rows = []
         for i, (prompt, answer) in enumerate(self.calls()):
+            if i == drop:
+                continue
             if i == len(LENSES):  # the verifier call
                 prompt += prompt_edit
             tool_id = f"toolu_{i}"
-            rows.append(
-                {
-                    "type": "assistant",
-                    "message": {
-                        "model": "claude-sonnet-5-5",
-                        "content": [
-                            {
-                                "type": "tool_use",
-                                "id": tool_id,
-                                "name": "Agent",
-                                "input": {
-                                    "subagent_type": "lens-reviewer",
-                                    "prompt": prompt,
-                                },
-                            }
-                        ],
-                    },
-                }
-            )
+            call = {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-sonnet-5-5",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": tool_id,
+                            "name": "Agent",
+                            "input": {
+                                "subagent_type": "lens-reviewer",
+                                "prompt": prompt,
+                            },
+                        }
+                    ],
+                },
+            }
+            rows.append(call)
+            if i == repeat:
+                again = json.loads(json.dumps(call))
+                again["message"]["content"][0]["id"] = f"{tool_id}_again"
+                rows.append(again)
             agent_rows = []
             if extra_tool and i == 0:
                 agent_rows.append(
@@ -808,21 +1009,19 @@ class AuditTests(unittest.TestCase):
                         },
                     }
                 )
+            # An interactive session's background agent hands back.
+            ending = {
+                "type": "tool_use",
+                "name": "SubagentHandback",
+                "input": {"message": answer},
+            }
+            if not finish:  # still working: a text row with no end_turn
+                ending = {"type": "text", "text": "Reading."}
             agent_rows.append(
                 {
                     "type": "assistant",
                     "effort": effort,
-                    "message": {
-                        "model": "claude-opus-5-5",
-                        # An interactive session's background agent hands back.
-                        "content": [
-                            {
-                                "type": "tool_use",
-                                "name": "SubagentHandback",
-                                "input": {"message": answer},
-                            }
-                        ],
-                    },
+                    "message": {"model": model, "content": [ending]},
                 }
             )
             (self.agents / f"agent-{i}.jsonl").write_text(
@@ -838,7 +1037,7 @@ class AuditTests(unittest.TestCase):
                     "content": [
                         {
                             "type": "text",
-                            "text": self.findings if shown is None else shown,
+                            "text": self.summary if shown is None else shown,
                         }
                     ]
                 },
@@ -875,6 +1074,31 @@ class AuditTests(unittest.TestCase):
     def test_audit_catches_a_summarised_report(self) -> None:
         self.record(shown="One finding in correctness; looks minor.")
         self.assertTrue(any(p.startswith("5:") for p in self.problems()))
+
+    def test_audit_requires_the_summary_not_the_findings(self) -> None:
+        """Check 5 is about ## Summary: showing only the findings fails it."""
+        self.record(shown=self.findings)
+        self.assertTrue(any(p.startswith("5:") for p in self.problems()))
+
+    def test_audit_catches_a_non_opus_model(self) -> None:
+        self.record(model="claude-sonnet-5-5")
+        found = self.problems()
+        self.assertTrue(any(p.startswith("3:") for p in found), found)
+
+    def test_audit_catches_a_missing_or_repeated_call(self) -> None:
+        self.record(drop=1)
+        found = self.problems()
+        self.assertIn("1: prompt for lens-security.md sent 0 times", found)
+        self.record(repeat=1)
+        found = self.problems()
+        self.assertIn("1: prompt for lens-security.md sent 2 times", found)
+
+    def test_audit_catches_an_agent_that_never_answered(self) -> None:
+        """No final message and no saved file must not compare equal (None == None)."""
+        self.record(finish=False)
+        (self.run_dir / "lens-security.md").unlink()
+        found = self.problems()
+        self.assertTrue(any(p.startswith("2: lens-security.md") for p in found), found)
 
 
 class AgentTests(unittest.TestCase):

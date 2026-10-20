@@ -47,7 +47,10 @@ PROMPTS = SKILL_DIR / "prompts"
 RUN_REL = ".claude/logs/lens-review"
 REPORT_REL = ".claude/docs/reviews"
 # Never reviewed and never make the tree "dirty": this skill's own output and
-# the other review's, plus Claude Code's runtime files.
+# the other review's. Claude Code's runtime files (scheduled_tasks.lock,
+# worktrees/, ...) are not listed: git's own exclude rules hide them (Claude
+# Code writes a block into .git/info/exclude), unlike run-review, which
+# snapshots the tree itself and so needs its own list.
 IGNORED = (".claude/logs", REPORT_REL, ".claude/isolated-review")
 NO_FINDINGS = "NO FINDINGS"
 FIELDS = ("severity", "location", "claim", "failure", "evidence", "confidence")
@@ -56,6 +59,7 @@ VERDICTS = ("CONFIRMED", "REFUTED", "UNCLEAR")
 VERIFY_FIELDS = ("verdict", "evidence", "impact", "correction")
 IMPACT_ORDER = ("hit in normal use", "low", "none")
 TOKEN = re.compile(r"\{([A-Z_]+)\}")
+BARE_NAME = re.compile(r"[\w.-]+")  # no / ~ ^ @ : — those are rev expressions or paths
 EXIT = {"OK": 0, "ERROR": 1, "REFUSED": 2, "INCOMPLETE": 3}
 
 
@@ -66,8 +70,9 @@ class Refused(Exception):
 # --- git ---------------------------------------------------------------------
 # git(), resolve_base(), changed_files() and line_counts() follow
 # .claude/skills/isolated-review/run-review (copied, not imported: either skill
-# may be deleted on its own). tests/test_lens_review.py keeps the shared
-# behaviour in step.
+# may be deleted on its own). tests/test_lens_review.py compares git() with
+# run-review's; resolve_base() differs on purpose (see there), and
+# changed_files()/line_counts() take a mode and paths, so they are not compared.
 
 
 def git(root: Path, *args: str, check: bool = True) -> str:
@@ -86,14 +91,18 @@ def git(root: Path, *args: str, check: bool = True) -> str:
 
 
 def resolve_base(root: Path, base: str | None) -> str:
-    """The ref to review against; a bare branch name means its `origin/` copy."""
+    """The ref to review against; a bare branch name means its `origin/` copy.
+
+    Only a bare name with a real `refs/remotes/origin/<name>` is mapped. `HEAD`,
+    `HEAD~3`, `HEAD^`, a sha or `refs/...` are used as given: run-review maps
+    them to `origin/<x>`, which with origin/HEAD set reviews the wrong range.
+    """
     if base:
-        if "/" in base:
+        if base == "HEAD" or not BARE_NAME.fullmatch(base):
             return base
-        remote = f"origin/{base}"
-        verify = ("rev-parse", "--verify", "--quiet", f"{remote}^{{commit}}")
+        verify = ("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{base}")
         found = git(root, *verify, check=False).strip()
-        return remote if found else base
+        return f"origin/{base}" if found else base
     ref = git(root, "rev-parse", "--abbrev-ref", "origin/HEAD", check=False).strip()
     if not ref or ref == "origin/HEAD":
         raise Refused("no --base given and origin/HEAD is not set")
@@ -439,8 +448,8 @@ def location_warning(root: Path, location: str) -> str:
     return f" (line {line} is past the end of the file, {total} lines — search for the claim)"
 
 
-def finding_lines(f: dict, lens: str, root: Path | None = None) -> list[str]:
-    note = location_warning(root, f["location"]) if root else ""
+def finding_lines(f: dict, lens: str, root: Path) -> list[str]:
+    note = location_warning(root, f["location"])
     lines = [
         f"### {lens} F{f['n']} — `{f['location']}`{note} — {f['verdict']}",
         f"- claim: {f['claim']}",
@@ -547,11 +556,23 @@ def collect(root: Path, run: Path) -> tuple[list[str], list[str]]:
     saved: list[str] = []
     for _ in range(2):  # lens answers first, then the verifier prompts they imply
         expected = expected_answers(root, run)
-        for path in transcript_files():
+        # A retried agent sends the identical prompt, so two transcripts can
+        # carry the same one. The newest file wins (oldest to newest, a later
+        # one overwrites): the file name is an agent id and says nothing about
+        # time, and the order of rows inside a transcript cannot tell two
+        # transcripts apart. If the newest has not finished, nothing is saved
+        # for that name; the failed attempt's text must not stand in for it.
+        newest: dict[str, list[dict]] = {}
+        for path in sorted(
+            transcript_files(), key=lambda p: (p.stat().st_mtime, p.name)
+        ):
             rows = transcript_rows(path)
             name = expected.get((first_prompt(rows) or "").strip())
-            answer = final_answer(rows) if name else None
-            if name and answer is not None and name not in saved:
+            if name:
+                newest[name] = rows
+        for name, rows in newest.items():
+            answer = final_answer(rows)
+            if answer is not None and name not in saved:
                 (run / name).write_text(answer + "\n", encoding="utf-8")
                 saved.append(name)
     expected = expected_answers(root, run)
@@ -559,15 +580,17 @@ def collect(root: Path, run: Path) -> tuple[list[str], list[str]]:
     return saved, missing
 
 
-def build_report(run: Path) -> tuple[str, bool]:
+def one_line(text: str) -> str:
+    return " ".join(text.split())
+
+
+def build_report(root: Path, run: Path) -> tuple[str, bool]:
     data = load_scope(run)
-    root = run.parents[
-        len(Path(RUN_REL).parts)
-    ]  # <root>/.claude/logs/lens-review/<run>
     kept: list[tuple[str, dict]] = []
     refuted: list[tuple[str, dict]] = []
     problems: list[str] = []
     unparsed: list[str] = []
+    empty: list[str] = []
     tally = dict.fromkeys((*VERDICTS, "UNVERIFIED"), 0)
     for lens in LENSES:
         text = read_lens(run, lens)
@@ -575,6 +598,8 @@ def build_report(run: Path) -> tuple[str, bool]:
             problems.append(f"{lens}: no answer saved (lens-{lens}.md missing)")
             continue
         answer = parse_lens(text)
+        if answer.empty:
+            empty.append(lens)
         for chunk in answer.unparsed:
             unparsed.append(f"#### {lens}\n\n{chunk}")
         for f in answer.findings:
@@ -625,15 +650,28 @@ def build_report(run: Path) -> tuple[str, bool]:
         "Every finding was checked by a separate verifier for TRUTH only. Whether it",
         "matters in real use is the reader's call, from `impact`.",
         "",
-        "## Findings",
+        "## Summary",
         "",
     ]
+    # One line per finding, for showing to the user; the detail is below.
+    ordered = sorted(kept, key=order)
+    for lens, f in ordered:
+        impact = labels[impact_rank(f.get("impact", ""))]
+        out.append(
+            f"- {f['verdict']} · {impact} · {lens} F{f['n']} · "
+            f"{one_line(f['location'])} — {one_line(f['claim'])}"
+        )
+    for lens, f in refuted:
+        out.append(f"- REFUTED · {lens} F{f['n']} — {one_line(f['claim'])}")
+    if not kept and not refuted:
+        out.append("None.")
+    out += ["", "## Findings", ""]
     if kept:
-        seen: dict[str, int] = {}
-        for _, f in kept:
-            seen[f["location"]] = seen.get(f["location"], 0) + 1
-        for lens, f in sorted(kept, key=order):
-            if seen[f["location"]] > 1:
+        lenses_at: dict[str, set[str]] = {}
+        for lens, f in kept:
+            lenses_at.setdefault(f["location"], set()).add(lens)
+        for lens, f in ordered:
+            if len(lenses_at[f["location"]]) > 1:
                 f = {
                     **f,
                     "location": f["location"] + " (also reported by another lens)",
@@ -641,7 +679,6 @@ def build_report(run: Path) -> tuple[str, bool]:
             out += finding_lines(f, lens, root)
     else:
         out += ["None.", ""]
-    empty = [lens for lens in LENSES if parse_lens(read_lens(run, lens)).empty]
     if empty:
         out += [f"Lenses with no findings: {', '.join(empty)}.", ""]
     out += ["## Refuted", ""]
@@ -719,7 +756,7 @@ def main(argv: list[str]) -> int:
             print(f"saved: {', '.join(saved) or 'nothing new'}")
             print(f"missing: {', '.join(missing) or 'none'}")
             return EXIT["INCOMPLETE"] if missing else EXIT["OK"]
-        text, complete = build_report(run)
+        text, complete = build_report(root, run)
         path = write_report_file(root, load_scope(run)["branch"], text)
         print(path.relative_to(root).as_posix())
         return EXIT["OK"] if complete else EXIT["INCOMPLETE"]
