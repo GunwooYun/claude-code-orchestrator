@@ -48,11 +48,18 @@ TEMPLATE_SKILLS = (
     "initproject",
     "isolated-review",
     "jira-setup",
+    "lens-review",
     "orchestrator-upgrade",
     "ticket",
 )
 TEMPLATE_HOOKS = ("bash-write-check.py", "lint-on-save.py")
-TEMPLATE_AGENTS = ("deep-reasoning", "general-purpose", "Explore", "Plan")
+TEMPLATE_AGENTS = (
+    "deep-reasoning",
+    "general-purpose",
+    "lens-reviewer",
+    "Explore",
+    "Plan",
+)
 PROBE_STATES = ("READY", "MISSING", "UNAUTHENTICATED", "DEGRADED", "STALE")
 JIRA_SKILLS = ("ticket", "jira-setup", "doc-write")
 ATLASSIAN_WRITE = re.compile(r"^(?:create|edit|update|add|transition|delete)")

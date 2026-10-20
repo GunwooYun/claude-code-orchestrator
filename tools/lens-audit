@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""
+lens-audit — check from transcripts that a /lens-review run kept its locks.
+
+Usage: tools/lens-audit --transcript <session.jsonl> --run <run dir> [--root <repo>]
+Exit:  0 every check passed, 1 a check failed, 2 bad input
+
+Template repository only (not shipped). The script in the skill controls the
+scope, the prompts and the report; it cannot see what the main session did with
+them. This reads the session's transcript and its subagent transcripts
+(`<session>/subagents/agent-*.jsonl` + `.meta.json`) and checks:
+
+  1. every lens-reviewer prompt is byte-identical to what the script prints
+     (`prompt lens` for each lens, `prompt verify` for each finding), and every
+     expected prompt was sent exactly once;
+  2. each saved answer (`lens-<lens>.md`, `verify-<lens>-<n>.md`) is the
+     agent's final message, unchanged;
+  3. every lens-reviewer request ran on an Opus model at effort medium;
+  4. lens-reviewer agents used no tool other than Read, Grep, Glob;
+  5. the report's `## Findings` section appears verbatim in the session's text.
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.machinery
+import importlib.util
+import json
+import sys
+from pathlib import Path
+from types import ModuleType
+
+AGENT = "lens-reviewer"
+READ_TOOLS = {"Read", "Grep", "Glob"}
+MODEL_PREFIX = "claude-opus"
+EFFORT = "medium"
+SCRIPT_REL = ".claude/skills/lens-review/lens-review"
+
+
+def load_script(root: Path) -> ModuleType:
+    path = root / SCRIPT_REL
+    loader = importlib.machinery.SourceFileLoader("lens_review", str(path))
+    spec = importlib.util.spec_from_loader("lens_review", loader)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def jsonl(path: Path) -> list[dict]:
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            try:
+                rows.append(json.loads(line))
+            except ValueError:
+                continue
+    return rows
+
+
+def content_items(row: dict) -> list[dict]:
+    message = row.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    return (
+        [c for c in content if isinstance(c, dict)] if isinstance(content, list) else []
+    )
+
+
+def agent_calls(rows: list[dict]) -> dict[str, str]:
+    """tool_use id -> prompt, for every Agent/Task call to the lens-reviewer."""
+    calls = {}
+    for row in rows:
+        if row.get("type") != "assistant":
+            continue
+        for item in content_items(row):
+            if item.get("type") != "tool_use" or item.get("name") not in (
+                "Agent",
+                "Task",
+            ):
+                continue
+            data = item.get("input") or {}
+            if data.get("subagent_type") == AGENT:
+                calls[item.get("id", "")] = data.get("prompt", "")
+    return calls
+
+
+def final_text(rows: list[dict]) -> str:
+    texts = []
+    for row in rows:
+        if row.get("type") == "assistant":
+            parts = [
+                c.get("text", "") for c in content_items(row) if c.get("type") == "text"
+            ]
+            if any(p.strip() for p in parts):
+                texts = parts
+    return "".join(texts).strip()
+
+
+def expected_prompts(lr: ModuleType, root: Path, run: Path) -> dict[str, str]:
+    """prompt text -> the answer file it should be saved to."""
+    expected = {}
+    for lens in lr.LENSES:
+        expected[lr.lens_prompt(root, run, lens)] = f"lens-{lens}.md"
+        for finding in lr.parse_lens(lr.read_lens(run, lens)).findings:
+            prompt = lr.verify_prompt(run, f"{lens}:{finding['n']}")
+            expected[prompt] = f"verify-{lens}-{finding['n']}.md"
+    return expected
+
+
+def audit(root: Path, transcript: Path, run: Path) -> list[str]:
+    lr = load_script(root)
+    problems: list[str] = []
+    main_rows = jsonl(transcript)
+    calls = agent_calls(main_rows)
+    expected = expected_prompts(lr, root, run)
+
+    sent: dict[str, int] = {}
+    for tool_id, prompt in calls.items():
+        if prompt not in expected:
+            problems.append(f"1: prompt of call {tool_id} is not one the script prints")
+        sent[prompt] = sent.get(prompt, 0) + 1
+    for prompt, name in expected.items():
+        if sent.get(prompt, 0) != 1:
+            problems.append(f"1: prompt for {name} sent {sent.get(prompt, 0)} times")
+
+    agents_dir = transcript.with_suffix("") / "subagents"
+    for meta_path in sorted(agents_dir.glob("*.meta.json")):
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        if meta.get("agentType") != AGENT:
+            continue
+        rows = jsonl(
+            meta_path.with_name(meta_path.name.replace(".meta.json", ".jsonl"))
+        )
+        tag = meta.get("description") or meta_path.stem
+        prompt = calls.get(meta.get("toolUseId", ""))
+        name = expected.get(prompt or "")
+        if name:
+            saved = run / name
+            text = saved.read_text(encoding="utf-8").strip() if saved.exists() else None
+            if text != final_text(rows):
+                problems.append(
+                    f"2: {name} differs from the agent's final message ({tag})"
+                )
+        for row in rows:
+            if row.get("type") != "assistant":
+                continue
+            model = (row.get("message") or {}).get("model", "")
+            if not str(model).startswith(MODEL_PREFIX):
+                problems.append(f"3: {tag} ran on {model!r}")
+                break
+            if row.get("effort") != EFFORT:
+                problems.append(f"3: {tag} ran at effort {row.get('effort')!r}")
+                break
+        for row in rows:
+            for item in content_items(row):
+                if (
+                    item.get("type") == "tool_use"
+                    and item.get("name") not in READ_TOOLS
+                ):
+                    problems.append(f"4: {tag} used {item.get('name')}")
+
+    reports = sorted((root / lr.REPORT_REL).glob("lens-*.md"))
+    report = next(
+        (
+            r
+            for r in reversed(reports)
+            if f"run: {run.relative_to(root).as_posix()}"
+            in r.read_text(encoding="utf-8")
+        ),
+        None,
+    )
+    if report is None:
+        problems.append("5: no report for this run under " + lr.REPORT_REL)
+    else:
+        text = report.read_text(encoding="utf-8")
+        findings = text.split("## Findings", 1)[1].split("\n## ", 1)[0].strip()
+        said = "\n".join(
+            c.get("text", "")
+            for row in main_rows
+            if row.get("type") == "assistant"
+            for c in content_items(row)
+            if c.get("type") == "text"
+        )
+        if findings not in said:
+            problems.append(
+                f"5: the ## Findings of {report.name} was not shown verbatim"
+            )
+    return problems
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="lens-audit")
+    parser.add_argument("--transcript", required=True, type=Path)
+    parser.add_argument("--run", required=True)
+    parser.add_argument("--root", type=Path, default=Path.cwd())
+    args = parser.parse_args(argv)
+    root = args.root.resolve()
+    run = root / args.run
+    if not args.transcript.exists() or not (run / "scope.json").exists():
+        print("lens-audit: transcript or run dir not found", file=sys.stderr)
+        return 2
+    problems = audit(root, args.transcript, run)
+    for problem in problems:
+        print(f"FAIL {problem}")
+    if not problems:
+        print(
+            "ok: prompts unchanged, answers saved verbatim, opus/medium, read-only, report shown"
+        )
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
