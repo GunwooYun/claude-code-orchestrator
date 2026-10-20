@@ -396,6 +396,7 @@ class PromptTests(unittest.TestCase):
             "{RULES}",
             "### F1",
             "NO FINDINGS",
+            "never a line number inside the diff file",
         ):
             self.assertIn(needle, frame)
         for lens in LENSES:
@@ -534,6 +535,19 @@ class ReportTests(unittest.TestCase):
         self.verdict("tests", 1, "verdict: CONFIRMED\n")
         text, _ = lr.build_report(self.run_dir)
         self.assertEqual(2, text.count("also reported by another lens"))
+
+    def test_report_flags_a_line_past_the_end_of_the_file(self) -> None:
+        """V-loc: a diff-file line number cited as a file line is marked."""
+        (self.root / "x.py").write_text("a = 1\nb = 2\n")  # 2 lines; FINDING cites :3
+        self.lens(
+            "correctness",
+            FINDING + FINDING.replace("F1", "F2").replace("x.py:3", "x.py:2"),
+        )
+        self.verdict("correctness", 1, "verdict: CONFIRMED\n")
+        self.verdict("correctness", 2, "verdict: CONFIRMED\n")
+        findings = self.sections(lr.build_report(self.run_dir)[0])["Findings"]
+        self.assertIn("`x.py:3` (line 3 is past the end of the file, 2 lines", findings)
+        self.assertIn("`x.py:2` — CONFIRMED", findings)
 
     def test_report_without_verdict_is_written_and_incomplete(self) -> None:
         """V8b"""

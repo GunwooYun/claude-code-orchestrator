@@ -416,9 +416,33 @@ def impact_rank(impact: str) -> int:
     return len(IMPACT_ORDER)
 
 
-def finding_lines(f: dict, lens: str) -> list[str]:
+LOCATION = re.compile(r"^`?([^`:\s]+):(\d+)")
+
+
+def location_warning(root: Path, location: str) -> str:
+    """A note when the cited line is past the end of the file.
+
+    Measured in the rehearsals: reviewers sometimes cite a line of the diff
+    file instead of the file itself (`:169` in a 70-line file). The content was
+    right; the reader could not find it.
+    """
+    match = LOCATION.match(location.strip())
+    if not match:
+        return ""
+    path = root / match.group(1)
+    if not path.is_file():
+        return ""
+    total = text_lines(path)
+    line = int(match.group(2))
+    if line <= total:
+        return ""
+    return f" (line {line} is past the end of the file, {total} lines — search for the claim)"
+
+
+def finding_lines(f: dict, lens: str, root: Path | None = None) -> list[str]:
+    note = location_warning(root, f["location"]) if root else ""
     lines = [
-        f"### {lens} F{f['n']} — `{f['location']}` — {f['verdict']}",
+        f"### {lens} F{f['n']} — `{f['location']}`{note} — {f['verdict']}",
         f"- claim: {f['claim']}",
         f"- failure: {f['failure']}",
     ]
@@ -523,6 +547,9 @@ def collect(root: Path, run: Path) -> tuple[list[str], list[str]]:
 
 def build_report(run: Path) -> tuple[str, bool]:
     data = load_scope(run)
+    root = run.parents[
+        len(Path(RUN_REL).parts)
+    ]  # <root>/.claude/logs/lens-review/<run>
     kept: list[tuple[str, dict]] = []
     refuted: list[tuple[str, dict]] = []
     problems: list[str] = []
@@ -587,7 +614,7 @@ def build_report(run: Path) -> tuple[str, bool]:
                     **f,
                     "location": f["location"] + " (also reported by another lens)",
                 }
-            out += finding_lines(f, lens)
+            out += finding_lines(f, lens, root)
     else:
         out += ["None.", ""]
     empty = [lens for lens in LENSES if parse_lens(read_lens(run, lens)).empty]
@@ -596,7 +623,7 @@ def build_report(run: Path) -> tuple[str, bool]:
     out += ["## Refuted", ""]
     if refuted:
         for lens, f in refuted:
-            out += finding_lines(f, lens)
+            out += finding_lines(f, lens, root)
     else:
         out += ["None.", ""]
     if unparsed:

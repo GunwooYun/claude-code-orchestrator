@@ -46,6 +46,9 @@ failure: the concrete input or state, and the wrong behaviour it produces
 evidence: the code that supports the claim, quoted
 confidence: high | medium | low
 
+`location` is the line in the file itself, as Read shows it when you open that
+file — never a line number inside the diff file. Open the file to check it.
+
 Number the findings F1, F2, F3 and so on. If you find nothing, answer with
 exactly this one line and nothing else:
 NO FINDINGS
