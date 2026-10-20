@@ -588,6 +588,15 @@ def build_report(run: Path) -> tuple[str, bool]:
         state = {"CONFIRMED": 0, "UNCLEAR": 1}.get(f["verdict"], 2)
         return (state, impact_rank(f.get("impact", "")), f["location"])
 
+    # Verifiers judge truth, so a correct change still collects many true but
+    # trivial findings (15 per run on a clean change in the rehearsals). The
+    # impact count tells the reader where to start.
+    labels = (*IMPACT_ORDER, "not stated")
+    impacts = dict.fromkeys(labels, 0)
+    for _, f in kept:
+        if f["verdict"] == "CONFIRMED":
+            impacts[labels[impact_rank(f.get("impact", ""))]] += 1
+
     out = [
         "# Lens review",
         "",
@@ -596,6 +605,7 @@ def build_report(run: Path) -> tuple[str, bool]:
         f"- changed: {len(data['files'])} files, {data['lines']} lines",
         f"- lenses: {', '.join(LENSES)}",
         "- verdicts: " + ", ".join(f"{k} {v}" for k, v in tally.items()),
+        "- confirmed by impact: " + ", ".join(f"{k} {v}" for k, v in impacts.items()),
         f"- run: {data['run']}",
         "",
         "Every finding was checked by a separate verifier for TRUTH only. Whether it",

@@ -526,6 +526,10 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(["3", "1", "2"], order)
         self.assertIn("— UNCLEAR", findings)
         self.assertIn("impact: hit in normal use — users", findings)
+        self.assertIn(
+            "confirmed by impact: hit in normal use 1, low 0, none 1, not stated 0",
+            text,
+        )
 
     def test_report_groups_same_location_across_lenses(self) -> None:
         """V8"""
