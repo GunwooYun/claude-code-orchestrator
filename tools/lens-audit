@@ -31,7 +31,8 @@ from pathlib import Path
 from types import ModuleType
 
 AGENT = "lens-reviewer"
-READ_TOOLS = {"Read", "Grep", "Glob"}
+# The hand-back is how an interactive session's background agent returns its answer.
+READ_TOOLS = {"Read", "Grep", "Glob", "SubagentHandback"}
 MODEL_PREFIX = "claude-opus"
 EFFORT = "medium"
 SCRIPT_REL = ".claude/skills/lens-review/lens-review"
@@ -86,18 +87,6 @@ def agent_calls(rows: list[dict]) -> dict[str, str]:
     return calls
 
 
-def final_text(rows: list[dict]) -> str:
-    texts = []
-    for row in rows:
-        if row.get("type") == "assistant":
-            parts = [
-                c.get("text", "") for c in content_items(row) if c.get("type") == "text"
-            ]
-            if any(p.strip() for p in parts):
-                texts = parts
-    return "".join(texts).strip()
-
-
 def expected_prompts(lr: ModuleType, root: Path, run: Path) -> dict[str, str]:
     """Stripped prompt text -> the answer file it should be saved to."""
     return lr.expected_answers(root, run)
@@ -133,7 +122,7 @@ def audit(root: Path, transcript: Path, run: Path) -> list[str]:
         if name:
             saved = run / name
             text = saved.read_text(encoding="utf-8").strip() if saved.exists() else None
-            if text != final_text(rows):
+            if text != lr.final_answer(rows):
                 problems.append(
                     f"2: {name} differs from the agent's final message ({tag})"
                 )

@@ -503,14 +503,28 @@ def first_prompt(rows: list[dict]) -> str | None:
     return None
 
 
+HANDBACK = "SubagentHandback"
+
+
 def final_answer(rows: list[dict]) -> str | None:
-    """The agent's last message, or None while it is still working."""
+    """The agent's final message, or None while it is still working.
+
+    Two shapes, both seen: an interactive session's background agent ends with
+    a `SubagentHandback` tool call carrying the message (the first real run
+    found nothing until this was handled); a headless one ends with a text row
+    whose stop_reason is `end_turn`. A text row written mid-run has no
+    stop_reason and is not an answer.
+    """
     last = [r for r in rows if r.get("type") == "assistant"]
     if not last:
         return None
-    content = (last[-1].get("message") or {}).get("content") or []
-    items = [c for c in content if isinstance(c, dict)]
-    if any(c.get("type") == "tool_use" for c in items):
+    message = last[-1].get("message") or {}
+    items = [c for c in message.get("content") or [] if isinstance(c, dict)]
+    for item in items:
+        if item.get("type") == "tool_use" and item.get("name") == HANDBACK:
+            text = str((item.get("input") or {}).get("message", ""))
+            return text.strip() or None
+    if message.get("stop_reason") != "end_turn":
         return None
     text = "".join(c.get("text", "") for c in items if c.get("type") == "text")
     return text.strip() or None

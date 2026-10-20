@@ -612,7 +612,10 @@ class CollectTests(unittest.TestCase):
             rows.append(
                 {
                     "type": "assistant",
-                    "message": {"content": [{"type": "text", "text": answer}]},
+                    "message": {
+                        "stop_reason": "end_turn",
+                        "content": [{"type": "text", "text": answer}],
+                    },
                 }
             )
         if tool_last:
@@ -660,6 +663,43 @@ class CollectTests(unittest.TestCase):
         self.assertIn("lens-security.md", missing)
         self.assertIn("lens-tests.md", missing)
 
+    def test_collect_takes_a_handback_and_skips_mid_run_text(self) -> None:
+        """Interactive agents answer through SubagentHandback; text rows mid-run
+        (no end_turn) are not answers."""
+        prompt = lr.lens_prompt(self.root, self.run_dir, "security")
+        rows = [
+            {"type": "user", "message": {"content": prompt}},
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "text", "text": "Reading."}]},
+            },
+        ]
+        self.n += 1
+        path = self.agents / f"agent-{self.n}.jsonl"
+        path.write_text("\n".join(json.dumps(r) for r in rows))
+        saved, _ = lr.collect(self.root, self.run_dir)
+        self.assertEqual([], saved)
+        rows.append(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "name": "SubagentHandback",
+                            "input": {"message": "NO FINDINGS"},
+                        }
+                    ]
+                },
+            }
+        )
+        path.write_text("\n".join(json.dumps(r) for r in rows))
+        saved, _ = lr.collect(self.root, self.run_dir)
+        self.assertEqual(["lens-security.md"], saved)
+        self.assertEqual(
+            "NO FINDINGS\n", (self.run_dir / "lens-security.md").read_text()
+        )
+
     def test_collect_ignores_other_sessions(self) -> None:
         other = self.config / "projects" / "-repo" / "other" / "subagents"
         other.mkdir(parents=True)
@@ -668,7 +708,10 @@ class CollectTests(unittest.TestCase):
             {"type": "user", "message": {"content": prompt}},
             {
                 "type": "assistant",
-                "message": {"content": [{"type": "text", "text": "NO FINDINGS"}]},
+                "message": {
+                    "stop_reason": "end_turn",
+                    "content": [{"type": "text", "text": "NO FINDINGS"}],
+                },
             },
         ]
         (other / "agent-x.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
@@ -771,7 +814,14 @@ class AuditTests(unittest.TestCase):
                     "effort": effort,
                     "message": {
                         "model": "claude-opus-5-5",
-                        "content": [{"type": "text", "text": answer}],
+                        # An interactive session's background agent hands back.
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "name": "SubagentHandback",
+                                "input": {"message": answer},
+                            }
+                        ],
                     },
                 }
             )
