@@ -366,7 +366,7 @@ git status
 "`agy-probe` 를 실행해서 결과를 보여 줘", "이 파일을 일부러 깨뜨리고 `verify-save` 가 0 이 아닌 종료 코드를
 내는지 확인해 줘".
 
-Claude 세션 안에서는 `/feature`, `/isolated-review` 가 스킬 목록에 보이는지 확인한다.
+Claude 세션 안에서는 `/feature`, `/isolated-review`, `/lens-review` 가 스킬 목록에 보이는지 확인한다.
 
 ### 5단계 — 첫 작업: `/feature`
 

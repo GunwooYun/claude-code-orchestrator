@@ -333,7 +333,7 @@ the bug this step exists to prevent.
 
 ## Step 8 — Smoke test and report
 
-- Skills list shows `/feature`, `/isolated-review`.
+- Skills list shows `/feature`, `/isolated-review`, `/lens-review`.
 - `grep -n '^model:' .claude/agents/*.md` matches the matrix agreed in Step 3,
   and no prose names a model that is not pinned.
 - Each verification script written in Step 5 runs by hand and honours the

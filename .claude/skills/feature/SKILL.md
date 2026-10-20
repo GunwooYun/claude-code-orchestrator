@@ -43,7 +43,7 @@ Phase 5: CLAUDE.md Update (Claude)            ← 승인된 계획을 세션 밖
 Implementation Loop:  태스크 → verify:task → 다음 태스크
                       마지막에 설정된 가장 느린 티어
     ↓
-Phase 6: Multi-Session Review (New Session + deep-reasoning)
+Phase 6: Multi-Session Review (/lens-review → /isolated-review)
 ```
 
 **검증이 구현보다 먼저 정해진다.** Phase 2b 를 건너뛰면 Phase 4 의 태스크 짝을
