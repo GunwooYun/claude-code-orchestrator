@@ -8,6 +8,7 @@ Usage:
   lens-review scope  [--base REF] [--mode auto|committed|worktree] [--paths P ...]
   lens-review prompt lens   --run DIR LENS
   lens-review prompt verify --run DIR --finding LENS:N
+  lens-review collect --run DIR
   lens-review report --run DIR
 
 Exit: 0 ok, 1 error, 2 refused (scope), 3 report written but incomplete
@@ -444,6 +445,82 @@ def write_report_file(root: Path, branch: str, text: str) -> Path:
     raise OSError(f"no free report name for lens-{safe}-{stamp}")
 
 
+# --- collect -----------------------------------------------------------------
+# The main session does not save the agents' answers: Write under .claude/ asks
+# for approval on every file (measured in the first rehearsal: the run stopped
+# after five lenses), and a retyped answer is exactly what must not happen. The
+# answers are taken from the session's own subagent transcripts instead, matched
+# by their prompt, which this script printed and which names the run directory.
+
+
+def transcript_files() -> list[Path]:
+    base = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+    session = os.environ.get("CLAUDE_CODE_SESSION_ID") or "*"
+    return sorted((base / "projects").glob(f"*/{session}/subagents/agent-*.jsonl"))
+
+
+def transcript_rows(path: Path) -> list[dict]:
+    rows = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
+
+
+def first_prompt(rows: list[dict]) -> str | None:
+    for row in rows:
+        if row.get("type") == "user":
+            content = (row.get("message") or {}).get("content")
+            return content if isinstance(content, str) else None
+    return None
+
+
+def final_answer(rows: list[dict]) -> str | None:
+    """The agent's last message, or None while it is still working."""
+    last = [r for r in rows if r.get("type") == "assistant"]
+    if not last:
+        return None
+    content = (last[-1].get("message") or {}).get("content") or []
+    items = [c for c in content if isinstance(c, dict)]
+    if any(c.get("type") == "tool_use" for c in items):
+        return None
+    text = "".join(c.get("text", "") for c in items if c.get("type") == "text")
+    return text.strip() or None
+
+
+def expected_answers(root: Path, run: Path) -> dict[str, str]:
+    """prompt -> answer file name, for every prompt this run can have sent."""
+    expected = {
+        lens_prompt(root, run, lens).strip(): f"lens-{lens}.md" for lens in LENSES
+    }
+    for lens in LENSES:
+        for f in parse_lens(read_lens(run, lens)).findings:
+            prompt = verify_prompt(run, f"{lens}:{f['n']}").strip()
+            expected[prompt] = f"verify-{lens}-{f['n']}.md"
+    return expected
+
+
+def collect(root: Path, run: Path) -> tuple[list[str], list[str]]:
+    """Save every finished answer; returns (saved, still missing) file names."""
+    saved: list[str] = []
+    for _ in range(2):  # lens answers first, then the verifier prompts they imply
+        expected = expected_answers(root, run)
+        for path in transcript_files():
+            rows = transcript_rows(path)
+            name = expected.get((first_prompt(rows) or "").strip())
+            answer = final_answer(rows) if name else None
+            if name and answer is not None and name not in saved:
+                (run / name).write_text(answer + "\n", encoding="utf-8")
+                saved.append(name)
+    expected = expected_answers(root, run)
+    missing = sorted(n for n in expected.values() if not (run / n).exists())
+    return saved, missing
+
+
 def build_report(run: Path) -> tuple[str, bool]:
     data = load_scope(run)
     kept: list[tuple[str, dict]] = []
@@ -561,6 +638,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p_verify = kinds.add_parser("verify")
     p_verify.add_argument("--run", required=True)
     p_verify.add_argument("--finding", required=True)
+    p_collect = sub.add_parser("collect")
+    p_collect.add_argument("--run", required=True)
     p_report = sub.add_parser("report")
     p_report.add_argument("--run", required=True)
     return parser.parse_args(argv)
@@ -584,6 +663,11 @@ def main(argv: list[str]) -> int:
             else:
                 sys.stdout.write(verify_prompt(run, args.finding))
             return EXIT["OK"]
+        if args.command == "collect":
+            saved, missing = collect(root, run)
+            print(f"saved: {', '.join(saved) or 'nothing new'}")
+            print(f"missing: {', '.join(missing) or 'none'}")
+            return EXIT["INCOMPLETE"] if missing else EXIT["OK"]
         text, complete = build_report(run)
         path = write_report_file(root, load_scope(run)["branch"], text)
         print(path.relative_to(root).as_posix())

@@ -12,6 +12,7 @@ import ast
 import importlib.machinery
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -20,6 +21,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import ModuleType
+from unittest import mock
 
 REPO = Path(__file__).parent.parent
 SKILL = REPO / ".claude" / "skills" / "lens-review"
@@ -565,6 +567,95 @@ class ReportTests(unittest.TestCase):
             self.assertEqual(
                 ".claude/docs/reviews", path.parent.relative_to(self.root).as_posix()
             )
+
+
+class CollectTests(unittest.TestCase):
+    """V-collect: answers come from the session's transcripts, matched by prompt."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name) / "repo"
+        (self.root / ".claude/rules").mkdir(parents=True)
+        self.run_dir = make_run(self.root)
+        self.config = Path(self._tmp.name) / "config"
+        self.agents = self.config / "projects" / "-repo" / "sess" / "subagents"
+        self.agents.mkdir(parents=True)
+        env = {"CLAUDE_CONFIG_DIR": str(self.config), "CLAUDE_CODE_SESSION_ID": "sess"}
+        patcher = mock.patch.dict(os.environ, env)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.n = 0
+
+    def agent(self, prompt: str, answer: str | None, tool_last: bool = False) -> None:
+        self.n += 1
+        rows: list[dict] = [{"type": "user", "message": {"content": prompt}}]
+        if answer is not None:
+            rows.append(
+                {
+                    "type": "assistant",
+                    "message": {"content": [{"type": "text", "text": answer}]},
+                }
+            )
+        if tool_last:
+            rows.append(
+                {
+                    "type": "assistant",
+                    # Text and a tool call in one message: still working.
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": "Let me read more."},
+                            {"type": "tool_use", "name": "Read"},
+                        ]
+                    },
+                }
+            )
+        (self.agents / f"agent-{self.n}.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in rows)
+        )
+
+    def test_collect_saves_lens_answers_then_verifier_answers(self) -> None:
+        for lens in LENSES:
+            answer = FINDING.strip() if lens == "tests" else "NO FINDINGS"
+            self.agent(lr.lens_prompt(self.root, self.run_dir, lens), answer)
+        saved, missing = lr.collect(self.root, self.run_dir)
+        self.assertEqual(5, len(saved))
+        self.assertEqual(["verify-tests-1.md"], missing)
+        self.assertEqual(
+            FINDING.strip() + "\n", (self.run_dir / "lens-tests.md").read_text()
+        )
+        self.agent(lr.verify_prompt(self.run_dir, "tests:1"), "verdict: CONFIRMED")
+        saved, missing = lr.collect(self.root, self.run_dir)
+        self.assertIn("verify-tests-1.md", saved)
+        self.assertEqual([], missing)
+
+    def test_collect_skips_a_changed_prompt_and_an_unfinished_agent(self) -> None:
+        self.agent(
+            lr.lens_prompt(self.root, self.run_dir, "security") + "\nBe brief.",
+            "NO FINDINGS",
+        )
+        self.agent(
+            lr.lens_prompt(self.root, self.run_dir, "tests"), "partial", tool_last=True
+        )
+        saved, missing = lr.collect(self.root, self.run_dir)
+        self.assertEqual([], saved)
+        self.assertIn("lens-security.md", missing)
+        self.assertIn("lens-tests.md", missing)
+
+    def test_collect_ignores_other_sessions(self) -> None:
+        other = self.config / "projects" / "-repo" / "other" / "subagents"
+        other.mkdir(parents=True)
+        prompt = lr.lens_prompt(self.root, self.run_dir, "security")
+        rows = [
+            {"type": "user", "message": {"content": prompt}},
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "text", "text": "NO FINDINGS"}]},
+            },
+        ]
+        (other / "agent-x.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
+        saved, _ = lr.collect(self.root, self.run_dir)
+        self.assertEqual([], saved)
 
 
 audit = load(REPO / "tools" / "lens-audit", "lens_audit")

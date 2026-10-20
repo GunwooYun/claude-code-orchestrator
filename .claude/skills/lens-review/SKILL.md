@@ -57,11 +57,19 @@ Run every script call as `python3 .claude/skills/lens-review/lens-review …`
    Add nothing — no context, no hints, no summary of the change, no reason it was
    built this way. The reviewer must not know what you think.
 
-4. **Save each answer verbatim** with Write to `<dir>/lens-<lens>.md` — the
-   agent's final message exactly as returned, before you read it for anything
-   else. Do not reformat, merge or drop findings.
+4. **Collect — do not save answers yourself.** When all five have finished:
+   ```
+   python3 .claude/skills/lens-review/lens-review collect --run <dir>
+   ```
+   It takes each agent's final message from this session's transcripts,
+   matched by the prompt the script printed, and saves it in `<dir>`. You never
+   copy or retype an answer (writing under `.claude/` would also ask for
+   approval on every file). `missing:` lists answers not found yet — wait for
+   those agents, then run it again. An answer that never appears means its
+   prompt was changed on the way: say so; do not work around it.
 
-5. **Verify every finding.** For every `### F<n>` in every saved answer:
+5. **Verify every finding.** `collect` printed the verifier answers still
+   missing as `verify-<lens>-<n>.md`; for each:
    ```
    python3 .claude/skills/lens-review/lens-review prompt verify --run <dir> --finding <lens>:<n>
    ```
@@ -70,7 +78,7 @@ Run every script call as `python3 .claude/skills/lens-review/lens-review …`
    The verifier judges whether the claim is TRUE, not whether it matters. Never
    add questions about impact, real-world occurrence or the project's rules:
    that turned true findings into "real, but REFUTED" when it was measured.
-   Save each answer verbatim to `<dir>/verify-<lens>-<n>.md`.
+   When they have finished, run `collect` again until `missing: none`.
 
 6. **Report.**
    ```
@@ -99,7 +107,10 @@ working tree.
 - The model and effort are pinned in `.claude/agents/lens-reviewer.md` (Opus,
   medium). A project without Opus access cannot use this skill as is.
 - `CLAUDE_CODE_EFFORT_LEVEL`, when set, overrides the pinned effort.
-- Steps 3–5 depend on you passing text unchanged. The script cannot enforce it;
-  `tools/lens-audit` in the template repository checks it from transcripts.
+- Steps 3 and 5 depend on you passing prompts unchanged. A changed prompt
+  shows up as a missing answer in `collect`; `tools/lens-audit` in the template
+  repository checks the rest from transcripts.
+- `collect` reads this session's transcripts under `~/.claude/projects/` (or
+  `$CLAUDE_CONFIG_DIR`), found by `$CLAUDE_CODE_SESSION_ID`.
 - Bias is reduced, not removed: this session still picks the base and when to
   run.

@@ -81,7 +81,8 @@ def agent_calls(rows: list[dict]) -> dict[str, str]:
                 continue
             data = item.get("input") or {}
             if data.get("subagent_type") == AGENT:
-                calls[item.get("id", "")] = data.get("prompt", "")
+                # Stripped: a shell's $(…) drops the script's trailing newline.
+                calls[item.get("id", "")] = data.get("prompt", "").strip()
     return calls
 
 
@@ -98,14 +99,8 @@ def final_text(rows: list[dict]) -> str:
 
 
 def expected_prompts(lr: ModuleType, root: Path, run: Path) -> dict[str, str]:
-    """prompt text -> the answer file it should be saved to."""
-    expected = {}
-    for lens in lr.LENSES:
-        expected[lr.lens_prompt(root, run, lens)] = f"lens-{lens}.md"
-        for finding in lr.parse_lens(lr.read_lens(run, lens)).findings:
-            prompt = lr.verify_prompt(run, f"{lens}:{finding['n']}")
-            expected[prompt] = f"verify-{lens}-{finding['n']}.md"
-    return expected
+    """Stripped prompt text -> the answer file it should be saved to."""
+    return lr.expected_answers(root, run)
 
 
 def audit(root: Path, transcript: Path, run: Path) -> list[str]:
