@@ -65,8 +65,12 @@ Run every script call as `python3 .claude/skills/lens-review/lens-review …`
    matched by the prompt the script printed, and saves it in `<dir>`. You never
    copy or retype an answer (writing under `.claude/` would also ask for
    approval on every file). `missing:` lists answers not found yet — wait for
-   those agents, then run it again. An answer that never appears means its
-   prompt was changed on the way: say so; do not work around it.
+   those agents, then run it again. `failed:` names agents that stopped on an
+   API error (a usage limit, an overload) with the reason: start each again
+   with the same prompt from step 3 or 5 (the newest attempt is the one
+   collected), or tell the user if the limit has not reset. An answer that
+   never appears and is not `failed` means its prompt was changed on the way:
+   say so; do not work around it.
 
 5. **Verify every finding.** `collect` printed the verifier answers still
    missing as `verify-<lens>-<n>.md`; for each:

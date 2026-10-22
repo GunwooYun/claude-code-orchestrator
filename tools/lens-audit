@@ -97,16 +97,16 @@ def audit(root: Path, transcript: Path, run: Path) -> list[str]:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         if meta.get("agentType") != AGENT:
             continue
-        rows = lr.transcript_rows(
-            meta_path.with_name(meta_path.name.replace(".meta.json", ".jsonl"))
-        )
+        agent_path = meta_path.with_name(meta_path.name.replace(".meta.json", ".jsonl"))
+        rows = lr.transcript_rows(agent_path)
         tag = meta.get("description") or meta_path.stem
         prompt = calls.get(meta.get("toolUseId", ""))
         name = expected.get(prompt or "")
         if name:
             saved = run / name
             text = saved.read_text(encoding="utf-8").strip() if saved.exists() else None
-            final = lr.final_answer(rows)
+            done = lr.agent_id(agent_path) in lr.completed_agents(agent_path)
+            final = lr.final_answer(rows, completed=done)
             # None == None would pass an unfinished agent with no saved file.
             if final is None or text != final:
                 problems.append(

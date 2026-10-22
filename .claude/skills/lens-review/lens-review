@@ -513,19 +513,54 @@ def first_prompt(rows: list[dict]) -> str | None:
 
 
 HANDBACK = "SubagentHandback"
+NOTICE = re.compile(r"<task-id>([\w-]+)</task-id>.*?<status>(\w+)</status>", re.S)
 
 
-def final_answer(rows: list[dict]) -> str | None:
+def agent_id(path: Path) -> str:
+    return path.stem.removeprefix("agent-")
+
+
+def completed_agents(path: Path) -> set[str]:
+    """Ids of the agents the main session was told had completed.
+
+    `path` is a subagent transcript; the main session's transcript sits next to
+    its `<session>/` directory. The completion notice is the main session's own
+    record that an agent finished, whatever its transcript's last row says.
+    """
+    main = path.parent.parent.with_suffix(".jsonl")
+    if not main.exists():
+        return set()
+    done = set()
+    for row in transcript_rows(main):
+        content = row.get("content")
+        if content is None:
+            content = (row.get("message") or {}).get("content")
+        if isinstance(content, str) and "<task-notification>" in content:
+            done.update(i for i, s in NOTICE.findall(content) if s == "completed")
+    return done
+
+
+def agent_error(rows: list[dict]) -> str | None:
+    """Why the agent stopped, when its last row is an API error (rate limit, …)."""
+    last = [r for r in rows if r.get("type") == "assistant"]
+    if last and last[-1].get("isApiErrorMessage"):
+        return str(last[-1].get("error") or "api error")
+    return None
+
+
+def final_answer(rows: list[dict], completed: bool = False) -> str | None:
     """The agent's final message, or None while it is still working.
 
-    Two shapes, both seen: an interactive session's background agent ends with
+    Three shapes, all seen: an interactive session's background agent ends with
     a `SubagentHandback` tool call carrying the message (the first real run
     found nothing until this was handled); a headless one ends with a text row
-    whose stop_reason is `end_turn`. A text row written mid-run has no
-    stop_reason and is not an answer.
+    whose stop_reason is `end_turn`; and in 4 of 6 runs of one batch the last
+    text row was written without its stop_reason although the main session had
+    been notified that the agent completed (`completed`). A text row written
+    mid-run has no stop_reason and is not an answer; an API error is not one.
     """
     last = [r for r in rows if r.get("type") == "assistant"]
-    if not last:
+    if not last or agent_error(rows):
         return None
     message = last[-1].get("message") or {}
     items = [c for c in message.get("content") or [] if isinstance(c, dict)]
@@ -533,7 +568,10 @@ def final_answer(rows: list[dict]) -> str | None:
         if item.get("type") == "tool_use" and item.get("name") == HANDBACK:
             text = str((item.get("input") or {}).get("message", ""))
             return text.strip() or None
-    if message.get("stop_reason") != "end_turn":
+    finished = message.get("stop_reason") == "end_turn"
+    if not finished and not (completed and message.get("stop_reason") is None):
+        return None
+    if any(c.get("type") == "tool_use" for c in items):
         return None
     text = "".join(c.get("text", "") for c in items if c.get("type") == "text")
     return text.strip() or None
@@ -551,9 +589,15 @@ def expected_answers(root: Path, run: Path) -> dict[str, str]:
     return expected
 
 
-def collect(root: Path, run: Path) -> tuple[list[str], list[str]]:
-    """Save every finished answer; returns (saved, still missing) file names."""
+def collect(root: Path, run: Path) -> tuple[list[str], list[str], list[str]]:
+    """Save every finished answer.
+
+    Returns (saved, still missing, failed) — failed names the agents whose newest
+    attempt stopped on an API error, with the reason: they will never answer and
+    must be started again with the same prompt.
+    """
     saved: list[str] = []
+    failed: dict[str, str] = {}
     for _ in range(2):  # lens answers first, then the verifier prompts they imply
         expected = expected_answers(root, run)
         # A retried agent sends the identical prompt, so two transcripts can
@@ -562,22 +606,32 @@ def collect(root: Path, run: Path) -> tuple[list[str], list[str]]:
         # time, and the order of rows inside a transcript cannot tell two
         # transcripts apart. If the newest has not finished, nothing is saved
         # for that name; the failed attempt's text must not stand in for it.
-        newest: dict[str, list[dict]] = {}
+        newest: dict[str, tuple[Path, list[dict]]] = {}
         for path in sorted(
             transcript_files(), key=lambda p: (p.stat().st_mtime, p.name)
         ):
             rows = transcript_rows(path)
             name = expected.get((first_prompt(rows) or "").strip())
             if name:
-                newest[name] = rows
-        for name, rows in newest.items():
-            answer = final_answer(rows)
+                newest[name] = (path, rows)
+        for name, (path, rows) in newest.items():
+            if (run / name).exists():
+                continue
+            error = agent_error(rows)
+            if error:
+                failed[name] = error
+                continue
+            failed.pop(name, None)
+            done = agent_id(path) in completed_agents(path)
+            answer = final_answer(rows, completed=done)
             if answer is not None and name not in saved:
                 (run / name).write_text(answer + "\n", encoding="utf-8")
                 saved.append(name)
     expected = expected_answers(root, run)
-    missing = sorted(n for n in expected.values() if not (run / n).exists())
-    return saved, missing
+    missing = sorted(
+        n for n in expected.values() if not (run / n).exists() and n not in failed
+    )
+    return saved, missing, [f"{n} ({failed[n]})" for n in sorted(failed)]
 
 
 def one_line(text: str) -> str:
@@ -752,10 +806,12 @@ def main(argv: list[str]) -> int:
                 sys.stdout.write(verify_prompt(run, args.finding))
             return EXIT["OK"]
         if args.command == "collect":
-            saved, missing = collect(root, run)
+            saved, missing, failed = collect(root, run)
             print(f"saved: {', '.join(saved) or 'nothing new'}")
             print(f"missing: {', '.join(missing) or 'none'}")
-            return EXIT["INCOMPLETE"] if missing else EXIT["OK"]
+            if failed:
+                print(f"failed: {', '.join(failed)}")
+            return EXIT["INCOMPLETE"] if missing or failed else EXIT["OK"]
         text, complete = build_report(root, run)
         path = write_report_file(root, load_scope(run)["branch"], text)
         print(path.relative_to(root).as_posix())

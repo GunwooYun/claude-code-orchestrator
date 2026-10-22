@@ -69,14 +69,14 @@ class CollectTests(unittest.TestCase):
         for lens in LENSES:
             answer = FINDING.strip() if lens == "tests" else "NO FINDINGS"
             self.agent(lr.lens_prompt(self.root, self.run_dir, lens), answer)
-        saved, missing = lr.collect(self.root, self.run_dir)
+        saved, missing, _ = lr.collect(self.root, self.run_dir)
         self.assertEqual(5, len(saved))
         self.assertEqual(["verify-tests-1.md"], missing)
         self.assertEqual(
             FINDING.strip() + "\n", (self.run_dir / "lens-tests.md").read_text()
         )
         self.agent(lr.verify_prompt(self.run_dir, "tests:1"), "verdict: CONFIRMED")
-        saved, missing = lr.collect(self.root, self.run_dir)
+        saved, missing, _ = lr.collect(self.root, self.run_dir)
         self.assertIn("verify-tests-1.md", saved)
         self.assertEqual([], missing)
 
@@ -89,7 +89,7 @@ class CollectTests(unittest.TestCase):
             answer = FINDING.strip() if lens == "tests" else "NO FINDINGS"
             self.agent(lr.lens_prompt(self.root, self.run_dir, lens), answer)
         self.agent(verify, "verdict: CONFIRMED")
-        saved, missing = lr.collect(self.root, self.run_dir)
+        saved, missing, _ = lr.collect(self.root, self.run_dir)
         self.assertIn("verify-tests-1.md", saved)
         self.assertEqual(6, len(saved))
         self.assertEqual([], missing)
@@ -106,7 +106,7 @@ class CollectTests(unittest.TestCase):
         self.stamp(1, 2000)
         self.stamp(2, 3000)
         self.stamp(3, 1000)
-        saved, _ = lr.collect(self.root, self.run_dir)
+        saved, *_ = lr.collect(self.root, self.run_dir)
         self.assertEqual(["lens-security.md"], saved)
         self.assertEqual(
             "NO FINDINGS\n", (self.run_dir / "lens-security.md").read_text()
@@ -120,7 +120,7 @@ class CollectTests(unittest.TestCase):
         self.agent(prompt, "partial", tool_last=True)  # the retry, still working
         self.stamp(1, 1000)
         self.stamp(2, 2000)
-        saved, missing = lr.collect(self.root, self.run_dir)
+        saved, missing, _ = lr.collect(self.root, self.run_dir)
         self.assertEqual([], saved)
         self.assertIn("lens-security.md", missing)
 
@@ -132,7 +132,7 @@ class CollectTests(unittest.TestCase):
         self.agent(
             lr.lens_prompt(self.root, self.run_dir, "tests"), "partial", tool_last=True
         )
-        saved, missing = lr.collect(self.root, self.run_dir)
+        saved, missing, _ = lr.collect(self.root, self.run_dir)
         self.assertEqual([], saved)
         self.assertIn("lens-security.md", missing)
         self.assertIn("lens-tests.md", missing)
@@ -151,7 +151,7 @@ class CollectTests(unittest.TestCase):
         self.n += 1
         path = self.agents / f"agent-{self.n}.jsonl"
         path.write_text("\n".join(json.dumps(r) for r in rows))
-        saved, _ = lr.collect(self.root, self.run_dir)
+        saved, *_ = lr.collect(self.root, self.run_dir)
         self.assertEqual([], saved)
         rows.append(
             {
@@ -168,11 +168,84 @@ class CollectTests(unittest.TestCase):
             }
         )
         path.write_text("\n".join(json.dumps(r) for r in rows))
-        saved, _ = lr.collect(self.root, self.run_dir)
+        saved, *_ = lr.collect(self.root, self.run_dir)
         self.assertEqual(["lens-security.md"], saved)
         self.assertEqual(
             "NO FINDINGS\n", (self.run_dir / "lens-security.md").read_text()
         )
+
+    def unstopped(self, prompt: str, text: str) -> str:
+        """An agent whose last text row was written without its stop_reason."""
+        self.n += 1
+        rows = [
+            {"type": "user", "message": {"content": prompt}},
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "text", "text": text}]},
+            },
+        ]
+        (self.agents / f"agent-{self.n}.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in rows)
+        )
+        return str(self.n)
+
+    def notify(self, agent: str, status: str) -> None:
+        """The main session's record of an agent's end (queue-operation row)."""
+        main = self.agents.parent.with_suffix(".jsonl")
+        notice = (
+            f"<task-notification>\n<task-id>{agent}</task-id>\n"
+            f"<status>{status}</status>\n<result>…</result>\n</task-notification>"
+        )
+        row = {"type": "queue-operation", "operation": "enqueue", "content": notice}
+        with main.open("a") as out:
+            out.write(json.dumps(row) + "\n")
+
+    def test_collect_unstopped_text_of_a_completed_agent_is_its_answer(self) -> None:
+        """Seen in 4 of 6 runs of one batch: the answer row lacks stop_reason, but
+        the main session was told the agent completed."""
+        prompt = lr.lens_prompt(self.root, self.run_dir, "security")
+        agent = self.unstopped(prompt, "NO FINDINGS")
+        saved, missing, _ = lr.collect(self.root, self.run_dir)
+        self.assertEqual([], saved)
+        self.assertIn("lens-security.md", missing)
+        self.notify(agent, "failed")
+        saved, *_ = lr.collect(self.root, self.run_dir)
+        self.assertEqual([], saved)
+        self.notify(agent, "completed")
+        saved, *_ = lr.collect(self.root, self.run_dir)
+        self.assertEqual(["lens-security.md"], saved)
+        self.assertEqual(
+            "NO FINDINGS\n", (self.run_dir / "lens-security.md").read_text()
+        )
+
+    def test_collect_completed_agent_ending_on_a_tool_call_is_not_saved(self) -> None:
+        prompt = lr.lens_prompt(self.root, self.run_dir, "tests")
+        self.agent(prompt, None, tool_last=True)
+        self.notify(str(self.n), "completed")
+        saved, missing, _ = lr.collect(self.root, self.run_dir)
+        self.assertEqual([], saved)
+        self.assertIn("lens-tests.md", missing)
+
+    def test_collect_reports_an_api_error_as_failed_not_missing(self) -> None:
+        """A usage limit ends the agent with a synthetic error row: it will never
+        answer, so it is named as failed with the reason."""
+        prompt = lr.lens_prompt(self.root, self.run_dir, "security")
+        agent = self.unstopped(prompt, "You've hit your session limit")
+        path = self.agents / f"agent-{agent}.jsonl"
+        rows = [json.loads(x) for x in path.read_text().splitlines()]
+        rows[-1].update(isApiErrorMessage=True, error="rate_limit")
+        path.write_text("\n".join(json.dumps(r) for r in rows))
+        self.notify(agent, "completed")
+        saved, missing, failed = lr.collect(self.root, self.run_dir)
+        self.assertEqual([], saved)
+        self.assertNotIn("lens-security.md", missing)
+        self.assertEqual(["lens-security.md (rate_limit)"], failed)
+        self.assertFalse((self.run_dir / "lens-security.md").exists())
+        self.agent(prompt, "NO FINDINGS")  # the retry, newest
+        self.stamp(int(agent), 1000)
+        saved, missing, failed = lr.collect(self.root, self.run_dir)
+        self.assertEqual(["lens-security.md"], saved)
+        self.assertEqual([], failed)
 
     def test_collect_ignores_other_sessions(self) -> None:
         other = self.config / "projects" / "-repo" / "other" / "subagents"
@@ -189,7 +262,7 @@ class CollectTests(unittest.TestCase):
             },
         ]
         (other / "agent-x.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
-        saved, _ = lr.collect(self.root, self.run_dir)
+        saved, *_ = lr.collect(self.root, self.run_dir)
         self.assertEqual([], saved)
 
 
