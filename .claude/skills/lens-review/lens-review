@@ -1,0 +1,828 @@
+#!/usr/bin/env python3
+"""
+lens-review — the mechanical half of /lens-review. The main session runs the
+agents; everything that must not depend on how the main session reads or
+retypes text is done here.
+
+Usage:
+  lens-review scope  [--base REF] [--mode auto|committed|worktree] [--paths P ...]
+  lens-review prompt lens   --run DIR LENS
+  lens-review prompt verify --run DIR --finding LENS:N
+  lens-review collect --run DIR
+  lens-review report --run DIR
+
+Exit: 0 ok, 1 error, 2 refused (scope), 3 report written but incomplete
+(a lens answer missing or unparsed, a finding without a verdict).
+
+Design and the measurements behind it: docs/lens-review.md in the template
+repository. The short version:
+  - The scope is resolved here, never from the main session's reading of the
+    arguments: a run where the main session read `/review <ref>` as one commit
+    sent all five lenses to the wrong change.
+  - Prompts are fixed templates filled by this script. The verifier prompt is
+    built from the lens answer FILE, so the main session never retypes a claim:
+    the wrong refutations measured on 2026-10-19 came from the main session
+    adding "weigh real occurrence / impact" to verifier prompts.
+  - The report is built from files only and drops nothing silently: REFUTED
+    findings get their own section, unparsed text and missing verdicts are
+    shown and make the exit code 3.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import secrets
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+LENSES = ("correctness", "security", "integration", "tests", "simplicity")
+HARD_CAP_LINES = 3000
+SKILL_DIR = Path(__file__).resolve().parent
+PROMPTS = SKILL_DIR / "prompts"
+RUN_REL = ".claude/logs/lens-review"
+REPORT_REL = ".claude/docs/reviews"
+# Never reviewed and never make the tree "dirty": this skill's own output and
+# the other review's. Claude Code's runtime files (scheduled_tasks.lock,
+# worktrees/, ...) are not listed: git's own exclude rules hide them (Claude
+# Code writes a block into .git/info/exclude), unlike run-review, which
+# snapshots the tree itself and so needs its own list.
+IGNORED = (".claude/logs", REPORT_REL, ".claude/isolated-review")
+NO_FINDINGS = "NO FINDINGS"
+FIELDS = ("severity", "location", "claim", "failure", "evidence", "confidence")
+REQUIRED = ("location", "claim", "failure")
+VERDICTS = ("CONFIRMED", "REFUTED", "UNCLEAR")
+VERIFY_FIELDS = ("verdict", "evidence", "impact", "correction")
+IMPACT_ORDER = ("hit in normal use", "low", "none")
+TOKEN = re.compile(r"\{([A-Z_]+)\}")
+BARE_NAME = re.compile(r"[\w.-]+")  # no / ~ ^ @ : — those are rev expressions or paths
+EXIT = {"OK": 0, "ERROR": 1, "REFUSED": 2, "INCOMPLETE": 3}
+
+
+class Refused(Exception):
+    """The scope cannot be reviewed; the reason goes to the user verbatim."""
+
+
+# --- git ---------------------------------------------------------------------
+# git(), resolve_base(), changed_files() and line_counts() follow
+# .claude/skills/isolated-review/run-review (copied, not imported: either skill
+# may be deleted on its own). tests/test_lens_review.py compares git() with
+# run-review's; resolve_base() differs on purpose (see there), and
+# changed_files()/line_counts() take a mode and paths, so they are not compared.
+
+
+def git(root: Path, *args: str, check: bool = True) -> str:
+    result = subprocess.run(
+        ["git", "-c", "core.quotePath=false", "-c", "color.ui=never", *args],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if check and result.returncode != 0:
+        raise Refused(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+    return result.stdout
+
+
+def resolve_base(root: Path, base: str | None) -> str:
+    """The ref to review against; a bare branch name means its `origin/` copy.
+
+    Only a bare name with a real `refs/remotes/origin/<name>` is mapped. `HEAD`,
+    `HEAD~3`, `HEAD^`, a sha or `refs/...` are used as given: run-review maps
+    them to `origin/<x>`, which with origin/HEAD set reviews the wrong range.
+    """
+    if base:
+        if base == "HEAD" or not BARE_NAME.fullmatch(base):
+            return base
+        verify = ("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{base}")
+        found = git(root, *verify, check=False).strip()
+        return f"origin/{base}" if found else base
+    ref = git(root, "rev-parse", "--abbrev-ref", "origin/HEAD", check=False).strip()
+    if not ref or ref == "origin/HEAD":
+        raise Refused("no --base given and origin/HEAD is not set")
+    return ref
+
+
+def ignored(path: str) -> bool:
+    return any(path == p or path.startswith(p + "/") for p in IGNORED)
+
+
+def untracked_files(root: Path, paths: list[str]) -> list[str]:
+    out = git(root, "ls-files", "--others", "--exclude-standard", "-z", "--", *paths)
+    return [p for p in out.split("\0") if p and not ignored(p)]
+
+
+def dirty(root: Path) -> bool:
+    fields = git(root, "status", "--porcelain", "-z", "--untracked-files=all")
+    entries = iter(fields.split("\0"))
+    for entry in entries:
+        if not entry:
+            continue
+        if not ignored(entry[3:]):
+            return True
+        if "R" in entry[:2] or "C" in entry[:2]:
+            next(entries, None)
+    return False
+
+
+def range_args(merge_base: str, mode: str) -> list[str]:
+    # Worktree mode: no right-hand side, so the diff runs from the merge-base to
+    # the working tree — committed and uncommitted changes in one diff.
+    return [merge_base] if mode == "worktree" else [merge_base, "HEAD"]
+
+
+def changed_files(
+    root: Path, merge_base: str, mode: str, paths: list[str]
+) -> list[tuple[str, str]]:
+    """(status letter, path) per changed file; renames give the new path."""
+    fields = git(
+        root,
+        "diff",
+        "--name-status",
+        "-z",
+        "-M",
+        *range_args(merge_base, mode),
+        "--",
+        *paths,
+    )
+    items = iter(f for f in fields.split("\0") if f)
+    files = []
+    for status in items:
+        path = next(items, "")
+        if status[0] in "RC":  # old path, then new path
+            path = next(items, path)
+        if not ignored(path):
+            files.append((status[0], path))
+    return files
+
+
+def line_counts(
+    root: Path, merge_base: str, mode: str, paths: list[str]
+) -> dict[str, int]:
+    """path -> added + removed lines; a binary file counts 0."""
+    fields = git(
+        root,
+        "diff",
+        "--numstat",
+        "-z",
+        "-M",
+        *range_args(merge_base, mode),
+        "--",
+        *paths,
+    ).split("\0")
+    counts: dict[str, int] = {}
+    i = 0
+    while i < len(fields):
+        entry = fields[i]
+        i += 1
+        if not entry:
+            continue
+        added, removed, path = entry.split("\t", 2)
+        if not path:  # rename: old and new path follow
+            path = fields[i + 1] if i + 1 < len(fields) else ""
+            i += 2
+        counts[path] = (int(added) if added.isdigit() else 0) + (
+            int(removed) if removed.isdigit() else 0
+        )
+    return counts
+
+
+def text_lines(path: Path) -> int:
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return 0
+    if b"\0" in data[:8000]:
+        return 0
+    return data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
+
+
+def new_file_diff(root: Path, rel: str) -> str:
+    # --no-index exits 1 when the files differ, which they always do here.
+    return git(root, "diff", "--no-index", "--", os.devnull, rel, check=False)
+
+
+# --- scope -------------------------------------------------------------------
+
+
+def run_dir(root: Path) -> Path:
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    path = root / RUN_REL / f"{stamp}-{secrets.token_hex(3)}"
+    path.mkdir(parents=True)
+    return path
+
+
+def scope(root: Path, base_arg: str | None, mode_arg: str, paths: list[str]) -> Path:
+    base = resolve_base(root, base_arg)
+    if not git(
+        root, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}", check=False
+    ):
+        raise Refused(f"base {base!r} is not a commit here")
+    head = git(root, "rev-parse", "HEAD").strip()
+    merge_base = git(root, "merge-base", base, "HEAD").strip()
+    mode = (
+        mode_arg if mode_arg != "auto" else ("worktree" if dirty(root) else "committed")
+    )
+    files = changed_files(root, merge_base, mode, paths)
+    counts = line_counts(root, merge_base, mode, paths)
+    untracked = untracked_files(root, paths) if mode == "worktree" else []
+    for rel in untracked:
+        files.append(("?", rel))
+        counts[rel] = text_lines(root / rel)
+    if not files:
+        what = "the working tree" if mode == "worktree" else "HEAD"
+        raise Refused(
+            f"no change between {base} (merge-base {merge_base[:12]}) and {what}"
+        )
+    total = sum(counts.values())
+    branch = git(root, "rev-parse", "--abbrev-ref", "HEAD").strip()
+    run = run_dir(root)
+    diff = git(root, "diff", "-M", *range_args(merge_base, mode), "--", *paths)
+    diff += "".join(new_file_diff(root, rel) for rel in untracked)
+    (run / "diff.patch").write_text(diff, encoding="utf-8")
+    data = {
+        "base_arg": base_arg,
+        "base": base,
+        "merge_base": merge_base,
+        "head": head,
+        "branch": "detached" if branch == "HEAD" else branch,
+        "mode": mode,
+        "paths": paths,
+        "files": [
+            {"status": s, "path": p, "lines": counts.get(p, 0)} for s, p in files
+        ],
+        "untracked": untracked,
+        "lines": total,
+        "over_cap": total > HARD_CAP_LINES,
+        "diff": (run / "diff.patch").relative_to(root).as_posix(),
+        "run": run.relative_to(root).as_posix(),
+    }
+    (run / "scope.json").write_text(json.dumps(data, indent=1), encoding="utf-8")
+    if data["over_cap"]:
+        raise Refused(
+            f"{total} changed lines is over the {HARD_CAP_LINES}-line cap; "
+            f"narrow it with --paths (sizes per file: {data['run']}/scope.json)"
+        )
+    return run
+
+
+def describe_range(data: dict) -> str:
+    what = (
+        "the working tree (committed, uncommitted and untracked changes)"
+        if data["mode"] == "worktree"
+        else f"HEAD {data['head'][:12]} (committed changes only)"
+    )
+    text = f"from merge-base {data['merge_base'][:12]} of {data['base']} to {what}"
+    if data["paths"]:
+        text += ", limited to " + ", ".join(data["paths"])
+    return text
+
+
+# --- prompts -----------------------------------------------------------------
+
+
+def fill(template: str, values: dict[str, str]) -> str:
+    """One pass: a value that itself contains `{NAME}` is never expanded."""
+
+    def sub(match: re.Match[str]) -> str:
+        key = match.group(1)
+        if key not in values:
+            raise ValueError(f"template token {{{key}}} has no value")
+        return values[key]
+
+    return TOKEN.sub(sub, template)
+
+
+def load_scope(run: Path) -> dict:
+    return json.loads((run / "scope.json").read_text(encoding="utf-8"))
+
+
+def rule_paths(root: Path) -> str:
+    rules = sorted((root / ".claude" / "rules").glob("*.md"))
+    if not rules:
+        return "- none"
+    return "\n".join(f"- `{p.relative_to(root).as_posix()}`" for p in rules)
+
+
+def lens_prompt(root: Path, run: Path, lens: str) -> str:
+    if lens not in LENSES:
+        raise ValueError(f"unknown lens {lens!r}; one of {', '.join(LENSES)}")
+    data = load_scope(run)
+    files = "\n".join(
+        f"  - `{f['path']}` ({'untracked' if f['status'] == '?' else f['status']})"
+        for f in data["files"]
+    )
+    body = (PROMPTS / "lenses" / f"{lens}.md").read_text(encoding="utf-8").strip()
+    return fill(
+        (PROMPTS / "lens.md").read_text(encoding="utf-8"),
+        {
+            "LENS": lens,
+            "LENS_BODY": body,
+            "RANGE": describe_range(data),
+            "DIFF": data["diff"],
+            "FILES": files,
+            "RULES": rule_paths(root),
+        },
+    )
+
+
+def verify_prompt(run: Path, finding: str) -> str:
+    lens, _, number = finding.partition(":")
+    if lens not in LENSES or not number.isdigit():
+        raise ValueError(f"--finding must be LENS:N, got {finding!r}")
+    parsed = parse_lens(read_lens(run, lens))
+    match = [f for f in parsed.findings if f["n"] == int(number)]
+    if not match:
+        raise ValueError(f"no finding F{number} in {lens}'s answer")
+    f = match[0]
+    return fill(
+        (PROMPTS / "verify.md").read_text(encoding="utf-8"),
+        {"CLAIM": f["claim"], "LOCATION": f["location"], "FAILURE": f["failure"]},
+    )
+
+
+# --- parsing -----------------------------------------------------------------
+
+HEADER = re.compile(r"^\s*(?:#{2,4}\s*|\*\*)F(\d+)\b[^\n]*$", re.MULTILINE)
+KEY = re.compile(r"^\s*(?:[-*]\s+)?\**`?([A-Za-z]+)`?\**\s*:\**\s*(.*)$")
+
+
+class LensAnswer:
+    def __init__(self) -> None:
+        self.findings: list[dict] = []
+        self.unparsed: list[str] = []
+        self.empty = False
+
+
+def read_lens(run: Path, lens: str) -> str | None:
+    path = run / f"lens-{lens}.md"
+    return path.read_text(encoding="utf-8") if path.exists() else None
+
+
+def parse_fields(block: str, names: tuple[str, ...]) -> dict[str, str]:
+    fields: dict[str, list[str]] = {}
+    current = None
+    for line in block.splitlines():
+        match = KEY.match(line)
+        if match and match.group(1).lower() in names:
+            current = match.group(1).lower()
+            fields[current] = [match.group(2).strip()]
+        elif current is not None:
+            fields[current].append(line.rstrip())
+    return {k: "\n".join(v).strip() for k, v in fields.items()}
+
+
+def parse_lens(text: str | None) -> LensAnswer:
+    answer = LensAnswer()
+    if text is None:
+        return answer
+    stripped = text.strip()
+    if stripped.strip("`* ").strip() == NO_FINDINGS:
+        answer.empty = True
+        return answer
+    headers = list(HEADER.finditer(text))
+    if not headers:
+        answer.unparsed.append(stripped)
+        return answer
+    lead = text[: headers[0].start()].strip()
+    if lead:
+        answer.unparsed.append(lead)
+    for i, header in enumerate(headers):
+        end = headers[i + 1].start() if i + 1 < len(headers) else len(text)
+        block = text[header.end() : end]
+        fields = parse_fields(block, FIELDS)
+        if all(fields.get(k) for k in REQUIRED):
+            answer.findings.append({"n": int(header.group(1)), **fields})
+        else:
+            answer.unparsed.append(text[header.start() : end].strip())
+    return answer
+
+
+def parse_verdict(text: str | None) -> dict[str, str]:
+    if text is None:
+        return {"verdict": "UNVERIFIED"}
+    fields = parse_fields(text, VERIFY_FIELDS)
+    word = fields.get("verdict", "").strip("*` ").split()
+    verdict = word[0].upper().strip("*`.,") if word else ""
+    fields["verdict"] = verdict if verdict in VERDICTS else "UNVERIFIED"
+    return fields
+
+
+# --- report ------------------------------------------------------------------
+
+
+def impact_rank(impact: str) -> int:
+    low = impact.lower()
+    for i, name in enumerate(IMPACT_ORDER):
+        if low.startswith(name):
+            return i
+    return len(IMPACT_ORDER)
+
+
+LOCATION = re.compile(r"^`?([^`:\s]+):(\d+)")
+
+
+def location_warning(root: Path, location: str) -> str:
+    """A note when the cited line is past the end of the file.
+
+    Measured in the rehearsals: reviewers sometimes cite a line of the diff
+    file instead of the file itself (`:169` in a 70-line file). The content was
+    right; the reader could not find it.
+    """
+    match = LOCATION.match(location.strip())
+    if not match:
+        return ""
+    path = root / match.group(1)
+    if not path.is_file():
+        return ""
+    total = text_lines(path)
+    line = int(match.group(2))
+    if line <= total:
+        return ""
+    return f" (line {line} is past the end of the file, {total} lines — search for the claim)"
+
+
+def finding_lines(f: dict, lens: str, root: Path) -> list[str]:
+    note = location_warning(root, f["location"])
+    lines = [
+        f"### {lens} F{f['n']} — `{f['location']}`{note} — {f['verdict']}",
+        f"- claim: {f['claim']}",
+        f"- failure: {f['failure']}",
+    ]
+    for key in ("severity", "confidence", "impact", "correction", "evidence"):
+        value = f.get(key)
+        if value and not (key == "correction" and value.lower().startswith("none")):
+            lines.append(f"- {key}: {value}")
+    return lines + [""]
+
+
+def write_report_file(root: Path, branch: str, text: str) -> Path:
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", branch)
+    folder = root / REPORT_REL
+    folder.mkdir(parents=True, exist_ok=True)
+    for n in range(1, 1000):
+        name = f"lens-{safe}-{stamp}.md" if n == 1 else f"lens-{safe}-{stamp}-{n}.md"
+        try:
+            with (folder / name).open("x", encoding="utf-8") as handle:
+                handle.write(text)
+            return folder / name
+        except FileExistsError:
+            continue
+    raise OSError(f"no free report name for lens-{safe}-{stamp}")
+
+
+# --- collect -----------------------------------------------------------------
+# The main session does not save the agents' answers: Write under .claude/ asks
+# for approval on every file (measured in the first rehearsal: the run stopped
+# after five lenses), and a retyped answer is exactly what must not happen. The
+# answers are taken from the session's own subagent transcripts instead, matched
+# by their prompt, which this script printed and which names the run directory.
+
+
+def transcript_files() -> list[Path]:
+    base = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+    session = os.environ.get("CLAUDE_CODE_SESSION_ID") or "*"
+    return sorted((base / "projects").glob(f"*/{session}/subagents/agent-*.jsonl"))
+
+
+def transcript_rows(path: Path) -> list[dict]:
+    rows = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
+
+
+def first_prompt(rows: list[dict]) -> str | None:
+    for row in rows:
+        if row.get("type") == "user":
+            content = (row.get("message") or {}).get("content")
+            return content if isinstance(content, str) else None
+    return None
+
+
+HANDBACK = "SubagentHandback"
+NOTICE = re.compile(r"<task-id>([\w-]+)</task-id>.*?<status>(\w+)</status>", re.S)
+
+
+def agent_id(path: Path) -> str:
+    return path.stem.removeprefix("agent-")
+
+
+def completed_agents(path: Path) -> set[str]:
+    """Ids of the agents the main session was told had completed.
+
+    `path` is a subagent transcript; the main session's transcript sits next to
+    its `<session>/` directory. The completion notice is the main session's own
+    record that an agent finished, whatever its transcript's last row says.
+    """
+    main = path.parent.parent.with_suffix(".jsonl")
+    if not main.exists():
+        return set()
+    done = set()
+    for row in transcript_rows(main):
+        content = row.get("content")
+        if content is None:
+            content = (row.get("message") or {}).get("content")
+        if isinstance(content, str) and "<task-notification>" in content:
+            done.update(i for i, s in NOTICE.findall(content) if s == "completed")
+    return done
+
+
+def agent_error(rows: list[dict]) -> str | None:
+    """Why the agent stopped, when its last row is an API error (rate limit, …)."""
+    last = [r for r in rows if r.get("type") == "assistant"]
+    if last and last[-1].get("isApiErrorMessage"):
+        return str(last[-1].get("error") or "api error")
+    return None
+
+
+def final_answer(rows: list[dict], completed: bool = False) -> str | None:
+    """The agent's final message, or None while it is still working.
+
+    Three shapes, all seen: an interactive session's background agent ends with
+    a `SubagentHandback` tool call carrying the message (the first real run
+    found nothing until this was handled); a headless one ends with a text row
+    whose stop_reason is `end_turn`; and in 4 of 6 runs of one batch the last
+    text row was written without its stop_reason although the main session had
+    been notified that the agent completed (`completed`). A text row written
+    mid-run has no stop_reason and is not an answer; an API error is not one.
+    """
+    last = [r for r in rows if r.get("type") == "assistant"]
+    if not last or agent_error(rows):
+        return None
+    message = last[-1].get("message") or {}
+    items = [c for c in message.get("content") or [] if isinstance(c, dict)]
+    for item in items:
+        if item.get("type") == "tool_use" and item.get("name") == HANDBACK:
+            text = str((item.get("input") or {}).get("message", ""))
+            return text.strip() or None
+    finished = message.get("stop_reason") == "end_turn"
+    if not finished and not (completed and message.get("stop_reason") is None):
+        return None
+    if any(c.get("type") == "tool_use" for c in items):
+        return None
+    text = "".join(c.get("text", "") for c in items if c.get("type") == "text")
+    return text.strip() or None
+
+
+def expected_answers(root: Path, run: Path) -> dict[str, str]:
+    """prompt -> answer file name, for every prompt this run can have sent."""
+    expected = {
+        lens_prompt(root, run, lens).strip(): f"lens-{lens}.md" for lens in LENSES
+    }
+    for lens in LENSES:
+        for f in parse_lens(read_lens(run, lens)).findings:
+            prompt = verify_prompt(run, f"{lens}:{f['n']}").strip()
+            expected[prompt] = f"verify-{lens}-{f['n']}.md"
+    return expected
+
+
+def collect(root: Path, run: Path) -> tuple[list[str], list[str], list[str]]:
+    """Save every finished answer.
+
+    Returns (saved, still missing, failed) — failed names the agents whose newest
+    attempt stopped on an API error, with the reason: they will never answer and
+    must be started again with the same prompt.
+    """
+    saved: list[str] = []
+    failed: dict[str, str] = {}
+    for _ in range(2):  # lens answers first, then the verifier prompts they imply
+        expected = expected_answers(root, run)
+        # A retried agent sends the identical prompt, so two transcripts can
+        # carry the same one. The newest file wins (oldest to newest, a later
+        # one overwrites): the file name is an agent id and says nothing about
+        # time, and the order of rows inside a transcript cannot tell two
+        # transcripts apart. If the newest has not finished, nothing is saved
+        # for that name; the failed attempt's text must not stand in for it.
+        newest: dict[str, tuple[Path, list[dict]]] = {}
+        for path in sorted(
+            transcript_files(), key=lambda p: (p.stat().st_mtime, p.name)
+        ):
+            rows = transcript_rows(path)
+            name = expected.get((first_prompt(rows) or "").strip())
+            if name:
+                newest[name] = (path, rows)
+        for name, (path, rows) in newest.items():
+            if (run / name).exists():
+                continue
+            error = agent_error(rows)
+            if error:
+                failed[name] = error
+                continue
+            failed.pop(name, None)
+            done = agent_id(path) in completed_agents(path)
+            answer = final_answer(rows, completed=done)
+            if answer is not None and name not in saved:
+                (run / name).write_text(answer + "\n", encoding="utf-8")
+                saved.append(name)
+    expected = expected_answers(root, run)
+    missing = sorted(
+        n for n in expected.values() if not (run / n).exists() and n not in failed
+    )
+    return saved, missing, [f"{n} ({failed[n]})" for n in sorted(failed)]
+
+
+def one_line(text: str) -> str:
+    return " ".join(text.split())
+
+
+def build_report(root: Path, run: Path) -> tuple[str, bool]:
+    data = load_scope(run)
+    kept: list[tuple[str, dict]] = []
+    refuted: list[tuple[str, dict]] = []
+    problems: list[str] = []
+    unparsed: list[str] = []
+    empty: list[str] = []
+    tally = dict.fromkeys((*VERDICTS, "UNVERIFIED"), 0)
+    for lens in LENSES:
+        text = read_lens(run, lens)
+        if text is None:
+            problems.append(f"{lens}: no answer saved (lens-{lens}.md missing)")
+            continue
+        answer = parse_lens(text)
+        if answer.empty:
+            empty.append(lens)
+        for chunk in answer.unparsed:
+            unparsed.append(f"#### {lens}\n\n{chunk}")
+        for f in answer.findings:
+            verdict = parse_verdict(
+                (run / f"verify-{lens}-{f['n']}.md").read_text(encoding="utf-8")
+                if (run / f"verify-{lens}-{f['n']}.md").exists()
+                else None
+            )
+            merged = {**f, **{k: v for k, v in verdict.items() if k != "evidence"}}
+            if verdict.get("evidence"):
+                merged["evidence"] = verdict["evidence"]
+            tally[merged["verdict"]] += 1
+            if merged["verdict"] == "UNVERIFIED":
+                problems.append(
+                    f"{lens} F{f['n']}: no verdict (verify-{lens}-{f['n']}.md)"
+                )
+            (refuted if merged["verdict"] == "REFUTED" else kept).append((lens, merged))
+    if unparsed:
+        problems.append(
+            "lens answers with text the parser could not read: see ## Unparsed"
+        )
+
+    def order(item: tuple[str, dict]) -> tuple[int, int, str]:
+        _, f = item
+        state = {"CONFIRMED": 0, "UNCLEAR": 1}.get(f["verdict"], 2)
+        return (state, impact_rank(f.get("impact", "")), f["location"])
+
+    # Verifiers judge truth, so a correct change still collects many true but
+    # trivial findings (15 per run on a clean change in the rehearsals). The
+    # impact count tells the reader where to start.
+    labels = (*IMPACT_ORDER, "not stated")
+    impacts = dict.fromkeys(labels, 0)
+    for _, f in kept:
+        if f["verdict"] == "CONFIRMED":
+            impacts[labels[impact_rank(f.get("impact", ""))]] += 1
+
+    out = [
+        "# Lens review",
+        "",
+        f"- range: {describe_range(data)}",
+        f"- branch: {data['branch']}  base: {data['base']}  HEAD: {data['head'][:12]}",
+        f"- changed: {len(data['files'])} files, {data['lines']} lines",
+        f"- lenses: {', '.join(LENSES)}",
+        "- verdicts: " + ", ".join(f"{k} {v}" for k, v in tally.items()),
+        "- confirmed by impact: " + ", ".join(f"{k} {v}" for k, v in impacts.items()),
+        f"- run: {data['run']}",
+        "",
+        "Every finding was checked by a separate verifier for TRUTH only. Whether it",
+        "matters in real use is the reader's call, from `impact`.",
+        "",
+        "## Summary",
+        "",
+    ]
+    # One line per finding, for showing to the user; the detail is below.
+    ordered = sorted(kept, key=order)
+    for lens, f in ordered:
+        impact = labels[impact_rank(f.get("impact", ""))]
+        out.append(
+            f"- {f['verdict']} · {impact} · {lens} F{f['n']} · "
+            f"{one_line(f['location'])} — {one_line(f['claim'])}"
+        )
+    for lens, f in refuted:
+        out.append(f"- REFUTED · {lens} F{f['n']} — {one_line(f['claim'])}")
+    if not kept and not refuted:
+        out.append("None.")
+    out += ["", "## Findings", ""]
+    if kept:
+        lenses_at: dict[str, set[str]] = {}
+        for lens, f in kept:
+            lenses_at.setdefault(f["location"], set()).add(lens)
+        for lens, f in ordered:
+            if len(lenses_at[f["location"]]) > 1:
+                f = {
+                    **f,
+                    "location": f["location"] + " (also reported by another lens)",
+                }
+            out += finding_lines(f, lens, root)
+    else:
+        out += ["None.", ""]
+    if empty:
+        out += [f"Lenses with no findings: {', '.join(empty)}.", ""]
+    out += ["## Refuted", ""]
+    if refuted:
+        for lens, f in refuted:
+            out += finding_lines(f, lens, root)
+    else:
+        out += ["None.", ""]
+    if unparsed:
+        out += ["## Unparsed", "", *unparsed, ""]
+    if problems:
+        out += ["## Incomplete", "", *[f"- {p}" for p in problems], ""]
+    return "\n".join(out), not problems
+
+
+# --- main ----------------------------------------------------------------------
+
+
+def repo_root() -> Path:
+    out = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if out.returncode != 0:
+        raise Refused("not inside a git repository")
+    return Path(out.stdout.strip())
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="lens-review")
+    sub = parser.add_subparsers(dest="command", required=True)
+    p_scope = sub.add_parser("scope")
+    p_scope.add_argument("--base")
+    p_scope.add_argument(
+        "--mode", choices=("auto", "committed", "worktree"), default="auto"
+    )
+    p_scope.add_argument("--paths", nargs="+", default=[])
+    p_prompt = sub.add_parser("prompt")
+    kinds = p_prompt.add_subparsers(dest="kind", required=True)
+    p_lens = kinds.add_parser("lens")
+    p_lens.add_argument("--run", required=True)
+    p_lens.add_argument("lens")
+    p_verify = kinds.add_parser("verify")
+    p_verify.add_argument("--run", required=True)
+    p_verify.add_argument("--finding", required=True)
+    p_collect = sub.add_parser("collect")
+    p_collect.add_argument("--run", required=True)
+    p_report = sub.add_parser("report")
+    p_report.add_argument("--run", required=True)
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+    try:
+        root = repo_root()
+        if args.command == "scope":
+            run = scope(root, args.base, args.mode, args.paths)
+            data = load_scope(run)
+            print(f"run: {data['run']}")
+            print(f"range: {describe_range(data)}")
+            print(f"changed: {len(data['files'])} files, {data['lines']} lines")
+            return EXIT["OK"]
+        run = root / args.run
+        if args.command == "prompt":
+            if args.kind == "lens":
+                sys.stdout.write(lens_prompt(root, run, args.lens))
+            else:
+                sys.stdout.write(verify_prompt(run, args.finding))
+            return EXIT["OK"]
+        if args.command == "collect":
+            saved, missing, failed = collect(root, run)
+            print(f"saved: {', '.join(saved) or 'nothing new'}")
+            print(f"missing: {', '.join(missing) or 'none'}")
+            if failed:
+                print(f"failed: {', '.join(failed)}")
+            return EXIT["INCOMPLETE"] if missing or failed else EXIT["OK"]
+        text, complete = build_report(root, run)
+        path = write_report_file(root, load_scope(run)["branch"], text)
+        print(path.relative_to(root).as_posix())
+        return EXIT["OK"] if complete else EXIT["INCOMPLETE"]
+    except Refused as exc:
+        print(f"lens-review: refused: {exc}", file=sys.stderr)
+        return EXIT["REFUSED"]
+    except (ValueError, OSError) as exc:
+        print(f"lens-review: {exc}", file=sys.stderr)
+        return EXIT["ERROR"]
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

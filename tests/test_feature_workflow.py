@@ -32,6 +32,7 @@ What these cannot show: that following the file produces good work. Only running
 from __future__ import annotations
 
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -152,18 +153,34 @@ class PhaseReferenceTests(unittest.TestCase):
         r"`?/feature`?[^\n]{0,40}?Phase\s+(\d+b?)|Phase\s+(\d+b?)[^\n]{0,30}?`?/feature`?"
     )
 
-    def _inbound(self) -> set[tuple[str, str]]:
+    # "logs" and "reviews" hold generated prose (reviewer answers, reports) that
+    # quotes "/feature ... Phase N" freely; the gate must not depend on it.
+    SKIP = (".git", "node_modules", "checkpoints", "logs", "reviews")
+
+    def _inbound(self, root: Path = REPO) -> set[tuple[str, str]]:
         found: set[tuple[str, str]] = set()
-        for path in sorted(REPO.rglob("*.md")):
+        for path in sorted(root.rglob("*.md")):
             if path == FEATURE or any(
-                part in (".git", "node_modules", "checkpoints") for part in path.parts
+                part in self.SKIP for part in path.relative_to(root).parts
             ):
                 continue
             flat = " ".join(path.read_text(encoding="utf-8").split())
             for match in self.REF.finditer(flat):
                 phase = match.group(1) or match.group(2)
-                found.add((str(path.relative_to(REPO)), phase))
+                found.add((str(path.relative_to(root)), phase))
         return found
+
+    def test_generated_prose_is_not_scanned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            top = Path(tmp)
+            for rel in (
+                ".claude/logs/lens-review/r1/lens-tests.md",
+                ".claude/docs/reviews/lens-x.md",
+            ):
+                (top / rel).parent.mkdir(parents=True)
+                (top / rel).write_text("See /feature Phase 99.\n")
+            (top / "README.md").write_text("See /feature Phase 98.\n")
+            self.assertEqual({("README.md", "98")}, self._inbound(top))
 
     def test_several_files_point_at_phases(self) -> None:
         """Guards the scan, and records that renumbering is not a local edit."""

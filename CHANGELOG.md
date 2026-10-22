@@ -11,6 +11,34 @@ Upgrading an adopted copy: do not copy the template over it — run
 「업그레이드 절차」 into a copy that predates it. Both follow `tools/UPGRADE.md`
 from a fresh clone of the latest release.
 
+## [Unreleased]
+
+**Upgrade:**
+1. If your project rewrote `CLAUDE.md` (it is project-owned, so the upgrade
+   does not touch it), update the review sentence in 운영 주의사항 by hand: where
+   it says "세션 안의 가벼운 리뷰는 deep-reasoning 으로 충분하다" (or similar),
+   use the new ending: "세션 안 리뷰는 `/lens-review`(5관점+검증, A1 전에),
+   작은 변경은 deep-reasoning." Otherwise `CLAUDE.md` and the shipped
+   `/feature` Phase 6 (B1 `/lens-review`) give two different defaults.
+
+### Added
+- `/lens-review`: an in-session review through five lenses (correctness,
+  security, integration, tests, simplicity), each a separate read-only
+  `lens-reviewer` agent (Opus, effort medium, `omitClaudeMd`), then one verifier
+  per finding that judges truth only, with impact in its own field. A script
+  resolves the scope, prints the fixed prompts and builds the report from the
+  saved answers, so the main session never retypes a claim. /feature Phase 6
+  Option B is now this review, before /isolated-review. Restores what 2.0.0
+  removed as "never run in real work" (it had found three real defects in this
+  repository) and what the early copy's `/review` did, on measurements:
+  `docs/lens-review.md`.
+
+### Corrected
+- 5.1.1 below (and README §9, §11) called the work project's `startproject` and
+  `review` skills "the template's pre-fork original". They came from the early
+  adapted copy of the template, not from the fork point (`e96c71c` has no
+  `review` skill). README now says "early template copy".
+
 ## [5.1.1] - 2026-10-19
 
 What the first real upgrade (Linux, 3.0.1 → 5.1.0) taught. Projects' files do
