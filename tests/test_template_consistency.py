@@ -35,10 +35,25 @@ REPO = Path(__file__).parent.parent
 HOOKS = REPO / ".claude" / "hooks"
 SKILLS = REPO / ".claude" / "skills"
 SETTINGS = REPO / ".claude" / "settings.json"
-# Directories the prose scans skip. "reviews" holds isolated-review reports
+# Directories the prose scans skip. "reviews" holds review reports
 # (gitignored); a header such as "changed: 5 files, 881 lines" reads as a
-# threshold and failed the gate on a 5-file branch.
-PROSE_SCAN_SKIP = (".git", "research", "node_modules", "checkpoints", "reviews")
+# threshold and failed the gate on a 5-file branch. "logs" holds the answers
+# of /lens-review's agents, free prose that quotes numbers and pointers.
+# tests/test_feature_workflow.py keeps the same list for its own scan.
+PROSE_SCAN_SKIP = (
+    ".git",
+    "research",
+    "node_modules",
+    "checkpoints",
+    "reviews",
+    "logs",
+)
+
+
+def prose_scanned(path: Path) -> bool:
+    """Whether the prose scans read this repository file."""
+    return not any(part in PROSE_SCAN_SKIP for part in path.relative_to(REPO).parts)
+
 
 # Locations whose contents are INPUTS the model is told to read. Outputs are
 # excluded on purpose: .claude/docs/ and .claude/logs/ hold
@@ -252,7 +267,7 @@ class LargeChangeThresholdTests(unittest.TestCase):
     def _threshold_mentions(self) -> dict[str, set[str]]:
         found: dict[str, set[str]] = {}
         for path in sorted(REPO.rglob("*.md")):
-            if any(part in PROSE_SCAN_SKIP for part in path.parts):
+            if not prose_scanned(path):
                 continue
             flat = " ".join(path.read_text(encoding="utf-8").split())
             numbers: set[str] = set()
@@ -546,7 +561,7 @@ class SectionPointerTests(unittest.TestCase):
     def _pointers(self) -> list[tuple[Path, str, str]]:
         found = []
         for path in sorted(REPO.rglob("*.md")):
-            if any(part in PROSE_SCAN_SKIP for part in path.parts):
+            if not prose_scanned(path):
                 continue
             flat = " ".join(path.read_text(encoding="utf-8").split())
             for match in self.POINTER.finditer(flat):
@@ -714,6 +729,20 @@ class CommitAttributionTests(unittest.TestCase):
         self.assertEqual("", attribution.get("commit"))
         self.assertEqual("", attribution.get("pr"))
         self.assertIs(False, attribution.get("sessionUrl"))
+
+
+class ProseScanScopeTests(unittest.TestCase):
+    """Generated prose (reviewer answers, reports) must not feed the gate."""
+
+    def test_prose_scan_skips_generated_dirs_and_reads_docs(self) -> None:
+        for rel in (
+            ".claude/logs/lens-review/r1/lens-tests.md",
+            ".claude/logs/isolated-review/x.md",
+            ".claude/docs/reviews/lens-x.md",
+        ):
+            self.assertFalse(prose_scanned(REPO / rel), rel)
+        for rel in ("README.md", ".claude/rules/testing.md", "docs/lens-review.md"):
+            self.assertTrue(prose_scanned(REPO / rel), rel)
 
 
 class AgyFitsTheBashTimeoutTests(unittest.TestCase):

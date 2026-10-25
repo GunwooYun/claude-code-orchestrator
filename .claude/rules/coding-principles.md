@@ -5,6 +5,8 @@ paths:
   - "tools/upgrade-plan"
   - "tools/hook-check"
   - ".claude/bin/usage-report"
+  - ".claude/skills/lens-review/lens-review"
+  - "tools/lens-audit"
 ---
 # Coding Principles (Python)
 

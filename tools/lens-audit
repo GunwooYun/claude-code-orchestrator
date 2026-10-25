@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""
+lens-audit — check from transcripts that a /lens-review run kept its locks.
+
+Usage: tools/lens-audit --transcript <session.jsonl> --run <run dir> [--root <repo>]
+Exit:  0 every check passed, 1 a check failed, 2 bad input
+
+Template repository only (not shipped). The script in the skill controls the
+scope, the prompts and the report; it cannot see what the main session did with
+them. This reads the session's transcript and its subagent transcripts
+(`<session>/subagents/agent-*.jsonl` + `.meta.json`) and checks:
+
+  1. every lens agent prompt is byte-identical to what the script prints
+     (`prompt lens` for each lens, `prompt verify` for each finding, `prompt
+     rate` once), went to the agent the script names (lens prompts to
+     lens-reviewer, the rest to lens-verifier), and was sent once — or again
+     only after the earlier attempt stopped on an API error;
+  2. each saved answer (`lens-<lens>.md`, `verify-<lens>-<n>.md`, `rate.md`)
+     is the agent's final message, unchanged;
+  3. lens-reviewer requests ran on Opus, lens-verifier requests on Sonnet, both
+     at effort medium;
+  4. lens agents used no tool other than Read, Grep, Glob;
+  5. the report's `## Summary` section appears verbatim in the session's text
+     (the full findings are read from the report file, not from the session).
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.machinery
+import importlib.util
+import json
+import sys
+from pathlib import Path
+from types import ModuleType
+
+# agent type -> (model prefix, effort) it must run on
+PINS = {
+    "lens-reviewer": ("claude-opus", "medium"),
+    "lens-verifier": ("claude-sonnet", "medium"),
+}
+# The hand-back is how an interactive session's background agent returns its answer.
+READ_TOOLS = {"Read", "Grep", "Glob", "SubagentHandback"}
+SCRIPT_REL = ".claude/skills/lens-review/lens-review"
+
+
+def load_script(root: Path) -> ModuleType:
+    path = root / SCRIPT_REL
+    loader = importlib.machinery.SourceFileLoader("lens_review", str(path))
+    spec = importlib.util.spec_from_loader("lens_review", loader)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def content_items(row: dict) -> list[dict]:
+    message = row.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    return (
+        [c for c in content if isinstance(c, dict)] if isinstance(content, list) else []
+    )
+
+
+def agent_calls(rows: list[dict]) -> dict[str, tuple[str, str]]:
+    """tool_use id -> (agent type, prompt), for every Agent/Task call to a lens agent."""
+    calls = {}
+    for row in rows:
+        if row.get("type") != "assistant":
+            continue
+        for item in content_items(row):
+            if item.get("type") != "tool_use" or item.get("name") not in (
+                "Agent",
+                "Task",
+            ):
+                continue
+            data = item.get("input") or {}
+            kind = data.get("subagent_type")
+            if kind in PINS:
+                # Stripped: a shell's $(…) drops the script's trailing newline.
+                calls[item.get("id", "")] = (kind, data.get("prompt", "").strip())
+    return calls
+
+
+def audit(root: Path, transcript: Path, run: Path) -> list[str]:
+    lr = load_script(root)
+    problems: list[str] = []
+    main_rows = lr.transcript_rows(transcript)
+    calls = agent_calls(main_rows)
+    expected = lr.expected_answers(root, run)  # prompt -> answer file
+
+    # Every lens agent's transcript, with the prompt its call sent.
+    agents_dir = transcript.with_suffix("") / "subagents"
+    agents = []
+    for meta_path in sorted(agents_dir.glob("*.meta.json")):
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        kind = meta.get("agentType")
+        if kind not in PINS:
+            continue
+        agent_path = meta_path.with_name(meta_path.name.replace(".meta.json", ".jsonl"))
+        _, prompt = calls.get(meta.get("toolUseId", ""), ("", ""))
+        agents.append((meta, meta_path, kind, agent_path, prompt))
+    # A prompt may be sent again after its agent stopped on an API error: that
+    # is the recovery SKILL.md step 4 prescribes. Only the newest attempt must
+    # answer; every older one must have failed (collect uses the same rule).
+    attempts: dict[str, list[Path]] = {}
+    for _, _, _, agent_path, prompt in sorted(
+        agents, key=lambda a: (a[3].stat().st_mtime, a[3].name)
+    ):
+        attempts.setdefault(prompt, []).append(agent_path)
+
+    def retried_after_errors(prompt: str) -> bool:
+        older = attempts.get(prompt, [])[:-1]
+        return bool(older) and all(lr.agent_error(lr.transcript_rows(p)) for p in older)
+
+    sent: dict[str, int] = {}
+    for tool_id, (kind, prompt) in calls.items():
+        if prompt not in expected:
+            problems.append(f"1: prompt of call {tool_id} is not one the script prints")
+        elif kind != lr.agent_for(expected[prompt]):
+            problems.append(f"1: prompt for {expected[prompt]} went to {kind}")
+        sent[prompt] = sent.get(prompt, 0) + 1
+    for prompt, name in expected.items():
+        count = sent.get(prompt, 0)
+        if count != 1 and not (count > 1 and retried_after_errors(prompt)):
+            problems.append(f"1: prompt for {name} sent {count} times")
+
+    for meta, meta_path, kind, agent_path, prompt in agents:
+        model_prefix, effort = PINS[kind]
+        rows = lr.transcript_rows(agent_path)
+        tag = meta.get("description") or meta_path.stem
+        name = expected.get(prompt)
+        if name and attempts[prompt][-1] == agent_path:
+            saved = run / name
+            text = saved.read_text(encoding="utf-8").strip() if saved.exists() else None
+            done = lr.agent_id(agent_path) in lr.completed_agents(agent_path)
+            final = lr.final_answer(rows, completed=done)
+            # None == None would pass an unfinished agent with no saved file.
+            if final is None or text != final:
+                problems.append(
+                    f"2: {name} differs from the agent's final message ({tag})"
+                )
+        for row in rows:
+            # An API error row is written by Claude Code ("<synthetic>"), not a model.
+            if row.get("type") != "assistant" or row.get("isApiErrorMessage"):
+                continue
+            model = (row.get("message") or {}).get("model", "")
+            if not str(model).startswith(model_prefix):
+                problems.append(f"3: {tag} ran on {model!r}")
+                break
+            if row.get("effort") != effort:
+                problems.append(f"3: {tag} ran at effort {row.get('effort')!r}")
+                break
+        for row in rows:
+            for item in content_items(row):
+                if (
+                    item.get("type") == "tool_use"
+                    and item.get("name") not in READ_TOOLS
+                ):
+                    problems.append(f"4: {tag} used {item.get('name')}")
+
+    reports = sorted((root / lr.REPORT_REL).glob("lens-*.md"))
+    report = next(
+        (
+            r
+            for r in reversed(reports)
+            if f"run: {run.relative_to(root).as_posix()}"
+            in r.read_text(encoding="utf-8")
+        ),
+        None,
+    )
+    if report is None:
+        problems.append("5: no report for this run under " + lr.REPORT_REL)
+    else:
+        text = report.read_text(encoding="utf-8")
+        summary = text.split("## Summary", 1)[1].split("\n## ", 1)[0].strip()
+        said = "\n".join(
+            c.get("text", "")
+            for row in main_rows
+            if row.get("type") == "assistant"
+            for c in content_items(row)
+            if c.get("type") == "text"
+        )
+        if summary not in said:
+            problems.append(
+                f"5: the ## Summary of {report.name} was not shown verbatim"
+            )
+    return problems
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="lens-audit")
+    parser.add_argument("--transcript", required=True, type=Path)
+    parser.add_argument("--run", required=True)
+    parser.add_argument("--root", type=Path, default=Path.cwd())
+    args = parser.parse_args(argv)
+    root = args.root.resolve()
+    run = root / args.run
+    if not args.transcript.exists() or not (run / "scope.json").exists():
+        print("lens-audit: transcript or run dir not found", file=sys.stderr)
+        return 2
+    problems = audit(root, args.transcript, run)
+    for problem in problems:
+        print(f"FAIL {problem}")
+    if not problems:
+        print(
+            "ok: prompts unchanged, answers saved verbatim, models pinned, read-only, report shown"
+        )
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
