@@ -105,7 +105,7 @@ your-project/
 └── .claude/
     ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 5.1.1)
     ├── settings.json              # 훅 등록 + 권한(allow / ask / deny)
-    ├── agents/                    # 서브에이전트 정의 (deep-reasoning, general-purpose, lens-reviewer)
+    ├── agents/                    # 서브에이전트 정의 (deep-reasoning, general-purpose, lens-reviewer, lens-verifier)
     ├── skills/                    # 슬래시 커맨드 (아래 표)
     ├── hooks/                     # 자동 검사 훅 (아래 표)
     ├── rules/                     # 세부 규칙 — 대부분 매 세션, paths: 가 있으면 맞는 파일을 열 때만
@@ -507,8 +507,11 @@ git worktree add --detach ../<project>-review <작업 브랜치>
 1. **다섯 관점의 리뷰어**(정확성·보안·통합·테스트·단순성)가 각자 따로 변경을 읽는다. 리뷰어는
    `lens-reviewer` 에이전트(Opus, effort medium, 읽기 도구 세 개만, `CLAUDE.md` 를 보지 않음)다.
 2. **지적마다 검증자 한 명**이 그 지적이 **사실인지만** 판정한다(CONFIRMED / REFUTED / UNCLEAR).
-   중요한지는 따로 `impact` 칸에 적고, 실제로 일어나는지는 사용자가 판단한다.
-3. 범위·요청문·답 저장·리포트는 스크립트가 만든다. 메인 Claude 는 요청문을 바꾸지 않고 전달할 뿐이고,
+   검증자는 `lens-verifier` 에이전트(Sonnet, effort medium)다. 실제로 일어나는지는 사용자가 판단한다.
+3. **정렬 한 번** — 같은 `lens-verifier` 가 남은 지적마다 운영 코드 문제인지, 결과(데이터 손실·보안·
+   잘못된 결과·장애·진단·외관), 얼마나 자주인지를 매기고, 리포트는 그 순서로 지적을 놓는다.
+   **지우지 않는다** — 테스트·문체 지적은 뒤로 갈 뿐이다.
+4. 범위·요청문·답 저장·리포트는 스크립트가 만든다. 메인 Claude 는 요청문을 바꾸지 않고 전달할 뿐이고,
    답은 스크립트의 `collect` 가 세션 기록에서 그대로 가져와 저장한다. 리포트는
    `.claude/docs/reviews/lens-<브랜치>-<시각>.md` 이며 맨 위 `## Summary` 에 지적마다 한 줄이 있다.
 

@@ -1,12 +1,13 @@
 ---
 name: lens-review
-description: Review a change in this session through five lenses (correctness, security, integration, tests, simplicity), each a separate read-only Opus reviewer, then have every finding checked for truth by a separate verifier. It is /feature Phase 6 Option B — the in-session review before /isolated-review. Works on committed or uncommitted changes. Run it when the user types /lens-review or accepts it in Phase 6; always ask once first (it costs a few dollars and minutes).
+description: Review a change in this session through five lenses (correctness, security, integration, tests, simplicity), each a separate read-only Opus reviewer, then have every finding checked for truth by a separate Sonnet verifier and the kept findings ordered by a rater. It is /feature Phase 6 Option B — the in-session review before /isolated-review. Works on committed or uncommitted changes. Run it when the user types /lens-review or accepts it in Phase 6; always ask once first (it costs a few dollars and minutes).
 disable-model-invocation: true
 ---
 
 # Lens Review
 
-**Five reviewers, one concern each, then a verifier per finding.** You (the main
+**Five reviewers, one concern each, then a verifier per finding, then one rater
+that puts the findings in reading order.** You (the main
 session) only start the agents; the script's `collect` saves what they say.
 Everything that must not depend on how you read or retype text — the scope, the
 prompts, the answers, the report — is done by the script.
@@ -34,7 +35,7 @@ Run every script call as `python3 .claude/skills/lens-review/lens-review …`
 (works on Windows too).
 
 1. **Ask the user once**: "관점 리뷰를 실행할까요? 기준 `<base>`, Opus 리뷰어 5명 +
-   지적마다 검증자 1명, 약 $2–6, 5–10분입니다." The base is the branch this work
+   지적마다 Sonnet 검증자 1명 + 정렬 1명, 약 $2–5, 5–10분입니다." The base is the branch this work
    merges into; ask for it in the same question if you do not know it.
 
 2. **Scope.**
@@ -67,7 +68,7 @@ Run every script call as `python3 .claude/skills/lens-review/lens-review …`
    approval on every file). `missing:` lists answers not found yet — wait for
    those agents, then run it again. `failed:` names agents that stopped on an
    API error (a usage limit, an overload) with the reason: start each again
-   with the same prompt from step 3 or 5 (the newest attempt is the one
+   with the same prompt and agent from step 3, 5 or 6 (the newest attempt is the one
    collected), or tell the user if the limit has not reset. An answer that
    never appears and is not `failed` means its prompt was changed on the way:
    say so; do not work around it.
@@ -77,22 +78,34 @@ Run every script call as `python3 .claude/skills/lens-review/lens-review …`
    ```
    python3 .claude/skills/lens-review/lens-review prompt verify --run <dir> --finding <lens>:<n>
    ```
-   and pass its output unchanged:
-   `Agent(subagent_type="lens-reviewer", run_in_background=true, prompt=<output>)`.
+   and pass its output unchanged — note the **verifier** agent:
+   `Agent(subagent_type="lens-verifier", run_in_background=true, prompt=<output>)`.
    The verifier judges whether the claim is TRUE, not whether it matters. Never
    add questions about impact, real-world occurrence or the project's rules:
    that turned true findings into "real, but REFUTED" when it was measured.
-   When they have finished, run `collect` again until `missing: none`.
+   When they have finished, run `collect` again.
 
-6. **Report.**
+6. **Rate — once.** When every verdict is in, `collect` lists `rate.md` as
+   missing (unless no finding was kept). Then:
+   ```
+   python3 .claude/skills/lens-review/lens-review prompt rate --run <dir>
+   ```
+   and pass its output unchanged:
+   `Agent(subagent_type="lens-verifier", run_in_background=true, prompt=<output>)`.
+   The rater only orders the findings — production code first, worst
+   consequence first; it removes nothing. When it has finished, run `collect`
+   until `missing: none`.
+
+7. **Report.**
    ```
    python3 .claude/skills/lens-review/lens-review report --run <dir>
    ```
    It prints the report path under `.claude/docs/reviews/`. Exit 3 means the
-   report was written but something is missing (a lens answer, a verdict, text
-   the parser could not read) — the report's `## Incomplete` section says what.
+   report was written but something is missing (a lens answer, a verdict, the
+   rating, text the parser could not read) — the report's `## Incomplete`
+   section says what.
 
-7. **Show the report.** The full report is long (tens of KB); do not paste it.
+8. **Show the report.** The full report is long (tens of KB); do not paste it.
    Print its `## Summary` — one line per finding, refuted ones included — and any
    `## Unparsed` / `## Incomplete` sections verbatim, then a complete translation
    of them into the user's language: every line, in order, nothing merged or
@@ -101,7 +114,10 @@ Run every script call as `python3 .claude/skills/lens-review/lens-review …`
    defer, reading the finding's section in the report as needed. **This is where the
    real-occurrence rule applies** (`CLAUDE.md` 운영 주의사항 「일어나지 않는 조건을
    이론만으로 쫓지 않는다」): show next to each finding whether its input occurs in real use,
-   and recommend defer when it does not. The verifier never makes that call.
+   and recommend defer when it does not. Neither the verifier nor the rater
+   makes that call: the rating is a reading order, not a verdict — a finding
+   rated "not production" (a test that cannot fail, a wrong comment) can still
+   be one to fix.
 
 While the agents run, do not edit the files under review: the lenses read the
 working tree.
@@ -111,10 +127,14 @@ working tree.
 - Reviewers and verifiers only read (Read, Grep, Glob). Defects that only show
   when code runs — a platform's encoding, a test that passes for the wrong
   reason without anyone reading it — can be missed.
-- The model and effort are pinned in `.claude/agents/lens-reviewer.md` (Opus,
-  medium). A project without Opus access cannot use this skill as is.
+- The models and effort are pinned in `.claude/agents/lens-reviewer.md` (Opus,
+  medium) and `.claude/agents/lens-verifier.md` (Sonnet, medium). A project
+  without Opus access cannot use this skill as is.
 - `CLAUDE_CODE_EFFORT_LEVEL`, when set, overrides the pinned effort.
-- Steps 3 and 5 depend on you passing prompts unchanged. A changed prompt
+- The rater reads only the findings' text. In its measurement it rated 10 of 45
+  real-defect hits "not production" (mostly tests that could not fail); they
+  sink to the end of the report, not out of it.
+- Steps 3, 5 and 6 depend on you passing prompts unchanged. A changed prompt
   shows up as a missing answer in `collect`; `tools/lens-audit` in the template
   repository checks the rest from transcripts.
 - `collect` reads this session's transcripts under `~/.claude/projects/` (or

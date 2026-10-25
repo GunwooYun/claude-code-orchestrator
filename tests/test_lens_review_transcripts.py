@@ -78,21 +78,45 @@ class CollectTests(unittest.TestCase):
         self.agent(lr.verify_prompt(self.run_dir, "tests:1"), "verdict: CONFIRMED")
         saved, missing, _ = lr.collect(self.root, self.run_dir)
         self.assertIn("verify-tests-1.md", saved)
+        # Every verdict is in: the rating is the last answer expected.
+        self.assertEqual(["rate.md"], missing)
+        rating = "R1: production=yes consequence=wrong-result reach=common"
+        self.agent(lr.rate_prompt(self.run_dir), rating)
+        saved, missing, _ = lr.collect(self.root, self.run_dir)
+        self.assertEqual(["rate.md"], saved)
         self.assertEqual([], missing)
 
-    def test_collect_saves_lens_and_verifier_answers_in_one_call(self) -> None:
-        """Both transcripts exist already: the second pass picks up the verifier."""
-        (self.run_dir / "lens-tests.md").write_text(FINDING.strip() + "\n")
+    def test_collect_saves_lens_verifier_and_rating_answers_in_one_call(self) -> None:
+        """All transcripts exist already: later passes pick up verifier and rater."""
+        for lens in LENSES:  # build the later prompts from the answers, then forget
+            answer = FINDING.strip() if lens == "tests" else "NO FINDINGS"
+            (self.run_dir / f"lens-{lens}.md").write_text(answer + "\n")
         verify = lr.verify_prompt(self.run_dir, "tests:1")
-        (self.run_dir / "lens-tests.md").unlink()
+        (self.run_dir / "verify-tests-1.md").write_text("verdict: CONFIRMED\n")
+        rate = lr.rate_prompt(self.run_dir)
+        for path in self.run_dir.glob("*-*.md"):
+            path.unlink()
         for lens in LENSES:
             answer = FINDING.strip() if lens == "tests" else "NO FINDINGS"
             self.agent(lr.lens_prompt(self.root, self.run_dir, lens), answer)
         self.agent(verify, "verdict: CONFIRMED")
+        self.agent(rate, "R1: production=no consequence=cosmetic reach=rare")
         saved, missing, _ = lr.collect(self.root, self.run_dir)
         self.assertIn("verify-tests-1.md", saved)
-        self.assertEqual(6, len(saved))
+        self.assertIn("rate.md", saved)
+        self.assertEqual(7, len(saved))
         self.assertEqual([], missing)
+
+    def test_collect_expects_no_rating_when_nothing_was_kept(self) -> None:
+        """Every finding refuted (or none at all): there is nothing to order."""
+        for lens in LENSES:
+            answer = FINDING.strip() if lens == "tests" else "NO FINDINGS"
+            self.agent(lr.lens_prompt(self.root, self.run_dir, lens), answer)
+        lr.collect(self.root, self.run_dir)
+        self.agent(lr.verify_prompt(self.run_dir, "tests:1"), "verdict: REFUTED")
+        _, missing, _ = lr.collect(self.root, self.run_dir)
+        self.assertEqual([], missing)
+        self.assertFalse((self.run_dir / "rate.md").exists())
 
     def stamp(self, n: int, mtime: int) -> None:
         os.utime(self.agents / f"agent-{n}.jsonl", (mtime, mtime))
@@ -272,6 +296,8 @@ audit = load(REPO / "tools" / "lens-audit", "lens_audit")
 class AuditTests(unittest.TestCase):
     """V-audit: a recorded-shape transcript passes; each broken lock is caught."""
 
+    RATING = "R1: production=yes consequence=wrong-result reach=common"
+
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
@@ -287,6 +313,7 @@ class AuditTests(unittest.TestCase):
         (self.run_dir / "verify-correctness-1.md").write_text(
             "verdict: CONFIRMED\nimpact: low"
         )
+        (self.run_dir / "rate.md").write_text(self.RATING)
         report_text, _ = lr.build_report(self.root, self.run_dir)
         self.report = lr.write_report_file(self.root, "feat", report_text)
         self.summary = (
@@ -311,6 +338,7 @@ class AuditTests(unittest.TestCase):
                 "verdict: CONFIRMED\nimpact: low",
             )
         )
+        out.append((lr.rate_prompt(self.run_dir), self.RATING))
         return out
 
     def record(
@@ -320,6 +348,8 @@ class AuditTests(unittest.TestCase):
         extra_tool: str | None = None,
         shown: str | None = None,
         model: str = "claude-opus-5-5",
+        verifier_model: str = "claude-sonnet-5-5",
+        verifier_agent: str = "lens-verifier",
         drop: int | None = None,
         repeat: int | None = None,
         finish: bool = True,
@@ -332,6 +362,8 @@ class AuditTests(unittest.TestCase):
                 continue
             if i == len(LENSES):  # the verifier call
                 prompt += prompt_edit
+            reviewer = i < len(LENSES)
+            kind = "lens-reviewer" if reviewer else verifier_agent
             tool_id = f"toolu_{i}"
             call = {
                 "type": "assistant",
@@ -343,7 +375,7 @@ class AuditTests(unittest.TestCase):
                             "id": tool_id,
                             "name": "Agent",
                             "input": {
-                                "subagent_type": "lens-reviewer",
+                                "subagent_type": kind,
                                 "prompt": prompt,
                             },
                         }
@@ -381,14 +413,17 @@ class AuditTests(unittest.TestCase):
                 {
                     "type": "assistant",
                     "effort": effort,
-                    "message": {"model": model, "content": [ending]},
+                    "message": {
+                        "model": model if reviewer else verifier_model,
+                        "content": [ending],
+                    },
                 }
             )
             (self.agents / f"agent-{i}.jsonl").write_text(
                 "\n".join(json.dumps(r) for r in agent_rows)
             )
             (self.agents / f"agent-{i}.meta.json").write_text(
-                json.dumps({"agentType": "lens-reviewer", "toolUseId": tool_id})
+                json.dumps({"agentType": kind, "toolUseId": tool_id})
             )
         rows.append(
             {
@@ -444,6 +479,20 @@ class AuditTests(unittest.TestCase):
         self.record(model="claude-sonnet-5-5")
         found = self.problems()
         self.assertTrue(any(p.startswith("3:") for p in found), found)
+
+    def test_audit_catches_a_verifier_not_on_sonnet(self) -> None:
+        self.record(verifier_model="claude-opus-5-5")
+        found = self.problems()
+        self.assertTrue(any(p.startswith("3:") for p in found), found)
+
+    def test_audit_catches_verify_and_rate_sent_to_the_reviewer(self) -> None:
+        """The verifier's prompts must go to lens-verifier, not lens-reviewer."""
+        self.record(verifier_agent="lens-reviewer", verifier_model="claude-opus-5-5")
+        found = self.problems()
+        self.assertIn(
+            "1: prompt for verify-correctness-1.md went to lens-reviewer", found
+        )
+        self.assertIn("1: prompt for rate.md went to lens-reviewer", found)
 
     def test_audit_catches_a_missing_or_repeated_call(self) -> None:
         self.record(drop=1)

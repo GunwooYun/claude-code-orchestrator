@@ -57,6 +57,7 @@ TEMPLATE_AGENTS = (
     "deep-reasoning",
     "general-purpose",
     "lens-reviewer",
+    "lens-verifier",
     "Explore",
     "Plan",
 )

@@ -2,8 +2,9 @@
 
 `/lens-review` (`.claude/skills/lens-review/`) reviews a change in the current
 session through five lenses, then has every finding checked for truth by a
-separate verifier. This file records why it is built this way. Read it before
-changing the skill, the script, the prompts or the `lens-reviewer` agent.
+separate verifier, then has one rater put the kept findings in reading order.
+This file records why it is built this way. Read it before changing the skill,
+the script, the prompts or the `lens-reviewer` / `lens-verifier` agents.
 
 ## History
 
@@ -49,7 +50,9 @@ maintainer's clone (local, not shipped).
 | Five lenses, always | The lenses found what A1 missed; choosing lenses per change was the main session's judgement, which is what failed on scope |
 | Scope by script (`scope`) | The main session misread the scope once and five reviewers followed it |
 | Fixed prompts printed by the script; the verifier prompt built from the saved lens answer | The only measured cause of wrong refutations was the main session editing verifier prompts |
-| Verify every finding; truth only; impact separate; drop only REFUTED | Lenses rate most findings minor, so "verify majors" rarely ran; verifying all costs ~2× and turned wrong kills into corrections once the prompt was locked. Whether a finding matters in real use is the user's call (CLAUDE.md), not the verifier's |
+| Verify every finding; truth only; impact separate; drop only REFUTED (`lens-verifier`, Sonnet since 2026-10-25) | Lenses rate most findings minor, so "verify majors" rarely ran; verifying all costs ~2× and turned wrong kills into corrections once the prompt was locked. Whether a finding matters in real use is the user's call (CLAUDE.md), not the verifier's |
+| Verifier on Sonnet, not Opus | 2026-10-24/25: same results on the 28-claim bench (all correct) and on 13 hard claims from real runs (both re-confirmed about half of the borderline-false ones), at 42% of the cost. "No difference measured", not "proven equal" — see below |
+| One rater orders the kept findings (production first, then consequence × reach); it removes nothing | The verifier's `impact` said "low" for 88% of findings, real defects included, so it could not tell the reader where to start. On 354 scored findings the rater put a real defect above a trivial one 86% of the time (impact: 62%). It rated 10 of 45 real-defect hits "not production" (mostly tests that could not fail), so it may only order, never filter |
 | Report never refuses; missing verdicts are UNVERIFIED, unparsed text is shown, exit 3 | A refusing report throws away a paid run; a silent parser loses findings nobody sees |
 | Agent: Opus, effort medium, Read/Grep/Glob, `omitClaudeMd` | The measured configuration; medium is ⅔ the cost of high for almost the same finds. No shell: reviewers read untrusted diffs, and execution did not improve verification. CLAUDE.md holds the author's rationale |
 | Next to /isolated-review, not instead | They find different things; A1 is the separate-process last word |
@@ -75,6 +78,8 @@ Rejected:
   enforce them. `tools/lens-audit` checks them from transcripts.
 - `CLAUDE_CODE_EFFORT_LEVEL` overrides the agent's pinned effort.
 - Projects without Opus cannot run it as shipped.
+- Recall on a work project was about half (next section); prompt rewrites,
+  higher effort and a sixth lens did not change that measurably.
 
 ## Rehearsals (2026-10-20)
 
@@ -127,3 +132,38 @@ Found by the first person-opened interactive run in this repository
 Not shown: other projects, and Windows. An interactive run in this repository
 has been shown (approval prompts, the ask, the translation step); one in
 another real project has not.
+
+## Measurements on a work project (2026-10-21/25)
+
+Ground truth: six tickets of one work project (Python + Vue, not named here)
+whose review-and-fix rounds are in git history — the head before each fix was
+reviewed, and the defects the fix commit addressed were counted (35 in the
+first rounds, 10 in four second rounds, 22 in two cases held out from all
+prompt work). Scoring by a separate Sonnet agent per case, blind to which setup
+produced each report; lens labels hidden where one report was scored.
+
+| Question | Result |
+|---|---|
+| How much does the shipped skill find? | 16–17 of 35 (two runs). False confirms: 2 in ~30 reports. Verifier: ~550 CONFIRMED, 8 REFUTED (one wrong) |
+| Enumerate-then-judge prompts (V-A) | 19 of 35, gain concentrated in one case whose misses the wording was written from. On second-round heads: 4 of 10, same as the shipped prompts → dropped |
+| Effort high for every agent (V-B) | 18 of 35 at ~1.5× cost → dropped |
+| /isolated-review on the same cases | Fewest finds, least noise, one defect no lens run found — complementary, as before |
+| Sixth "trace" lens (guarantee → every path), prompt written blind to the defects | Pre-registered criteria failed: no defect found by trace alone on the two held-out cases (two partials); 4 of 5 trace findings duplicated other lenses on one. One primed case: trace alone found a defect every earlier run missed. 0 false findings, ~+11% cost → not adopted |
+| Where the misses are | Of 35 commonly missed defects, 2 sat in code no finding mentioned; 18 were in code a finding cited for something else; 9 had their mechanism described with the wrong conclusion. A sweep of unmentioned code (planned V-C) was not run |
+| Cheaper verifier | Sonnet per finding 42% of the Opus cost, batched Opus per lens 56%; no accuracy difference measured on either set → Sonnet adopted |
+| Rater | See Design. Text only (it did not read code in the bench) |
+
+Not shown by these runs:
+- One run per setup; differences of one or two defects are within run-to-run
+  variation. One project, one stack.
+- The scorer was not cross-checked by a second scorer or a person; half of one
+  held-out case's ground truth may be author changes rather than review
+  findings.
+- The verifier bench was saturated (both arms perfect) and the hard-claim set
+  could not separate the arms, so the Sonnet switch rests on "no difference
+  seen", not on a measured equality.
+- The rater was measured offline on finished reports, not inside the skill.
+- Headless sessions often ended before their agents (4 of 7 trace runs); the
+  missing answers were filled by `claude -p --agent` with the same prompts.
+- Library-knowledge defects (a type cache that grows) and defects that only
+  show on hardware were missed by every setup.

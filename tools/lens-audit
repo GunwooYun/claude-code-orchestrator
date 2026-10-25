@@ -10,13 +10,15 @@ scope, the prompts and the report; it cannot see what the main session did with
 them. This reads the session's transcript and its subagent transcripts
 (`<session>/subagents/agent-*.jsonl` + `.meta.json`) and checks:
 
-  1. every lens-reviewer prompt is byte-identical to what the script prints
-     (`prompt lens` for each lens, `prompt verify` for each finding), and every
-     expected prompt was sent exactly once;
-  2. each saved answer (`lens-<lens>.md`, `verify-<lens>-<n>.md`) is the
-     agent's final message, unchanged;
-  3. every lens-reviewer request ran on an Opus model at effort medium;
-  4. lens-reviewer agents used no tool other than Read, Grep, Glob;
+  1. every lens agent prompt is byte-identical to what the script prints
+     (`prompt lens` for each lens, `prompt verify` for each finding, `prompt
+     rate` once), went to the agent the script names (lens prompts to
+     lens-reviewer, the rest to lens-verifier), and was sent exactly once;
+  2. each saved answer (`lens-<lens>.md`, `verify-<lens>-<n>.md`, `rate.md`)
+     is the agent's final message, unchanged;
+  3. lens-reviewer requests ran on Opus, lens-verifier requests on Sonnet, both
+     at effort medium;
+  4. lens agents used no tool other than Read, Grep, Glob;
   5. the report's `## Summary` section appears verbatim in the session's text
      (the full findings are read from the report file, not from the session).
 """
@@ -31,11 +33,13 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-AGENT = "lens-reviewer"
+# agent type -> (model prefix, effort) it must run on
+PINS = {
+    "lens-reviewer": ("claude-opus", "medium"),
+    "lens-verifier": ("claude-sonnet", "medium"),
+}
 # The hand-back is how an interactive session's background agent returns its answer.
 READ_TOOLS = {"Read", "Grep", "Glob", "SubagentHandback"}
-MODEL_PREFIX = "claude-opus"
-EFFORT = "medium"
 SCRIPT_REL = ".claude/skills/lens-review/lens-review"
 
 
@@ -57,8 +61,8 @@ def content_items(row: dict) -> list[dict]:
     )
 
 
-def agent_calls(rows: list[dict]) -> dict[str, str]:
-    """tool_use id -> prompt, for every Agent/Task call to the lens-reviewer."""
+def agent_calls(rows: list[dict]) -> dict[str, tuple[str, str]]:
+    """tool_use id -> (agent type, prompt), for every Agent/Task call to a lens agent."""
     calls = {}
     for row in rows:
         if row.get("type") != "assistant":
@@ -70,9 +74,10 @@ def agent_calls(rows: list[dict]) -> dict[str, str]:
             ):
                 continue
             data = item.get("input") or {}
-            if data.get("subagent_type") == AGENT:
+            kind = data.get("subagent_type")
+            if kind in PINS:
                 # Stripped: a shell's $(…) drops the script's trailing newline.
-                calls[item.get("id", "")] = data.get("prompt", "").strip()
+                calls[item.get("id", "")] = (kind, data.get("prompt", "").strip())
     return calls
 
 
@@ -84,9 +89,11 @@ def audit(root: Path, transcript: Path, run: Path) -> list[str]:
     expected = lr.expected_answers(root, run)  # prompt -> answer file
 
     sent: dict[str, int] = {}
-    for tool_id, prompt in calls.items():
+    for tool_id, (kind, prompt) in calls.items():
         if prompt not in expected:
             problems.append(f"1: prompt of call {tool_id} is not one the script prints")
+        elif kind != lr.agent_for(expected[prompt]):
+            problems.append(f"1: prompt for {expected[prompt]} went to {kind}")
         sent[prompt] = sent.get(prompt, 0) + 1
     for prompt, name in expected.items():
         if sent.get(prompt, 0) != 1:
@@ -95,13 +102,15 @@ def audit(root: Path, transcript: Path, run: Path) -> list[str]:
     agents_dir = transcript.with_suffix("") / "subagents"
     for meta_path in sorted(agents_dir.glob("*.meta.json")):
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        if meta.get("agentType") != AGENT:
+        kind = meta.get("agentType")
+        if kind not in PINS:
             continue
+        model_prefix, effort = PINS[kind]
         agent_path = meta_path.with_name(meta_path.name.replace(".meta.json", ".jsonl"))
         rows = lr.transcript_rows(agent_path)
         tag = meta.get("description") or meta_path.stem
-        prompt = calls.get(meta.get("toolUseId", ""))
-        name = expected.get(prompt or "")
+        _, prompt = calls.get(meta.get("toolUseId", ""), ("", ""))
+        name = expected.get(prompt)
         if name:
             saved = run / name
             text = saved.read_text(encoding="utf-8").strip() if saved.exists() else None
@@ -116,10 +125,10 @@ def audit(root: Path, transcript: Path, run: Path) -> list[str]:
             if row.get("type") != "assistant":
                 continue
             model = (row.get("message") or {}).get("model", "")
-            if not str(model).startswith(MODEL_PREFIX):
+            if not str(model).startswith(model_prefix):
                 problems.append(f"3: {tag} ran on {model!r}")
                 break
-            if row.get("effort") != EFFORT:
+            if row.get("effort") != effort:
                 problems.append(f"3: {tag} ran at effort {row.get('effort')!r}")
                 break
         for row in rows:
@@ -175,7 +184,7 @@ def main(argv: list[str]) -> int:
         print(f"FAIL {problem}")
     if not problems:
         print(
-            "ok: prompts unchanged, answers saved verbatim, opus/medium, read-only, report shown"
+            "ok: prompts unchanged, answers saved verbatim, models pinned, read-only, report shown"
         )
     return 1 if problems else 0
 

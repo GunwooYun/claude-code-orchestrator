@@ -8,11 +8,12 @@ Usage:
   lens-review scope  [--base REF] [--mode auto|committed|worktree] [--paths P ...]
   lens-review prompt lens   --run DIR LENS
   lens-review prompt verify --run DIR --finding LENS:N
+  lens-review prompt rate   --run DIR
   lens-review collect --run DIR
   lens-review report --run DIR
 
 Exit: 0 ok, 1 error, 2 refused (scope), 3 report written but incomplete
-(a lens answer missing or unparsed, a finding without a verdict).
+(a lens answer missing or unparsed, a finding without a verdict, no rating).
 
 Design and the measurements behind it: docs/lens-review.md in the template
 repository. The short version:
@@ -26,6 +27,9 @@ repository. The short version:
   - The report is built from files only and drops nothing silently: REFUTED
     findings get their own section, unparsed text and missing verdicts are
     shown and make the exit code 3.
+  - Kept findings are ORDERED by a separate rater (production or not, worst
+    consequence, how often), never filtered: the verifier's impact said "low"
+    for nearly everything, real defects included (measured 2026-10-25).
 """
 
 from __future__ import annotations
@@ -33,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import re
 import secrets
 import subprocess
@@ -58,6 +63,24 @@ REQUIRED = ("location", "claim", "failure")
 VERDICTS = ("CONFIRMED", "REFUTED", "UNCLEAR")
 VERIFY_FIELDS = ("verdict", "evidence", "impact", "correction")
 IMPACT_ORDER = ("hit in normal use", "low", "none")
+# Lens prompts go to the reviewer; verify and rate prompts to the verifier.
+REVIEWER = "lens-reviewer"
+VERIFIER = "lens-verifier"
+RATE_FILE = "rate.md"
+# Rating -> sort weight: production first, then consequence x reach.
+CONSEQUENCE = {
+    "data-loss": 5,
+    "security": 5,
+    "wrong-result": 4,
+    "outage": 4,
+    "diagnosability": 2,
+    "cosmetic": 1,
+}
+REACH = {"always": 4, "common": 3, "rare": 2, "contrived": 1}
+RATING = re.compile(
+    r"^\W*(R\d+)\W*:\s*production=(\w+)\s+consequence=([\w-]+)\s+reach=(\w+)",
+    re.MULTILINE,
+)
 TOKEN = re.compile(r"\{([A-Z_]+)\}")
 BARE_NAME = re.compile(r"[\w.-]+")  # no / ~ ^ @ : — those are rev expressions or paths
 EXIT = {"OK": 0, "ERROR": 1, "REFUSED": 2, "INCOMPLETE": 3}
@@ -347,6 +370,85 @@ def verify_prompt(run: Path, finding: str) -> str:
     )
 
 
+def judged(run: Path, lens: str, f: dict) -> dict:
+    """A lens finding merged with its verdict file (verdict UNVERIFIED if none)."""
+    path = run / f"verify-{lens}-{f['n']}.md"
+    verdict = parse_verdict(path.read_text(encoding="utf-8") if path.exists() else None)
+    merged = {**f, **{k: v for k, v in verdict.items() if k != "evidence"}}
+    if verdict.get("evidence"):
+        merged["evidence"] = verdict["evidence"]
+    return merged
+
+
+def rate_order(run: Path) -> list[tuple[str, dict]] | None:
+    """The kept findings in the order the rater sees them (R1, R2, …).
+
+    None while a lens answer or a verdict is still missing: the rater sees the
+    verifier's corrections, so it runs last. Shuffled with the run's name as the
+    seed, so the prompt is the same every time it is rebuilt (collect matches
+    answers by prompt) but the rater is not handed the lenses in a fixed order.
+    """
+    kept: list[tuple[str, dict]] = []
+    for lens in LENSES:
+        text = read_lens(run, lens)
+        if text is None:
+            return None
+        for f in parse_lens(text).findings:
+            merged = judged(run, lens, f)
+            if merged["verdict"] == "UNVERIFIED":
+                return None
+            if merged["verdict"] != "REFUTED":
+                kept.append((lens, merged))
+    random.Random(run.name).shuffle(kept)
+    return kept
+
+
+def rate_prompt(run: Path) -> str:
+    kept = rate_order(run)
+    if not kept:
+        raise ValueError("nothing to rate: verify every finding first (or none kept)")
+    blocks = "\n".join(
+        f"### R{i}\nclaim: {f['claim']}\nfailure: {f['failure']}\n"
+        f"impact: {f.get('impact', '')}\ncorrection: {f.get('correction') or 'none'}\n"
+        for i, (_, f) in enumerate(kept, 1)
+    )
+    return fill((PROMPTS / "rate.md").read_text(encoding="utf-8"), {"FINDINGS": blocks})
+
+
+def ratings(run: Path) -> dict[tuple[str, int], dict[str, str]] | None:
+    """(lens, n) -> rating, from rate.md; None if it was not saved."""
+    path = run / RATE_FILE
+    kept = rate_order(run)
+    if not path.exists() or not kept:
+        return None
+    by_id = {
+        m.group(1): {
+            "production": m.group(2).lower(),
+            "consequence": m.group(3).lower(),
+            "reach": m.group(4).lower(),
+        }
+        for m in RATING.finditer(path.read_text(encoding="utf-8"))
+    }
+    return {
+        (lens, f["n"]): by_id[f"R{i}"]
+        for i, (lens, f) in enumerate(kept, 1)
+        if f"R{i}" in by_id
+    }
+
+
+def rating_score(rating: dict[str, str] | None) -> tuple[int, int]:
+    """Sort key: production before the rest before unrated, then worst first."""
+    if rating is None:
+        return (2, 0)
+    weight = CONSEQUENCE.get(rating["consequence"], 0) * REACH.get(rating["reach"], 0)
+    return (0 if rating["production"] == "yes" else 1, -weight)
+
+
+def agent_for(name: str) -> str:
+    """Which agent an answer file's prompt goes to."""
+    return REVIEWER if name.startswith("lens-") else VERIFIER
+
+
 # --- parsing -----------------------------------------------------------------
 
 HEADER = re.compile(r"^\s*(?:#{2,4}\s*|\*\*)F(\d+)\b[^\n]*$", re.MULTILINE)
@@ -455,7 +557,7 @@ def finding_lines(f: dict, lens: str, root: Path) -> list[str]:
         f"- claim: {f['claim']}",
         f"- failure: {f['failure']}",
     ]
-    for key in ("severity", "confidence", "impact", "correction", "evidence"):
+    for key in ("rating", "severity", "confidence", "impact", "correction", "evidence"):
         value = f.get(key)
         if value and not (key == "correction" and value.lower().startswith("none")):
             lines.append(f"- {key}: {value}")
@@ -586,6 +688,8 @@ def expected_answers(root: Path, run: Path) -> dict[str, str]:
         for f in parse_lens(read_lens(run, lens)).findings:
             prompt = verify_prompt(run, f"{lens}:{f['n']}").strip()
             expected[prompt] = f"verify-{lens}-{f['n']}.md"
+    if rate_order(run):
+        expected[rate_prompt(run).strip()] = RATE_FILE
     return expected
 
 
@@ -598,7 +702,9 @@ def collect(root: Path, run: Path) -> tuple[list[str], list[str], list[str]]:
     """
     saved: list[str] = []
     failed: dict[str, str] = {}
-    for _ in range(2):  # lens answers first, then the verifier prompts they imply
+    # Lens answers first, then the verifier prompts they imply, then the rating
+    # once every verdict is in.
+    for _ in range(3):
         expected = expected_answers(root, run)
         # A retried agent sends the identical prompt, so two transcripts can
         # carry the same one. The newest file wins (oldest to newest, a later
@@ -657,14 +763,7 @@ def build_report(root: Path, run: Path) -> tuple[str, bool]:
         for chunk in answer.unparsed:
             unparsed.append(f"#### {lens}\n\n{chunk}")
         for f in answer.findings:
-            verdict = parse_verdict(
-                (run / f"verify-{lens}-{f['n']}.md").read_text(encoding="utf-8")
-                if (run / f"verify-{lens}-{f['n']}.md").exists()
-                else None
-            )
-            merged = {**f, **{k: v for k, v in verdict.items() if k != "evidence"}}
-            if verdict.get("evidence"):
-                merged["evidence"] = verdict["evidence"]
+            merged = judged(run, lens, f)
             tally[merged["verdict"]] += 1
             if merged["verdict"] == "UNVERIFIED":
                 problems.append(
@@ -675,11 +774,31 @@ def build_report(root: Path, run: Path) -> tuple[str, bool]:
         problems.append(
             "lens answers with text the parser could not read: see ## Unparsed"
         )
+    rated = ratings(run) or {}
+    if kept and not problems:
+        if not (run / RATE_FILE).exists():
+            problems.append(f"no rating saved ({RATE_FILE})")
+        elif len(rated) < len(kept):
+            problems.append(
+                f"{RATE_FILE} rates {len(rated)} of {len(kept)} kept findings"
+            )
+    for lens, f in kept:
+        rating = rated.get((lens, f["n"]))
+        if rating:
+            f["rating"] = (
+                f"{'production' if rating['production'] == 'yes' else 'not production'}"
+                f" · {rating['consequence']} · {rating['reach']}"
+            )
 
-    def order(item: tuple[str, dict]) -> tuple[int, int, str]:
-        _, f = item
+    def order(item: tuple[str, dict]) -> tuple[int, int, int, int, str]:
+        lens, f = item
         state = {"CONFIRMED": 0, "UNCLEAR": 1}.get(f["verdict"], 2)
-        return (state, impact_rank(f.get("impact", "")), f["location"])
+        return (
+            *rating_score(rated.get((lens, f["n"]))),
+            state,
+            impact_rank(f.get("impact", "")),
+            f["location"],
+        )
 
     # Verifiers judge truth, so a correct change still collects many true but
     # trivial findings (15 per run on a clean change in the rehearsals). The
@@ -699,10 +818,14 @@ def build_report(root: Path, run: Path) -> tuple[str, bool]:
         f"- lenses: {', '.join(LENSES)}",
         "- verdicts: " + ", ".join(f"{k} {v}" for k, v in tally.items()),
         "- confirmed by impact: " + ", ".join(f"{k} {v}" for k, v in impacts.items()),
+        f"- rated: production {sum(r['production'] == 'yes' for r in rated.values())}, "
+        f"not production {sum(r['production'] != 'yes' for r in rated.values())}, "
+        f"unrated {len(kept) - len(rated)}",
         f"- run: {data['run']}",
         "",
-        "Every finding was checked by a separate verifier for TRUTH only. Whether it",
-        "matters in real use is the reader's call, from `impact`.",
+        "Every finding was checked by a separate verifier for TRUTH only. A separate",
+        "rater then ORDERED the kept findings — production code first, worst",
+        "consequence first. Nothing was dropped; tests and style come last, not never.",
         "",
         "## Summary",
         "",
@@ -710,9 +833,9 @@ def build_report(root: Path, run: Path) -> tuple[str, bool]:
     # One line per finding, for showing to the user; the detail is below.
     ordered = sorted(kept, key=order)
     for lens, f in ordered:
-        impact = labels[impact_rank(f.get("impact", ""))]
+        label = f.get("rating") or labels[impact_rank(f.get("impact", ""))]
         out.append(
-            f"- {f['verdict']} · {impact} · {lens} F{f['n']} · "
+            f"- {f['verdict']} · {label} · {lens} F{f['n']} · "
             f"{one_line(f['location'])} — {one_line(f['claim'])}"
         )
     for lens, f in refuted:
@@ -780,6 +903,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p_verify = kinds.add_parser("verify")
     p_verify.add_argument("--run", required=True)
     p_verify.add_argument("--finding", required=True)
+    p_rate = kinds.add_parser("rate")
+    p_rate.add_argument("--run", required=True)
     p_collect = sub.add_parser("collect")
     p_collect.add_argument("--run", required=True)
     p_report = sub.add_parser("report")
@@ -802,8 +927,10 @@ def main(argv: list[str]) -> int:
         if args.command == "prompt":
             if args.kind == "lens":
                 sys.stdout.write(lens_prompt(root, run, args.lens))
-            else:
+            elif args.kind == "verify":
                 sys.stdout.write(verify_prompt(run, args.finding))
+            else:
+                sys.stdout.write(rate_prompt(run))
             return EXIT["OK"]
         if args.command == "collect":
             saved, missing, failed = collect(root, run)

@@ -569,6 +569,16 @@ class ReportTests(unittest.TestCase):
     def verdict(self, name: str, n: int, text: str) -> None:
         (self.run_dir / f"verify-{name}-{n}.md").write_text(text)
 
+    def rate_all(self) -> None:
+        """Every kept finding rated the same: complete, order unchanged."""
+        kept = lr.rate_order(self.run_dir) or []
+        (self.run_dir / "rate.md").write_text(
+            "".join(
+                f"R{i}: production=yes consequence=wrong-result reach=common\n"
+                for i in range(1, len(kept) + 1)
+            )
+        )
+
     def sections(self, text: str) -> dict[str, str]:
         parts = re.split(r"^## ", text, flags=re.MULTILINE)
         return {p.split("\n", 1)[0]: p for p in parts[1:]}
@@ -581,6 +591,7 @@ class ReportTests(unittest.TestCase):
         )
         self.verdict("correctness", 1, "verdict: CONFIRMED\nimpact: low\n")
         self.verdict("correctness", 2, "verdict: REFUTED\nevidence: x.py:8 guards it\n")
+        self.rate_all()
         text, complete = lr.build_report(self.root, self.run_dir)
         self.assertTrue(complete)
         parts = self.sections(text)
@@ -717,10 +728,11 @@ class ReportTests(unittest.TestCase):
             )
 
     def test_report_cli_exits_0_when_complete(self) -> None:
-        """V5: every lens answered and every finding has a verdict."""
+        """V5: every lens answered, every finding has a verdict and a rating."""
         git(self.root, "init", "-q")
         self.lens("security", FINDING)
         self.verdict("security", 1, "verdict: CONFIRMED\nimpact: low\n")
+        self.rate_all()
         done = run_script(self.root, "report", "--run", ".claude/logs/lens-review/r1")
         self.assertEqual(0, done.returncode, done.stderr)
         report = (self.root / done.stdout.strip()).read_text(encoding="utf-8")

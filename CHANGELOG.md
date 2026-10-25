@@ -25,7 +25,9 @@ from a fresh clone of the latest release.
 - `/lens-review`: an in-session review through five lenses (correctness,
   security, integration, tests, simplicity), each a separate read-only
   `lens-reviewer` agent (Opus, effort medium, `omitClaudeMd`), then one verifier
-  per finding that judges truth only, with impact in its own field. A script
+  per finding that judges truth only (`lens-verifier`: Sonnet, effort medium),
+  then one rater that orders the kept findings — production code and the worst
+  consequence first, nothing dropped. A script
   resolves the scope, prints the fixed prompts and builds the report from the
   saved answers, so the main session never retypes a claim. /feature Phase 6
   Option B is now this review, before /isolated-review. Restores what 2.0.0
