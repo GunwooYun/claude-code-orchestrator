@@ -13,7 +13,8 @@ them. This reads the session's transcript and its subagent transcripts
   1. every lens agent prompt is byte-identical to what the script prints
      (`prompt lens` for each lens, `prompt verify` for each finding, `prompt
      rate` once), went to the agent the script names (lens prompts to
-     lens-reviewer, the rest to lens-verifier), and was sent exactly once;
+     lens-reviewer, the rest to lens-verifier), and was sent once — or again
+     only after the earlier attempt stopped on an API error;
   2. each saved answer (`lens-<lens>.md`, `verify-<lens>-<n>.md`, `rate.md`)
      is the agent's final message, unchanged;
   3. lens-reviewer requests ran on Opus, lens-verifier requests on Sonnet, both
