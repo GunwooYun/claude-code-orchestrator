@@ -123,6 +123,9 @@ Found by the first person-opened interactive run in this repository
   as `REFUTED · <lens> F<n> — <claim>`); step 7 shows and translates the
   Summary and names the file for the rest, and `tools/lens-audit` check 5 now
   requires the Summary verbatim. The rehearsals above showed `## Findings`.
+  Since the rater (2026-10-25) the `<impact>` slot holds the rating instead —
+  `production · <consequence> · <reach>` or `not production · …` — whenever
+  one was saved.
 - The same run's lens review of this branch was applied: a relative `--base`
   (`HEAD~3`) was read as `origin/HEAD~3`; a retried agent's old transcript
   could be saved; the "also reported by another lens" label ignored which lens

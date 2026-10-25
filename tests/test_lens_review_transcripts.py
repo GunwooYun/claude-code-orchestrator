@@ -352,6 +352,8 @@ class AuditTests(unittest.TestCase):
         verifier_agent: str = "lens-verifier",
         drop: int | None = None,
         repeat: int | None = None,
+        retry: int | None = None,
+        retry_failed: bool = True,
         finish: bool = True,
     ) -> None:
         """drop: leave call i out; repeat: send call i twice; finish: the
@@ -382,6 +384,8 @@ class AuditTests(unittest.TestCase):
                     ],
                 },
             }
+            if i == retry:  # an earlier attempt of the same prompt
+                rows.append(self.earlier_attempt(i, call, kind, retry_failed))
             rows.append(call)
             if i == repeat:
                 again = json.loads(json.dumps(call))
@@ -493,6 +497,54 @@ class AuditTests(unittest.TestCase):
             "1: prompt for verify-correctness-1.md went to lens-reviewer", found
         )
         self.assertIn("1: prompt for rate.md went to lens-reviewer", found)
+
+    def earlier_attempt(self, i: int, call: dict, kind: str, failed: bool) -> dict:
+        """A first attempt of call i, older than the real one: an API error
+        row (failed) or a normal answer (not failed)."""
+        first = json.loads(json.dumps(call))
+        first["message"]["content"][0]["id"] = f"toolu_{i}_first"
+        ending: dict = {
+            "type": "assistant",
+            "effort": "medium",
+            "message": {"model": "claude-opus-5-5", "content": []},
+        }
+        if failed:
+            ending = {
+                "type": "assistant",
+                "isApiErrorMessage": True,
+                "error": "rate_limit",
+                "message": {
+                    "model": "<synthetic>",
+                    "stop_reason": "stop_sequence",
+                    "content": [{"type": "text", "text": "limit reached"}],
+                },
+            }
+        else:
+            ending["message"]["content"] = [
+                {
+                    "type": "tool_use",
+                    "name": "SubagentHandback",
+                    "input": {"message": "an answer"},
+                }
+            ]
+        path = self.agents / f"agent-{i}first.jsonl"
+        path.write_text(json.dumps(ending))
+        (self.agents / f"agent-{i}first.meta.json").write_text(
+            json.dumps({"agentType": kind, "toolUseId": f"toolu_{i}_first"})
+        )
+        os.utime(path, (1000, 1000))  # older than every real attempt
+        return first
+
+    def test_audit_passes_a_prompt_resent_after_an_api_error(self) -> None:
+        """SKILL.md step 4: a failed agent is started again with the same prompt."""
+        self.record(retry=len(LENSES))  # the verifier call
+        self.assertEqual([], self.problems())
+
+    def test_audit_catches_a_resend_when_the_first_attempt_answered(self) -> None:
+        self.record(retry=len(LENSES), retry_failed=False)
+        self.assertIn(
+            "1: prompt for verify-correctness-1.md sent 2 times", self.problems()
+        )
 
     def test_audit_catches_a_missing_or_repeated_call(self) -> None:
         self.record(drop=1)

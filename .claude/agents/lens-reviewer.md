@@ -1,8 +1,9 @@
 ---
 name: lens-reviewer
 description: |
-  Read-only reviewer for /lens-review. Reviews a change through ONE lens, or
-  verifies ONE finding, exactly as the prompt says. Spawned only by the
+  Read-only reviewer for /lens-review. Reviews a change through ONE lens,
+  exactly as the prompt says (verify and rate prompts go to lens-verifier,
+  not here). Spawned only by the
   /lens-review procedure with a prompt printed by its script — do not use it
   for anything else.
 tools: Read, Grep, Glob

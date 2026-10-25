@@ -88,6 +88,30 @@ def audit(root: Path, transcript: Path, run: Path) -> list[str]:
     calls = agent_calls(main_rows)
     expected = lr.expected_answers(root, run)  # prompt -> answer file
 
+    # Every lens agent's transcript, with the prompt its call sent.
+    agents_dir = transcript.with_suffix("") / "subagents"
+    agents = []
+    for meta_path in sorted(agents_dir.glob("*.meta.json")):
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        kind = meta.get("agentType")
+        if kind not in PINS:
+            continue
+        agent_path = meta_path.with_name(meta_path.name.replace(".meta.json", ".jsonl"))
+        _, prompt = calls.get(meta.get("toolUseId", ""), ("", ""))
+        agents.append((meta, meta_path, kind, agent_path, prompt))
+    # A prompt may be sent again after its agent stopped on an API error: that
+    # is the recovery SKILL.md step 4 prescribes. Only the newest attempt must
+    # answer; every older one must have failed (collect uses the same rule).
+    attempts: dict[str, list[Path]] = {}
+    for _, _, _, agent_path, prompt in sorted(
+        agents, key=lambda a: (a[3].stat().st_mtime, a[3].name)
+    ):
+        attempts.setdefault(prompt, []).append(agent_path)
+
+    def retried_after_errors(prompt: str) -> bool:
+        older = attempts.get(prompt, [])[:-1]
+        return bool(older) and all(lr.agent_error(lr.transcript_rows(p)) for p in older)
+
     sent: dict[str, int] = {}
     for tool_id, (kind, prompt) in calls.items():
         if prompt not in expected:
@@ -96,22 +120,16 @@ def audit(root: Path, transcript: Path, run: Path) -> list[str]:
             problems.append(f"1: prompt for {expected[prompt]} went to {kind}")
         sent[prompt] = sent.get(prompt, 0) + 1
     for prompt, name in expected.items():
-        if sent.get(prompt, 0) != 1:
-            problems.append(f"1: prompt for {name} sent {sent.get(prompt, 0)} times")
+        count = sent.get(prompt, 0)
+        if count != 1 and not (count > 1 and retried_after_errors(prompt)):
+            problems.append(f"1: prompt for {name} sent {count} times")
 
-    agents_dir = transcript.with_suffix("") / "subagents"
-    for meta_path in sorted(agents_dir.glob("*.meta.json")):
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        kind = meta.get("agentType")
-        if kind not in PINS:
-            continue
+    for meta, meta_path, kind, agent_path, prompt in agents:
         model_prefix, effort = PINS[kind]
-        agent_path = meta_path.with_name(meta_path.name.replace(".meta.json", ".jsonl"))
         rows = lr.transcript_rows(agent_path)
         tag = meta.get("description") or meta_path.stem
-        _, prompt = calls.get(meta.get("toolUseId", ""), ("", ""))
         name = expected.get(prompt)
-        if name:
+        if name and attempts[prompt][-1] == agent_path:
             saved = run / name
             text = saved.read_text(encoding="utf-8").strip() if saved.exists() else None
             done = lr.agent_id(agent_path) in lr.completed_agents(agent_path)
@@ -122,7 +140,8 @@ def audit(root: Path, transcript: Path, run: Path) -> list[str]:
                     f"2: {name} differs from the agent's final message ({tag})"
                 )
         for row in rows:
-            if row.get("type") != "assistant":
+            # An API error row is written by Claude Code ("<synthetic>"), not a model.
+            if row.get("type") != "assistant" or row.get("isApiErrorMessage"):
                 continue
             model = (row.get("message") or {}).get("model", "")
             if not str(model).startswith(model_prefix):
