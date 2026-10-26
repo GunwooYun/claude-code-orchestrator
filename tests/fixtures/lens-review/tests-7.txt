@@ -1,0 +1,55 @@
+### F1
+severity: major
+location: tests/test_lens_review.py:453
+claim: `test_parse_recorded_answers` can never fail because `tests/fixtures/lens-review/` does not exist, so it loops over an empty list and passes without asserting anything.
+failure: Glob `tests/fixtures/lens-review/*` finds no files. `cases` is `[]`, so a regression that makes `parse_lens` drop or mis-split real recorded lens answers (for example a narrowed `HEADER` or `KEY` regex) still passes this "real answers parse completely" test.
+evidence: `cases = sorted(FIXTURES.glob("*.md")) if FIXTURES.exists() else []` followed by `for path in cases:`, with no assertion that `cases` is non-empty
+confidence: high
+
+### F2
+severity: major
+location: tests/test_lens_review.py:635
+claim: No test checks the two-pass loop in `collect`, which should save the lens answers and then, in the same call, the verifier answers they imply.
+failure: The test adds the verifier transcript only after the first `collect` call has returned, so each call needs just one pass. If `for _ in range(2)` at `.claude/skills/lens-review/lens-review:534` became `range(1)`, a verifier transcript that already exists at the first `collect` would not be saved until a second run. The test would still pass.
+evidence: `saved, missing = lr.collect(self.root, self.run_dir)` ... `self.assertEqual(["verify-tests-1.md"], missing)` ... then `self.agent(lr.verify_prompt(self.run_dir, "tests:1"), "verdict: CONFIRMED")` and a second `lr.collect(...)`
+confidence: high
+
+### F3
+severity: minor
+location: tests/test_lens_review.py:229
+claim: The over-cap test uses 3100 lines against a 3000-line cap, so it cannot tell `>` from `>=` or catch an off-by-one at the boundary.
+failure: If `"over_cap": total > HARD_CAP_LINES` (`.claude/skills/lens-review/lens-review:253`) were changed to `>=`, a change of exactly 3000 lines would be refused, and this test would still pass. No test covers 3000 or 3001 lines.
+evidence: `self.repo.write("big.py", "".join(f"v{i} = {i}\n" for i in range(3100)))`
+confidence: high
+
+### F4
+severity: minor
+location: tests/test_lens_review.py:574
+claim: The CLI report test ignores the second run's exit code and never runs the complete path, so the exit-0 branch of `report` is untested.
+failure: If `main` returned 3 for a complete report, or the second run returned an error after writing the file, no assertion would fail. Only `first.returncode == 3` is checked.
+evidence: `self.assertEqual(3, first.returncode, first.stderr)`, while `second` is checked only through `stdout`
+confidence: high
+
+### F5
+severity: minor
+location: tests/test_lens_review.py:270
+claim: The drift guard compares only `resolve_base` with run-review, but the script's comment says the tests keep `git()`, `changed_files()` and `line_counts()` in step too.
+failure: In run-review, `changed_files` and `line_counts` have different signatures (`run-review:258`, `run-review:271`), and nothing compares `git()`. A behaviour fix in run-review's `git()` or rename parsing could diverge from this copy, and no test would fail.
+evidence: script lines 67-70: `# git(), resolve_base(), changed_files() and line_counts() follow ... tests/test_lens_review.py keeps the shared behaviour in step.` The test compares only `self.function_source(RUN_REVIEW, "resolve_base")`.
+confidence: medium
+
+### F6
+severity: minor
+location: tests/test_lens_review.py:190
+claim: The rename edge-case test checks only the status letter, never the line count, so the rename branch of `line_counts` could pick the wrong path without any test failing.
+failure: The rename has no content change, so it counts 0 lines whatever key is used. If `path = fields[i + 1]` at `.claude/skills/lens-review/lens-review:179` were changed to `fields[i]` (the old path), a renamed-and-edited file would show `lines: 0` in scope.json and be left out of the cap total. The test would still pass.
+evidence: `status = {f["path"]: f["status"] for f in data["files"]}` and `self.assertEqual("R", status["new_name.py"])`, with no assertion on `lines`
+confidence: medium
+
+### F7
+severity: minor
+location: tests/test_lens_review.py:819
+claim: The audit tests do not cover check 3's non-Opus model branch or check 1's "sent exactly once" counting (a missing or duplicate call).
+failure: If the model check at `tools/lens-audit:144` were removed, or `!= 1` at `tools/lens-audit:119` were loosened to `< 1`, a run on another model or a run that sent a lens prompt twice would audit clean. Every recorded agent row uses `"model": "claude-opus-5-5"`, and `record()` sends each prompt exactly once.
+evidence: `self.record(effort="high", extra_tool="Bash")`. `"model": "claude-opus-5-5"` is fixed in `record()`, and no test duplicates or omits a call.
+confidence: medium

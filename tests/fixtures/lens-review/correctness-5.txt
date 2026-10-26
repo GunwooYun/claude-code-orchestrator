@@ -1,0 +1,39 @@
+### F1
+severity: major
+location: .claude/skills/lens-review/lens-review:91
+claim: `resolve_base` prefixes `origin/` to any base without a slash, so a relative ref such as `HEAD~3` or `HEAD^` is silently turned into a ref on origin's default branch.
+failure: `lens-review scope --base HEAD~3` checks `origin/HEAD~3^{commit}`. That resolves whenever origin/HEAD is set, so the base becomes `origin/HEAD~3`, i.e. three commits behind the remote default branch, not the local `HEAD~3`. The merge-base and diff then cover a different range from the one the user asked for, with no warning. The range line only shows `origin/HEAD~3`.
+evidence: `if "/" in base: return base` / `remote = f"origin/{base}"` / `verify = ("rev-parse", "--verify", "--quiet", f"{remote}^{{commit}}")` / `return remote if found else base`
+confidence: high
+
+### F2
+severity: minor
+location: .claude/skills/lens-review/lens-review:513
+claim: `final_answer` treats "the last assistant row has text and no tool_use" as "the agent is finished", which is also true while the agent is still running, between writing a text block and its tool_use block.
+failure: Step 4 of the skill tells the session to run `collect` again while some agents are still working. If an agent's transcript currently ends with a separate text row (for example "Let me read the callers.") whose tool_use row has not been written yet, that text is saved as `lens-<lens>.md`. `missing` then stops listing it, so nobody runs `collect` again, and the report is built from the partial text.
+evidence: `last = [r for r in rows if r.get("type") == "assistant"]` ... `if any(c.get("type") == "tool_use" for c in items): return None` / `text = "".join(...)`; `return text.strip() or None`
+confidence: medium
+
+### F3
+severity: minor
+location: .claude/skills/lens-review/lens-review:540
+claim: When two transcripts carry the same prompt (an agent was retried), `collect` keeps whichever one comes first by file name, not the newest one.
+failure: A lens agent ends with an error text message and the session launches it again with the same prompt. Both transcripts match the same `name`. The first finished one in `sorted(...)` order (by agent id, unrelated to time) is written, and `name not in saved` blocks the other, so the failed attempt's text can become the saved answer.
+evidence: `return sorted((base / "projects").glob(f"*/{session}/subagents/agent-*.jsonl"))` and `if name and answer is not None and name not in saved:`
+confidence: medium
+
+### F4
+severity: minor
+location: .claude/skills/lens-review/lens-review:331
+claim: If a lens answer has two findings with the same number, both are verified with the first one's prompt and both get the first one's verdict file.
+failure: A lens answer contains `### F1` twice. Both are parsed with `n=1`. `verify_prompt(run, "lens:1")` always takes `match[0]`, `expected_answers` maps only the first claim's prompt to `verify-lens-1.md`, and `build_report` attaches that one verdict to both findings. The second claim is never checked, yet it is reported as CONFIRMED or REFUTED.
+evidence: `match = [f for f in parsed.findings if f["n"] == int(number)]` ... `f = match[0]`; in build_report: `(run / f"verify-{lens}-{f['n']}.md")`
+confidence: high
+
+### F5
+severity: minor
+location: .claude/skills/lens-review/lens-review:622
+claim: The "(also reported by another lens)" label is added whenever two kept findings have the same location, even when both come from the same lens.
+failure: The correctness lens reports F1 and F2 both at `foo.py:10`. Both are labelled "also reported by another lens" even though no other lens reported that location.
+evidence: `seen[f["location"]] = seen.get(f["location"], 0) + 1` ... `if seen[f["location"]] > 1:` ... `"location": f["location"] + " (also reported by another lens)"`
+confidence: high

@@ -117,13 +117,16 @@ and ask whether to keep it or change it.
 | `deep-reasoning` | `.claude/agents/deep-reasoning.md` → `model:` | `fable` | Deep reasoning on a cheaper tier than the main session; pinned so an Opus main session does not silently make it Opus |
 | `general-purpose` | `.claude/agents/general-purpose.md` → `model:` | `sonnet` | Thin wrapper around agy and file work — the tokens should go to agy, not to this agent |
 | agy research | `--model` per call | see the Model Policy in `.claude/rules/antigravity-delegation.md` | Gemini tiers T1–T4, pinned per call; chosen in Step 3c (`/agy-models`) |
+| `lens-reviewer` (`/lens-review`) | `.claude/agents/lens-reviewer.md` → `model:` / `effort:` | `opus` / `medium` | **Not reassignable.** Its behaviour was measured on Opus at medium effort. Tell the user: without Opus access `/lens-review` cannot run as shipped, and Phase 6 uses `/isolated-review` or deep-reasoning instead |
+| `lens-verifier` (`/lens-review`) | `.claude/agents/lens-verifier.md` → `model:` / `effort:` | `sonnet` / `medium` | **Not reassignable.** Its verdicts and ordering were measured on Sonnet at medium effort against the Opus verifier it replaced |
 | `/isolated-review` reviewer | `.claude/skills/isolated-review/run-review` → `MODEL` | `fable` | **Not reassignable.** Its neutrality was measured on Fable. Tell the user: without Fable access this skill always ends FAILED, and Phase 6 uses a person-opened (A2) review instead |
 
 Procedure:
 
 1. `grep -n '^model:' .claude/agents/*.md` and report the real values, plus
    `grep -n '^MODEL = ' .claude/skills/isolated-review/run-review` (reported,
-   not offered for change).
+   not offered for change). `lens-reviewer`'s and `lens-verifier`'s `model:` and
+   `effort:` are reported the same way, not offered.
 2. Ask the user (one AskUserQuestion): keep this matrix, or reassign? Offer the
    trade-off — a cheaper `deep-reasoning` saves tokens but weakens design review;
    raising `general-purpose` above `sonnet` mostly burns tokens on wrapping agy.
@@ -331,7 +334,7 @@ the bug this step exists to prevent.
 
 ## Step 8 — Smoke test and report
 
-- Skills list shows `/feature`, `/isolated-review`.
+- Skills list shows `/feature`, `/isolated-review`, `/lens-review`.
 - `grep -n '^model:' .claude/agents/*.md` matches the matrix agreed in Step 3,
   and no prose names a model that is not pinned.
 - Each verification script written in Step 5 runs by hand and honours the
