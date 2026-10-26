@@ -11,7 +11,12 @@ Upgrading an adopted copy: do not copy the template over it — run
 「업그레이드 절차」 into a copy that predates it. Both follow `tools/UPGRADE.md`
 from a fresh clone of the latest release.
 
-## [Unreleased]
+## [5.2.0] - 2026-10-26
+
+An in-session review next to /isolated-review: `/lens-review` (five Opus
+reviewers, a Sonnet verifier per finding, one rater that orders the report).
+Adds two agents and one skill; one hand step if your project rewrote
+`CLAUDE.md`. Not yet run on Windows.
 
 **Upgrade:**
 1. If your project rewrote `CLAUDE.md` (it is project-owned, so the upgrade
