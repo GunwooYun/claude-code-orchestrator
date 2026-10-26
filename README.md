@@ -5,7 +5,7 @@
 
 ![Claude Code Orchestrator](./summary.png)
 
-> 현재 버전: **5.1.1** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md). 이미 쓰고 있는 프로젝트를 올리려면
+> 현재 버전: **5.2.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md). 이미 쓰고 있는 프로젝트를 올리려면
 > [업그레이드 절차](#업그레이드-절차) — 5.1.0 부터는 `/orchestrator-upgrade`, 그 전 사본은 한 줄을 붙여 넣는다.
 
 ## 목차
@@ -103,7 +103,7 @@ your-project/
 ├── .agents/
 │   └── rules/AGENTS.md            # agy 가 읽는 프로젝트 설명
 └── .claude/
-    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 5.1.1)
+    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 5.2.0)
     ├── settings.json              # 훅 등록 + 권한(allow / ask / deny)
     ├── agents/                    # 서브에이전트 정의 (deep-reasoning, general-purpose, lens-reviewer, lens-verifier)
     ├── skills/                    # 슬래시 커맨드 (아래 표)
@@ -121,7 +121,7 @@ your-project/
 |---|---|---|
 | **`/initproject`** | 복사 직후 **프로젝트당 한 번** | 스택을 감지하고 템플릿을 이 프로젝트에 맞게 고친다 |
 | **`/feature <기능명>`** | **작업 하나마다** | 조사 → 요구사항 → 검증 계획 → 설계 리뷰 → 할 일 목록 → 승인 → 구현 → 리뷰 |
-| **`/lens-review`** | 구현한 뒤, 커밋 전이어도 | 다섯 관점의 리뷰어가 따로 읽고, 지적마다 검증자가 사실인지 판정한다 ([7장](#관점-리뷰--lens-review)) |
+| **`/lens-review`** | 구현한 뒤, 커밋 전이어도 | 다섯 관점의 리뷰어가 따로 읽고, 지적마다 검증자가 사실인지 판정하고, 중요한 것부터 정렬한다 ([7장](#관점-리뷰--lens-review)) |
 | **`/isolated-review`** | 구현을 커밋한 뒤 | 이 세션과 무관한 격리된 리뷰어가 읽기 전용으로 리뷰한다 |
 | `/orchestrator-upgrade` | 새 릴리스로 올릴 때 | 최신 릴리스를 임시로 클론해 그 안의 절차대로 업그레이드하고, 정할 일만 묻는다 ([9장](#업그레이드-절차)) |
 | `/agy-models` | agy 프로브가 `STALE` 일 때, 등급별 모델을 바꾸고 싶을 때 | agy 등급 T1~T4 의 모델을 사용자가 고른다 (`/initproject` 도 이 절차를 쓴다) |
@@ -315,7 +315,7 @@ agy 할당량이 넉넉하면 전부 high 로 두어도 된다. 나중에 `STALE
 `/agy-models` 만 다시 실행한다.
 
 **Step 4 — `CLAUDE.md` 갱신.** 맨 위 제목을 프로젝트 이름으로 바꾸고, `## 기술 스택` 에 실제 명령을 적고,
-`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v5.1.1`)을 기록한다. 나중에 `/jira-setup`·
+`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v5.2.0`)을 기록한다. 나중에 `/jira-setup`·
 `/doc-write` 가 같은 섹션에 `### Jira`·`### Confluence` 를 덧붙인다 — 각자 자기 부분만 고친다.
 
 **Step 5 — 검증 스크립트 작성.** Step 2 의 답으로 `.claude/scripts/verify-save`, `verify-task` 등을 만든다.
@@ -703,6 +703,15 @@ python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
 - **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남으면 훅 파일이 없어서
   모든 편집(또는 Bash 명령)마다 오류가 난다.
 
+### 5.2.0 으로 올릴 때
+
+새 파일만 들어온다 — 에이전트 `lens-reviewer`·`lens-verifier` 와 스킬 `lens-review`(분류표의 ADD).
+`/feature` Phase 6 의 B 가 `/lens-review` 로 바뀐다. 손 단계는 하나다: 프로젝트가 `CLAUDE.md` 를 고쳐 썼다면
+운영 주의사항의 "세션 안의 가벼운 리뷰는 deep-reasoning 으로 충분하다"를 "세션 안 리뷰는 `/lens-review`
+(5관점+검증, A1 전에), 작은 변경은 deep-reasoning." 으로 바꾼다. `/lens-review` 는 Opus 접근권이 필요하고,
+`.claude/settings.json` 을 직접 고친 프로젝트는 `python3 .claude/skills/lens-review/lens-review` 호출이
+허용돼 있는지 확인한다(템플릿 기본값 `Bash(python3:*)`). 5.1.0 이하에서 올리면 아래 목록도 함께 따른다.
+
 ### 5.1.1 으로 올릴 때
 
 아래 버전별 목록은 `/orchestrator-upgrade`(또는 한 줄 프롬프트)가 CHANGELOG 에서 읽어 **알아서 안내하는**
@@ -774,7 +783,7 @@ python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
 | `/initproject` | 실제 프로젝트 두 곳(Node/TS 모노레포, Python+TS 포크)에서 대화형으로 완주 |
 | `/feature` | 실제 프로젝트에서 여러 작업 단위를 끝까지 진행 |
 | `/isolated-review` | 실작업 3회 + 지난 작업 6건 재검증, 업무 프로젝트에서 4회 실행. 사람이 연 리뷰가 놓친 진짜 문제를 찾았고 오탐은 없었다. 실행이 필요한 결함은 놓친다 |
-| `/lens-review` | 헤드리스로 이 저장소와 작은 JS 저장소에서 연습 실행(심어 둔 결함을 찾고 거짓 확인 0건), 2026-10-20 에 이 저장소에서 사람이 연 대화형 실행 1회 — 여기서 서브에이전트 답을 못 가져오는 결함을 찾아 고쳤다(1cbc21b). 다른 실제 프로젝트와 Windows 에서는 아직 실행하지 않았다. 실행이 필요한 결함은 놓친다. 수치: [`docs/lens-review.md`](docs/lens-review.md) |
+| `/lens-review` | 헤드리스로 이 저장소와 작은 JS 저장소에서 연습 실행(심어 둔 결함을 찾고 거짓 확인 0건), 2026-10-20 에 이 저장소에서 사람이 연 대화형 실행 1회 — 여기서 서브에이전트 답을 못 가져오는 결함을 찾아 고쳤다(1cbc21b). 2026-10-21~25 업무 프로젝트의 실제 리뷰 기록 6건으로 블라인드 채점(실제 결함의 약 절반을 찾음, Sonnet 검증자·정렬 채택의 근거). 최종 버전(검증자 Sonnet + 정렬)을 2026-10-26 다른 실제 프로젝트의 대화형 세션에서 실행해 `tools/lens-audit` 5/5 통과, 5.1.1 → 5.2.0 업그레이드 리허설에서 새 파일 12개가 ADD 로 들어가고 hook-check 3/3. Windows 에서는 아직 실행하지 않았다. 실행이 필요한 결함은 놓친다. 수치: [`docs/lens-review.md`](docs/lens-review.md) |
 | deep-reasoning 서브에이전트, agy(general-purpose 서브에이전트 경유) | 실사용 중. 업무 프로젝트(2026-08~10, `usage-report`): deep-reasoning 71회, general-purpose 20회, agy 23회(실패 1). agy 리서치는 가끔 줄 번호 없이 답하거나 틀린 사실을 낸다 — 판단 전에 확인한다 |
 | `usage-report` | 도입 프로젝트 두 곳에서 실행(업무 서버는 ssh 로). 리뷰에서 집계 오류 4건(서브에이전트 토큰, 게이트 횟수, 프로브 상태, 날짜 경계)을 찾아 고친 뒤 다시 셌다. Claude Code 의 기록 형식은 문서화돼 있지 않아 버전이 바뀌면 틀릴 수 있다 |
 | `tools/upgrade-plan` (4.x 의 `/orchestrator-version --plan`) | 실제 프로젝트의 3.1.0 사본 백업 하나로 대조했다(손으로 찾은 잔여 파일 18개와 일치). 5.0.0 업그레이드 안내는 v3.0.1·v4.3.1 사본으로 확인했다 |
