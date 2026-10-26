@@ -11,7 +11,11 @@ Upgrading an adopted copy: do not copy the template over it — run
 「업그레이드 절차」 into a copy that predates it. Both follow `tools/UPGRADE.md`
 from a fresh clone of the latest release.
 
-## [Unreleased]
+## [5.2.1] - 2026-10-26
+
+Report formats for `writing-style.md`, taken from a page a user picked as the
+model for their reports. One document changes; adopting it is an optional
+hand step because the file is project-owned.
 
 **Upgrade:** one optional hand step. `.claude/docs/writing-style.md` is
 project-owned, so the upgrade does not overwrite it. To use the new formats,
