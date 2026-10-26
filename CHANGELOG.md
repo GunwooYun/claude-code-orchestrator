@@ -11,6 +11,34 @@ Upgrading an adopted copy: do not copy the template over it — run
 「업그레이드 절차」 into a copy that predates it. Both follow `tools/UPGRADE.md`
 from a fresh clone of the latest release.
 
+## [Unreleased]
+
+**Upgrade:** one optional hand step. `.claude/docs/writing-style.md` is
+project-owned, so the upgrade does not overwrite it. To use the new formats,
+copy the added blocks from the release's file into yours: the paragraph after
+the 3.4 marks block, the two paragraphs after the 4.1 skeleton, section 4.3,
+the status-lozenge block after the 6.3 panel rule, and the extra lines of 9-2.
+Skip it and your documents keep the old rules — nothing breaks.
+
+### Added
+- `writing-style.md`: report formats taken from a Confluence page a user
+  picked as the model for their reports (a security-update analysis written
+  in an adopting project, 2026-10-26): a `용어 | 뜻` table at the start of
+  chapter 1 (4.1), a "지금 상태 확인하는 방법" chapter with copy-paste
+  commands and the expected output as comments (4.1), a to-do format —
+  priority checklist plus one section per item with **왜 / 확인 / 주의·대가**
+  lead-ins (4.3), fixed status-lozenge colours, date elements and link cards
+  (6.3), and where these go inside a fixed Jira ticket template (9-2).
+
+### Changed
+- `writing-style.md` 3.4 — **relaxes a core rule for report pages only.**
+  Confluence feature explainers and status reports now mark only
+  [추론]/[미확인] in the body and omit [확인함] when the sentence names its
+  source, but must end with an "아직 확인하지 못한 것" chapter (why, and who
+  does what). Compliance documents and implementation plans keep all three
+  marks. Reason: the user found pages with a mark on every sentence hard for
+  junior readers, and the model page carried its gaps in one closing chapter.
+
 ## [5.2.0] - 2026-10-26
 
 An in-session review next to /isolated-review: `/lens-review` (five Opus
