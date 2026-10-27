@@ -50,8 +50,8 @@ maintainer's clone (local, not shipped).
 | Five lenses, always | The lenses found what A1 missed; choosing lenses per change was the main session's judgement, which is what failed on scope |
 | Scope by script (`scope`) | The main session misread the scope once and five reviewers followed it |
 | Fixed prompts printed by the script; the verifier prompt built from the saved lens answer | The only measured cause of wrong refutations was the main session editing verifier prompts |
-| Verify every finding; truth only; impact separate; drop only REFUTED (`lens-verifier`, Sonnet since 2026-10-25) | Lenses rate most findings minor, so "verify majors" rarely ran; verifying all costs ~2× and turned wrong kills into corrections once the prompt was locked. Whether a finding matters in real use is the user's call (CLAUDE.md), not the verifier's |
-| Verifier on Sonnet, not Opus | 2026-10-24/25: same results on the 28-claim bench (all correct) and on 13 hard claims from real runs (both re-confirmed about half of the borderline-false ones), at 42% of the cost. "No difference measured", not "proven equal" — see below |
+| Verify every finding; truth only; impact separate; drop only REFUTED (`lens-verifier`, Opus; Sonnet 2026-10-25..27) | Lenses rate most findings minor, so "verify majors" rarely ran; verifying all costs ~2× and turned wrong kills into corrections once the prompt was locked. Whether a finding matters in real use is the user's call (CLAUDE.md), not the verifier's |
+| Verifier on Opus (Sonnet was tried 2026-10-25..27) | 2026-10-24/25: Sonnet matched Opus on the bench at 42% of the cost, so it was adopted. 2026-10-27: in a real run Sonnet confirmed a false production finding (twice, across a re-run) that Opus refuted from the code, and the user had already acted on it — see "Re-verification of two real runs". A false CONFIRM costs the user's work; the extra ~$2 per run does not. The rater stays on the same agent: Sonnet rated slightly better (AUC 0.86 vs 0.83), too small to split an agent for one call |
 | One rater orders the kept findings (production first, then consequence × reach); it removes nothing | The verifier's `impact` said "low" for 88% of findings, real defects included, so it could not tell the reader where to start. On 354 scored findings the rater put a real defect above a trivial one 86% of the time (impact: 62%). It rated 10 of 45 real-defect hits "not production" (mostly tests that could not fail), so it may only order, never filter |
 | Report never refuses; missing verdicts are UNVERIFIED, unparsed text is shown, exit 3 | A refusing report throws away a paid run; a silent parser loses findings nobody sees |
 | Agent: Opus, effort medium, Read/Grep/Glob, `omitClaudeMd` | The measured configuration; medium is ⅔ the cost of high for almost the same finds. No shell: reviewers read untrusted diffs, and execution did not improve verification. CLAUDE.md holds the author's rationale |
@@ -153,7 +153,7 @@ produced each report; lens labels hidden where one report was scored.
 | /isolated-review on the same cases | Fewest finds, least noise, one defect no lens run found — complementary, as before |
 | Sixth "trace" lens (guarantee → every path), prompt written blind to the defects | Pre-registered criteria failed: no defect found by trace alone on the two held-out cases (two partials); 4 of 5 trace findings duplicated other lenses on one. One primed case: trace alone found a defect every earlier run missed. 0 false findings, ~+11% cost → not adopted |
 | Where the misses are | Of 35 commonly missed defects, 2 sat in code no finding mentioned; 18 were in code a finding cited for something else; 9 had their mechanism described with the wrong conclusion. A sweep of unmentioned code (planned V-C) was not run |
-| Cheaper verifier | Sonnet per finding 42% of the Opus cost, batched Opus per lens 56%; no accuracy difference measured on either set → Sonnet adopted |
+| Cheaper verifier | Sonnet per finding 42% of the Opus cost, batched Opus per lens 56%; no accuracy difference measured on either set → Sonnet adopted (reverted 2026-10-27, below) |
 | Rater | See Design. Text only (it did not read code in the bench) |
 
 Not shown by these runs:
@@ -163,10 +163,36 @@ Not shown by these runs:
   held-out case's ground truth may be author changes rather than review
   findings.
 - The verifier bench was saturated (both arms perfect) and the hard-claim set
-  could not separate the arms, so the Sonnet switch rests on "no difference
-  seen", not on a measured equality.
+  could not separate the arms, so the Sonnet switch rested on "no difference
+  seen", not on a measured equality (reverted 2026-10-27, see below).
 - The rater was measured offline on finished reports, not inside the skill.
 - Headless sessions often ended before their agents (4 of 7 trace runs); the
   missing answers were filled by `claude -p --agent` with the same prompts.
 - Library-knowledge defects (a type cache that grows) and defects that only
   show on hardware were missed by every setup.
+
+## Re-verification of two real runs (2026-10-27)
+
+Two interactive `/lens-review` runs on a work project (C++, 25 findings, 10 on
+production code) had been verified by Sonnet. The saved verify and rate prompts
+were re-sent unchanged, once to Opus and once more to Sonnet, in scratch clones
+at each run's HEAD. Disputed verdicts were settled by a deep-reasoning read of
+the code; the deciding one was re-checked by hand.
+
+| Question | Result |
+|---|---|
+| Sonnet vs Sonnet (re-run) | 6 of 25 verdicts differ |
+| Sonnet vs Opus | 4 of 25 verdicts differ |
+| Wrong CONFIRM by the original Sonnet run | 1: a production finding (operator approves servers whose offsets are not shown). The same confirmation screen prints a conflict warning whenever servers differ by more than the tolerance, so the failure cannot happen. Sonnet confirmed it in both runs, Opus refuted it citing that code. It was first in its report and a fix had been committed for it |
+| Rater (top five of each report) | Sonnet twice: identical; Opus: the same findings in a different order |
+| Cost of the 27 calls | Opus $3.9, Sonnet $1.6 |
+
+Not shown:
+- One wrong confirm in 10 production findings is a single case, not a rate.
+- Most other disagreements were harness artifacts, not model differences:
+  the project keeps `test/` out of git (`.git/info/exclude`), so the clones had
+  no tests, and some re-runs read the live working tree, which had moved on.
+  Test-gap findings were therefore not compared fairly.
+- The same exclusion may affect real runs: a verifier once answered UNCLEAR
+  ("no test found") for a test that exists. The likely cause is Grep/Glob
+  skipping git-excluded files [inference, not reproduced].

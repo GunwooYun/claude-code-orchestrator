@@ -2,7 +2,8 @@
 
 > This document tracks design decisions made during conversations.
 > Record a decision here when it outlives the current unit of work; `/feature`
-> keeps a unit's own decisions in `CLAUDE.md` → `## Current Project` → `### Decisions`.
+> keeps a unit's own decisions in `CLAUDE.md` → `## Current Project` → `### Decisions`
+> and copies the lasting ones to Key Decisions when the unit is done.
 
 ## Overview
 

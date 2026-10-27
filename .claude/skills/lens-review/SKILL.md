@@ -1,6 +1,6 @@
 ---
 name: lens-review
-description: Review a change in this session through five lenses (correctness, security, integration, tests, simplicity), each a separate read-only Opus reviewer, then have every finding checked for truth by a separate Sonnet verifier and the kept findings ordered by a rater. It is /feature Phase 6 Option B — the in-session review before /isolated-review. Works on committed or uncommitted changes. Run it when the user types /lens-review or accepts it in Phase 6; always ask once first (it costs a few dollars and minutes).
+description: Review a change in this session through five lenses (correctness, security, integration, tests, simplicity), each a separate read-only Opus reviewer, then have every finding checked for truth by a separate Opus verifier and the kept findings ordered by a rater. It is /feature Phase 6 Option B — the in-session review before /isolated-review. Works on committed or uncommitted changes. Run it when the user types /lens-review or accepts it in Phase 6; always ask once first (it costs a few dollars and minutes).
 disable-model-invocation: true
 ---
 
@@ -35,7 +35,7 @@ Run every script call as `python3 .claude/skills/lens-review/lens-review …`
 (works on Windows too).
 
 1. **Ask the user once**: "관점 리뷰를 실행할까요? 기준 `<base>`, Opus 리뷰어 5명 +
-   지적마다 Sonnet 검증자 1명 + 정렬 1명, 약 $2–5, 5–10분입니다." The base is the branch this work
+   지적마다 Opus 검증자 1명 + 정렬 1명, 약 $3–7, 5–10분입니다." The base is the branch this work
    merges into; ask for it in the same question if you do not know it.
 
 2. **Scope.**
@@ -128,7 +128,7 @@ working tree.
   when code runs — a platform's encoding, a test that passes for the wrong
   reason without anyone reading it — can be missed.
 - The models and effort are pinned in `.claude/agents/lens-reviewer.md` (Opus,
-  medium) and `.claude/agents/lens-verifier.md` (Sonnet, medium). A project
+  medium) and `.claude/agents/lens-verifier.md` (Opus, medium). A project
   without Opus access cannot use this skill as is.
 - `CLAUDE_CODE_EFFORT_LEVEL`, when set, overrides the pinned effort.
 - The rater reads only the findings' text. In its measurement it rated 10 of 45

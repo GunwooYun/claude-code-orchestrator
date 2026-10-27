@@ -6,16 +6,19 @@ description: |
   Spawned only by the /lens-review procedure with a prompt printed by its
   script — do not use it for anything else.
 tools: Read, Grep, Glob
-model: sonnet
+model: opus
 effort: medium
 omitClaudeMd: true
 ---
 
-<!-- Pinned on purpose, measured 2026-10-24/25 (docs/lens-review.md):
-     - model sonnet: on the 28-claim bench and on 13 hard claims taken from real
-       runs, Sonnet judged as well as the Opus verifier it replaced, at 42% of
-       its cost. As a rater it ordered findings better than Opus did (AUC 0.86
-       vs 0.83 on 354 labelled findings).
+<!-- Pinned on purpose (docs/lens-review.md):
+     - model opus (back from Sonnet, 2026-10-27): on the bench (2026-10-24/25)
+       Sonnet judged as well as Opus at 42% of the cost, but in a real run it
+       confirmed a false production finding twice (once in a re-run) that Opus
+       refuted from the code, and the user acted on it. A false CONFIRM costs
+       the user's work; Opus is ~2.4x the verify cost. As a rater Sonnet scored
+       AUC 0.86 vs Opus 0.83 on 354 labelled findings — too small a gap to keep a
+       separate agent for one call per run.
      - effort medium, omitClaudeMd, Read/Grep/Glob only: the same reasons as
        lens-reviewer.md — the author's rationale must not reach a verifier, and
        it reads untrusted text. -->
