@@ -1,7 +1,6 @@
 ---
 name: lens-review
 description: Review a change in this session through five lenses (correctness, security, integration, tests, simplicity), each a separate read-only Opus reviewer, then have every finding checked for truth by a separate Opus verifier and the kept findings ordered by a rater. It is /feature Phase 6 Option B — the in-session review before /isolated-review. Works on committed or uncommitted changes. Run it when the user types /lens-review or accepts it in Phase 6; always ask once first (it costs a few dollars and minutes).
-disable-model-invocation: true
 ---
 
 # Lens Review

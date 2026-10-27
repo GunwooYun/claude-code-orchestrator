@@ -33,6 +33,11 @@ block finished before this version.
   `tools/lens-audit` pins Opus for both agents. The rater stays on the same
   agent: Sonnet rated slightly better (AUC 0.86 vs 0.83), too small a gap for
   a separate agent. Measurements and limits: `docs/lens-review.md`.
+- `/lens-review` can now be started by Claude, like `/isolated-review`: the
+  skill no longer sets `disable-model-invocation`. In two field sessions
+  (2026-10-26/27) Claude was blocked from running it after the user accepted it
+  in `/feature` Phase 6, and had to ask the user to type it. The cost is still
+  guarded by step 1 (ask once, with the price).
 - `/feature`: before Status becomes `완료`, and before Phase 5 replaces a block
   that is not `완료`, the decisions that outlive the unit are copied to
   `.claude/docs/DESIGN.md` → Key Decisions with the date. Found in an adopting
