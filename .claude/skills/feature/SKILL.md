@@ -316,7 +316,9 @@ Present final plan to user (in Korean):
 **프로젝트 관련 정보를 CLAUDE.md에 추가한다.**
 
 Add to CLAUDE.md, after `## Project Setup` if there is one. Replace an existing
-`## Current Project` block instead of appending a second one:
+`## Current Project` block instead of appending a second one. If that block's
+Status is not `완료`, first promote its lasting decisions to `.claude/docs/DESIGN.md`
+(the rule under 「루프의 끝」) — replacing is when they would be lost:
 
 ```markdown
 ---
@@ -417,9 +419,13 @@ Task tool parameters:
 
 마지막 티어의 결과가 오면 보고한다. `/ticket` Step 5 가 이것을 그대로 쓴다.
 
+**먼저 `### Decisions` 중 이 작업 뒤에도 유효한 것**(아키텍처·라이브러리·정책 — 이 작업
+안에서만 쓰인 것은 제외)**을 `.claude/docs/DESIGN.md` → Key Decisions 에 오늘 날짜로 한 줄씩
+옮긴다.** 블록이 교체되면 나머지는 사라진다.
+
 **보고와 함께 `## Current Project` 의 `- Status:` 를 `완료 (YYYY-MM-DD)` 로 바꾼다.**
 블록은 다음 `/feature` 가 교체할 때까지 남는다. 표시가 없으면 그 사이에 열린 세션이
-끝난 작업을 진행 중으로 읽는다.
+끝난 작업을 진행 중으로 읽는다. 보고에 담을 것:
 
 - **무엇을 돌렸는가**: 티어와 명령, 그리고 결과(통과/실패)
 - **시나리오별 결과**: 계획의 ID 마다 대응하는 테스트와 그 결과

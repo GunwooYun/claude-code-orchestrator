@@ -762,10 +762,16 @@ class AgentTests(unittest.TestCase):
 
 
 class SkillWiringTests(unittest.TestCase):
-    def test_skill_names_files_that_exist_and_is_user_invoked(self) -> None:
-        """V10"""
+    def test_skill_names_files_that_exist_and_is_model_invocable_after_asking(
+        self,
+    ) -> None:
+        """V10. Model-invocable like /isolated-review: blocked, Claude could not
+        run it after the user accepted it in Phase 6 (two field sessions,
+        2026-10-26/27). The cost is guarded by asking once instead."""
         text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("disable-model-invocation: true", text)
+        self.assertNotIn("disable-model-invocation", text)
+        self.assertIn("always ask once first", text.split("---", 2)[1])
+        self.assertIn("**Ask the user once**", text)
         self.assertIn("python3 .claude/skills/lens-review/lens-review", text)
         self.assertIn("subagent_type", text)
         self.assertIn("lens-reviewer", text)

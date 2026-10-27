@@ -7,6 +7,11 @@ garbled and lint-on-save returned silently; and the save check's UTF-8 output
 was decoded with cp949, so the report to Claude read "None". Reproduced here
 by forcing the same encodings: PYTHONIOENCODING=cp949 for stdin and an EUC-KR
 locale for subprocess decoding.
+
+Linux decodes file paths and argv with the locale codec (macOS and Windows do
+not), so under the EUC-KR locale a child cannot open a directory created with a
+UTF-8 name and stops before any hook code runs. There the project path is ASCII;
+the Korean text still travels through the payload and the save check's output.
 """
 
 from __future__ import annotations
@@ -24,20 +29,25 @@ from pathlib import Path
 REPO = Path(__file__).parent.parent
 HOOKS = REPO / ".claude" / "hooks"
 KOREAN_ENV = {"PYTHONIOENCODING": "cp949", "LC_ALL": "ko_KR.eucKR", "PYTHONUTF8": "0"}
+# Paths follow the locale only on Linux; elsewhere keep the Windows-like Korean path.
+PROJECT_PARENT = "yun" if sys.platform.startswith("linux") else "윤건우"
+SAVE_WORD = "검사"
 
 
 class HookEncodingTests(unittest.TestCase):
     def setUp(self) -> None:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.project = Path(tmp.name) / "윤건우" / "proj"
+        self.project = Path(tmp.name) / PROJECT_PARENT / "proj"
         hooks = self.project / ".claude" / "hooks"
         hooks.mkdir(parents=True)
         for name in ("lint-on-save.py", "bash-write-check.py", "_savecheck.py"):
             shutil.copy2(HOOKS / name, hooks)
         script = self.project / ".claude" / "scripts" / "verify-save"
         script.parent.mkdir(parents=True)
-        script.write_text('#!/bin/sh\necho "SAVE-RAN $1"\nexit 1\n', encoding="utf-8")
+        script.write_text(
+            f'#!/bin/sh\necho "SAVE-RAN $1 {SAVE_WORD}"\nexit 1\n', encoding="utf-8"
+        )
         script.chmod(0o755)
 
     def hook(self, name: str, payload: dict) -> str:
@@ -63,10 +73,10 @@ class HookEncodingTests(unittest.TestCase):
             {
                 "session_id": "enc",
                 "tool_name": "Edit",
-                "tool_input": {"file_path": str(target)},
+                "tool_input": {"file_path": str(target), "new_string": "x = 1  # 한글"},
             },
         )
-        self.assertIn(f"SAVE-RAN {target}", context)
+        self.assertIn(f"SAVE-RAN {target} {SAVE_WORD}", context)
         self.assertNotIn("None", context)
 
     def test_bash_write_check_reports_the_check_for_a_korean_path(self) -> None:
@@ -75,7 +85,10 @@ class HookEncodingTests(unittest.TestCase):
             "cwd": str(self.project),
             "tool_use_id": "toolu_enc",
             "tool_name": "Bash",
-            "tool_input": {"command": "printf 'y = 2\\n' > u.py"},
+            "tool_input": {
+                "command": "printf 'y = 2\\n' > u.py",
+                "description": "한글 설명",
+            },
         }
         self.hook("bash-write-check.py", {**base, "hook_event_name": "PreToolUse"})
         time.sleep(0.05)
@@ -85,6 +98,7 @@ class HookEncodingTests(unittest.TestCase):
             {**base, "hook_event_name": "PostToolUse", "tool_response": {"stdout": ""}},
         )
         self.assertIn("SAVE-RAN", context)
+        self.assertIn(SAVE_WORD, context)
         self.assertIn("u.py", context)
         self.assertNotIn("None", context)
 
