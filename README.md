@@ -5,7 +5,7 @@
 
 ![Claude Code Orchestrator](./summary.png)
 
-> 현재 버전: **5.2.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md). 이미 쓰고 있는 프로젝트를 올리려면
+> 현재 버전: **5.3.0** — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md). 이미 쓰고 있는 프로젝트를 올리려면
 > [업그레이드 절차](#업그레이드-절차) — 5.1.0 부터는 `/orchestrator-upgrade`, 그 전 사본은 한 줄을 붙여 넣는다.
 
 ## 목차
@@ -103,7 +103,7 @@ your-project/
 ├── .agents/
 │   └── rules/AGENTS.md            # agy 가 읽는 프로젝트 설명
 └── .claude/
-    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 5.2.0)
+    ├── ORCHESTRATOR_VERSION       # 이 사본이 어느 릴리스인지 (예: 5.3.0)
     ├── settings.json              # 훅 등록 + 권한(allow / ask / deny)
     ├── agents/                    # 서브에이전트 정의 (deep-reasoning, general-purpose, lens-reviewer, lens-verifier)
     ├── skills/                    # 슬래시 커맨드 (아래 표)
@@ -315,7 +315,7 @@ agy 할당량이 넉넉하면 전부 high 로 두어도 된다. 나중에 `STALE
 `/agy-models` 만 다시 실행한다.
 
 **Step 4 — `CLAUDE.md` 갱신.** 맨 위 제목을 프로젝트 이름으로 바꾸고, `## 기술 스택` 에 실제 명령을 적고,
-`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v5.2.0`)을 기록한다. 나중에 `/jira-setup`·
+`## Project Setup` 에 개요·완료 지점·사용 버전(`Orchestrator: v5.3.0`)을 기록한다. 나중에 `/jira-setup`·
 `/doc-write` 가 같은 섹션에 `### Jira`·`### Confluence` 를 덧붙인다 — 각자 자기 부분만 고친다.
 
 **Step 5 — 검증 스크립트 작성.** Step 2 의 답으로 `.claude/scripts/verify-save`, `verify-task` 등을 만든다.
@@ -702,6 +702,15 @@ python3 <템플릿 클론>/tools/upgrade-plan <프로젝트 루트>
   CHANGELOG 가 이 파일들에서 바꾸라고 한 부분(허용 경로, 빠진 섹션 등)은 손으로 반영한다.
 - **훅을 지우는 업그레이드에서는 `settings.json` 의 등록을 같은 단계에서 지운다.** 등록만 남으면 훅 파일이 없어서
   모든 편집(또는 Bash 명령)마다 오류가 난다.
+
+### 5.3.0 으로 올릴 때
+
+템플릿 소유 파일은 평소대로 바뀐다. `/lens-review` 검증자가 Opus 로 돌아가 1회 비용이 약 $3–7 로 늘고, Claude 가
+한 번 물은 뒤 직접 실행한다. `/feature` 는 작업이 끝날 때 계속 유효한 결정을 `DESIGN.md` 로 옮긴다. 손 단계는 셋이고
+모두 선택이다(안 해도 깨지지 않는다): ① `writing-style.md` 의 새 보고서 형식 블록을 옮긴다(CHANGELOG 5.3.0 이
+위치를 적어 둠, 고치지 않은 사본이면 새 파일로 바꿔도 된다) ② `CLAUDE.md` Workflow 표 아래에 plan mode 한 줄
+③ 이미 `완료` 인 `## Current Project` 의 결정을 `DESIGN.md` Key Decisions 로 한 번 옮긴다. 5.2.1 은 릴리스되지
+않았고 그 내용은 5.3.0 에 들어 있다.
 
 ### 5.2.0 으로 올릴 때
 
