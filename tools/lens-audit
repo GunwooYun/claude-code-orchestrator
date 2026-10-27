@@ -17,8 +17,8 @@ them. This reads the session's transcript and its subagent transcripts
      only after the earlier attempt stopped on an API error;
   2. each saved answer (`lens-<lens>.md`, `verify-<lens>-<n>.md`, `rate.md`)
      is the agent's final message, unchanged;
-  3. lens-reviewer requests ran on Opus, lens-verifier requests on Sonnet, both
-     at effort medium;
+  3. lens-reviewer and lens-verifier requests ran on Opus, both at effort
+     medium;
   4. lens agents used no tool other than Read, Grep, Glob;
   5. the report's `## Summary` section appears verbatim in the session's text
      (the full findings are read from the report file, not from the session).
@@ -37,7 +37,7 @@ from types import ModuleType
 # agent type -> (model prefix, effort) it must run on
 PINS = {
     "lens-reviewer": ("claude-opus", "medium"),
-    "lens-verifier": ("claude-sonnet", "medium"),
+    "lens-verifier": ("claude-opus", "medium"),
 }
 # The hand-back is how an interactive session's background agent returns its answer.
 READ_TOOLS = {"Read", "Grep", "Glob", "SubagentHandback"}

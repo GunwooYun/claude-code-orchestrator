@@ -11,6 +11,56 @@ Upgrading an adopted copy: do not copy the template over it — run
 「업그레이드 절차」 into a copy that predates it. Both follow `tools/UPGRADE.md`
 from a fresh clone of the latest release.
 
+## [Unreleased]
+
+The `/lens-review` verifier is back on Opus, and `/feature` now keeps a unit's
+lasting decisions in `DESIGN.md` before its `## Current Project` block is replaced.
+
+**Upgrade:** one optional hand step. `CLAUDE.md` is project-owned: to get the
+plan-mode sentence, add it under the Workflow table by hand ("구현 없이 계획만
+필요하면 Claude Code 의 plan mode 를 쓴다."). The seed header of
+`.claude/docs/DESIGN.md` changed too; yours is project-owned and keeps working.
+If your `## Current Project` is already `완료` and its lasting decisions are not
+in DESIGN.md Key Decisions, copy them by hand once — neither new rule covers a
+block finished before this version.
+
+### Changed
+- `lens-verifier` (verify and rate prompts): Sonnet → Opus. In a real run on a
+  work project (2026-10-27, 25 findings re-sent unchanged to both models)
+  Sonnet confirmed a false production finding twice that Opus refuted from the
+  code, and the user had already committed a fix for it. Verify + rate cost
+  rises about 2.4× (25 verify + 2 rate calls: $1.6 → $3.9); the ask now says ~$3–7.
+  `tools/lens-audit` pins Opus for both agents. The rater stays on the same
+  agent: Sonnet rated slightly better (AUC 0.86 vs 0.83), too small a gap for
+  a separate agent. Measurements and limits: `docs/lens-review.md`.
+- `/lens-review` can now be started by Claude, like `/isolated-review`: the
+  skill no longer sets `disable-model-invocation`. In two field sessions
+  (2026-10-26/27) Claude was blocked from running it after the user accepted it
+  in `/feature` Phase 6, and had to ask the user to type it. The cost is still
+  guarded by step 1 (ask once, with the price).
+- `/feature`: before Status becomes `완료`, and before Phase 5 replaces a block
+  that is not `완료`, the decisions that outlive the unit are copied to
+  `.claude/docs/DESIGN.md` → Key Decisions with the date. Found in an adopting
+  project: Key Decisions had no row after its seeding day while a unit's ten
+  decisions sat only in the block the next `/feature` would replace.
+- `/doc-write`: tables get column widths sized to their content (Confluence
+  `data-colwidth`, Jira ADF `attrs.colwidth`; Jira markdown tables cannot set
+  widths, so a body with a table is written as ADF). Existing widths are kept
+  when a table is edited. Requested by a user whose tables came out evenly split.
+- `CLAUDE.md` Workflow: plan only, no implementation → Claude Code plan mode.
+  The fork's `/plan`, `/tdd`, `/simplify`, `/checkpointing`, the routing hooks
+  and the design/library-record skills were reviewed against field data
+  (nudges followed 0–15% of the time; no nudge ever pointed at a removed
+  skill) and stay removed.
+
+### Fixed
+- `tests/test_hook_encoding.py` could not pass on Linux: Linux decodes paths
+  with the locale, so under the EUC-KR locale the child could not open the
+  UTF-8-named project dir. On Linux the path is now ASCII and the Korean text
+  goes through the payload and the save check's output; reverting either hook
+  fix (stdin as bytes, output as UTF-8) still fails the tests there. Found on
+  the first WSL checkout.
+
 ## [5.2.0] - 2026-10-26
 
 An in-session review next to /isolated-review: `/lens-review` (five Opus

@@ -348,7 +348,7 @@ class AuditTests(unittest.TestCase):
         extra_tool: str | None = None,
         shown: str | None = None,
         model: str = "claude-opus-5-5",
-        verifier_model: str = "claude-sonnet-5-5",
+        verifier_model: str = "claude-opus-5-5",
         verifier_agent: str = "lens-verifier",
         drop: int | None = None,
         repeat: int | None = None,
@@ -484,8 +484,8 @@ class AuditTests(unittest.TestCase):
         found = self.problems()
         self.assertTrue(any(p.startswith("3:") for p in found), found)
 
-    def test_audit_catches_a_verifier_not_on_sonnet(self) -> None:
-        self.record(verifier_model="claude-opus-5-5")
+    def test_audit_catches_a_verifier_not_on_opus(self) -> None:
+        self.record(verifier_model="claude-sonnet-5-5")
         found = self.problems()
         self.assertTrue(any(p.startswith("3:") for p in found), found)
 

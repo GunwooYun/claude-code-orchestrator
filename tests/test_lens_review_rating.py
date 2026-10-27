@@ -127,7 +127,7 @@ class RatingTests(unittest.TestCase):
 
 
 class VerifierAgentTests(unittest.TestCase):
-    def test_verifier_is_locked_to_reading_with_sonnet_medium(self) -> None:
+    def test_verifier_is_locked_to_reading_with_opus_medium(self) -> None:
         """V9 for the verifier agent."""
         text = VERIFIER.read_text(encoding="utf-8")
         head = text.split("---", 2)[1]
@@ -139,7 +139,7 @@ class VerifierAgentTests(unittest.TestCase):
         self.assertEqual(
             {"Read", "Grep", "Glob"}, {t.strip() for t in fm["tools"].split(",")}
         )
-        self.assertEqual("sonnet", fm["model"])
+        self.assertEqual("opus", fm["model"])
         self.assertEqual("medium", fm["effort"])
         self.assertEqual("true", fm["omitClaudeMd"])
 
